@@ -65,5 +65,8 @@ public class Trip
     public DateTime ModifiedAt { get; set; } = DateTime.UtcNow;
     public string? ModifiedBy { get; set; }
     
+    [MaxLength(50)]
+    public string? CreatedByUserId { get; set; }
+    
     public virtual ICollection<Transaction> Transactions { get; set; } = new List<Transaction>();
 }

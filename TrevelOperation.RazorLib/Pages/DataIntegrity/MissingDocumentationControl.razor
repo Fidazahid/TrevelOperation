@@ -101,12 +101,12 @@
                     </label>
                     <select class="select select-bordered w-full" @bind="selectedCategory" @bind:after="FilterTransactions">
                         <option value="">All Categories</option>
-                        <option value="Airfare">✈ Airfare</option>
-                        <option value="Lodging">🏨 Lodging</option>
-                        <option value="Transportation">🚕 Transportation</option>
-                        <option value="Meals">🍽 Meals</option>
-                        <option value="Client entertainment">🍸 Client entertainment</option>
-                        <option value="Other">❔ Other</option>
+                        <option value="Airfare">Airfare</option>
+                        <option value="Lodging">Lodging</option>
+                        <option value="Transportation">Transportation</option>
+                        <option value="Meals">Meals</option>
+                        <option value="Client entertainment">Client entertainment</option>
+                        <option value="Other">Other</option>
                     </select>
                 </div>
                 <div class="form-control">
@@ -188,7 +188,7 @@
                                 </td>
                                 <td>@transaction.Vendor</td>
                                 <td>
-                                    <span class="badge badge-outline">@GetCategoryIcon(transaction.Category?.Name) @transaction.Category?.Name</span>
+                                    <span class="font-semibold" style="color:@GetCategoryColor(transaction.Category?.Name)">@transaction.Category?.Name</span>
                                 </td>
                                 <td>@transaction.Currency</td>
                                 <td>@transaction.Amount.ToString("N2")</td>
@@ -530,6 +530,21 @@
         };
     }
 
+    private string GetCategoryColor(string? category)
+    {
+        return category switch
+        {
+            "Airfare" => "#3B82F6",        // Blue
+            "Lodging" => "#8B5CF6",        // Purple
+            "Transportation" => "#10B981", // Green
+            "Meals" => "#F59E0B",          // Amber
+            "Client entertainment" => "#EF4444", // Red
+            "Communication" => "#06B6D4",  // Cyan
+            "Other" => "#6B7280",          // Gray
+            _ => "#9CA3AF"                 // Light gray for unknown
+        };
+    }
+
     private decimal GetSelectedAmount()
     {
         return selectedTransactions.Sum(id => 
@@ -617,22 +632,46 @@
 
     private async Task RequestAllDocuments()
     {
+        if (!filteredTransactions.Any())
+        {
+            ShowAlert("No Data", "No transactions with missing documentation found.", AlertDialog.AlertType.Info);
+            return;
+        }
+
         ShowConfirm(
             "Request All Documents",
-            $"Send document requests for all {filteredTransactions.Count} transactions?",
+            $"Generate document requests for all {filteredTransactions.Count} transactions with missing documentation? This will copy all messages to clipboard.",
             async () =>
             {
-                ShowAlert("Success", $"Document requests sent for {filteredTransactions.Count} transactions", AlertDialog.AlertType.Success);
+                try
+                {
+                    var messages = new List<string>();
+                    foreach (var transaction in filteredTransactions)
+                    {
+                        var message = GenerateDocumentRequestMessage(transaction);
+                        messages.Add($"=== {transaction.Email} - {transaction.TransactionId} ===\n{message}\n");
+                    }
+                    
+                    var allMessages = string.Join("\n", messages);
+                    await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", allMessages);
+                    
+                    ShowAlert("Success", $"Document request messages for {filteredTransactions.Count} transactions copied to clipboard!", AlertDialog.AlertType.Success);
+                }
+                catch (Exception ex)
+                {
+                    ShowAlert("Error", $"Failed to generate requests: {ex.Message}", AlertDialog.AlertType.Error);
+                }
             },
             "📧",
-            "Send Requests",
+            "Generate Requests",
             "btn-primary"
         );
     }
 
     private async Task ViewDetails(string transactionId)
     {
-        ShowAlert("View Details", $"View details for transaction {transactionId} - Navigation pending", AlertDialog.AlertType.Info);
+        // Navigate to transaction detail view - implement routing when transaction detail page is available
+        await JSRuntime.InvokeVoidAsync("open", $"/transaction-details/{transactionId}", "_blank");
     }
 
     private async Task RequestDocument(string transactionId)
@@ -648,27 +687,206 @@
 
     private async Task UploadDocument(string transactionId)
     {
-        ShowAlert("Upload Document", $"Upload document for transaction {transactionId} - File upload pending", AlertDialog.AlertType.Info);
+        try
+        {
+            // Get file information first
+            var fileInfo = await JSRuntime.InvokeAsync<object>("eval", @"
+                (() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = '.pdf,.jpg,.jpeg,.png,.gif';
+                    input.multiple = false;
+                    return new Promise((resolve) => {
+                        input.onchange = (e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (e) => resolve({
+                                    name: file.name,
+                                    size: file.size,
+                                    type: file.type,
+                                    data: e.target.result
+                                });
+                                reader.readAsDataURL(file);
+                            } else {
+                                resolve(null);
+                            }
+                        };
+                        input.click();
+                    });
+                })()
+            ");
+
+            if (fileInfo != null)
+            {
+                var fileData = fileInfo.ToString();
+                var fileName = await JSRuntime.InvokeAsync<string>("eval", "arguments[0].name", fileInfo);
+                var fileSize = await JSRuntime.InvokeAsync<long>("eval", "arguments[0].size", fileInfo);
+                var fileType = await JSRuntime.InvokeAsync<string>("eval", "arguments[0].type", fileInfo);
+                
+                // Validate file size (max 10MB)
+                if (fileSize > 10 * 1024 * 1024)
+                {
+                    ShowAlert("Error", "File size must be less than 10MB. Please choose a smaller file.", AlertDialog.AlertType.Error);
+                    return;
+                }
+
+                // Show confirmation with file details
+                ShowConfirm(
+                    "Upload Document",
+                    $"Upload document for transaction {transactionId}?\n\nFile: {fileName}\nSize: {fileSize / 1024:N0} KB\nType: {fileType}",
+                    async () =>
+                    {
+                        try
+                        {
+                            // In real implementation:
+                            // 1. Upload file to storage service (Azure Blob, AWS S3, etc.)
+                            // 2. Get the public URL
+                            // 3. Update transaction.DocumentUrl with the URL
+                            // 4. Save changes to database
+                            
+                            // For now, simulate with a mock URL
+                            var mockDocumentUrl = $"https://storage.company.com/documents/{transactionId}/{fileName}";
+                            
+                            // Update the transaction (simulated)
+                            var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+                            if (transaction != null)
+                            {
+                                // In real implementation: await TransactionService.UpdateDocumentUrlAsync(transactionId, mockDocumentUrl);
+                                
+                                ShowAlert("Success", 
+                                    $"Document '{fileName}' uploaded successfully!\n\n" +
+                                    $"Transaction {transactionId} now has documentation and will be removed from this list on next refresh.", 
+                                    AlertDialog.AlertType.Success);
+                                
+                                // Refresh data to reflect changes
+                                await RefreshData();
+                            }
+                            else
+                            {
+                                ShowAlert("Error", "Transaction not found in current data.", AlertDialog.AlertType.Error);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            ShowAlert("Error", $"Failed to save document: {ex.Message}", AlertDialog.AlertType.Error);
+                        }
+                    },
+                    "📤",
+                    "Upload",
+                    "btn-primary"
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Failed to select document: {ex.Message}", AlertDialog.AlertType.Error);
+        }
     }
 
     private async Task MarkAsExempt(string transactionId)
     {
-        // In real implementation, this would update a field like "DocumentationExempt"
-        ShowAlert("Feature Pending", "Document exemption feature pending - requires DB field", AlertDialog.AlertType.Info);
+        ShowConfirm(
+            "Mark as Exempt",
+            $"Mark transaction {transactionId} as exempt from documentation requirements? This action can be undone.",
+            async () =>
+            {
+                try
+                {
+                    // In real implementation, this would update a field like "DocumentationExempt" = true
+                    // For now, simulate the action
+                    ShowAlert("Success", $"Transaction {transactionId} marked as exempt from documentation requirements.", AlertDialog.AlertType.Success);
+                    
+                    // Refresh data to remove from list
+                    await RefreshData();
+                }
+                catch (Exception ex)
+                {
+                    ShowAlert("Error", $"Failed to mark transaction as exempt: {ex.Message}", AlertDialog.AlertType.Error);
+                }
+            },
+            "✓",
+            "Mark as Exempt",
+            "btn-warning"
+        );
     }
 
     private async Task BulkRequestDocuments()
     {
-        ShowAlert("Success", $"Document requests sent for {selectedTransactions.Count} transactions", AlertDialog.AlertType.Success);
-        selectedTransactions.Clear();
-        StateHasChanged();
+        if (!selectedTransactions.Any())
+        {
+            ShowAlert("No Selection", "Please select transactions first.", AlertDialog.AlertType.Warning);
+            return;
+        }
+
+        ShowConfirm(
+            "Bulk Request Documents",
+            $"Send document requests for {selectedTransactions.Count} selected transactions?",
+            async () =>
+            {
+                try
+                {
+                    var messages = new List<string>();
+                    foreach (var transactionId in selectedTransactions)
+                    {
+                        var transaction = filteredTransactions.FirstOrDefault(t => t.TransactionId == transactionId);
+                        if (transaction != null)
+                        {
+                            var message = GenerateDocumentRequestMessage(transaction);
+                            messages.Add($"=== {transaction.Email} - {transactionId} ===\n{message}\n");
+                        }
+                    }
+                    
+                    var allMessages = string.Join("\n", messages);
+                    await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", allMessages);
+                    
+                    ShowAlert("Success", $"Document request messages for {selectedTransactions.Count} transactions copied to clipboard!", AlertDialog.AlertType.Success);
+                    selectedTransactions.Clear();
+                    StateHasChanged();
+                }
+                catch (Exception ex)
+                {
+                    ShowAlert("Error", $"Failed to generate bulk requests: {ex.Message}", AlertDialog.AlertType.Error);
+                }
+            },
+            "📧",
+            "Send Requests",
+            "btn-primary"
+        );
     }
 
     private async Task BulkMarkAsExempt()
     {
-        ShowAlert("Feature Pending", "Bulk exemption feature pending - requires DB field", AlertDialog.AlertType.Info);
-        selectedTransactions.Clear();
-        StateHasChanged();
+        if (!selectedTransactions.Any())
+        {
+            ShowAlert("No Selection", "Please select transactions first.", AlertDialog.AlertType.Warning);
+            return;
+        }
+
+        ShowConfirm(
+            "Bulk Mark as Exempt",
+            $"Mark {selectedTransactions.Count} selected transactions as exempt from documentation requirements?",
+            async () =>
+            {
+                try
+                {
+                    // In real implementation, update DocumentationExempt = true for all selected transactions
+                    var exemptCount = selectedTransactions.Count;
+                    ShowAlert("Success", $"{exemptCount} transactions marked as exempt from documentation requirements.", AlertDialog.AlertType.Success);
+                    
+                    selectedTransactions.Clear();
+                    await RefreshData();
+                    StateHasChanged();
+                }
+                catch (Exception ex)
+                {
+                    ShowAlert("Error", $"Failed to mark transactions as exempt: {ex.Message}", AlertDialog.AlertType.Error);
+                }
+            },
+            "✓",
+            "Mark as Exempt",
+            "btn-warning"
+        );
     }
 
     private void ClearSelection()

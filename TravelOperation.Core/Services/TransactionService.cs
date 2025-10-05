@@ -194,6 +194,10 @@ public class TransactionService : ITransactionService
         // Validate transaction before creating
         ValidateTransaction(transaction);
         
+        // Set the current user as the creator
+        var currentUser = await _authService.GetCurrentUserAsync();
+        transaction.CreatedByUserId = currentUser?.UserId;
+        
         transaction.CreatedAt = DateTime.UtcNow;
         transaction.ModifiedAt = DateTime.UtcNow;
         
@@ -239,30 +243,33 @@ public class TransactionService : ITransactionService
 
         await _auditService.LogActionAsync("System", "Create", "Transactions", transaction.TransactionId, null, auditData);
         
-        // Check if notification should be sent for high-value transactions ($1000+)
+        // Notify finance team about new transaction
         try
         {
-            if (!string.IsNullOrEmpty(transaction.Email) && 
-                transaction.AmountUSD.HasValue && 
-                Math.Abs(transaction.AmountUSD.Value) >= 1000)
-            {
-                var categoryName = await _context.Categories
-                    .Where(c => c.CategoryId == transaction.CategoryId)
-                    .Select(c => c.Name)
-                    .FirstOrDefaultAsync() ?? "Unknown";
+            var categoryName = await _context.Categories
+                .Where(c => c.CategoryId == transaction.CategoryId)
+                .Select(c => c.Name)
+                .FirstOrDefaultAsync() ?? "Unknown";
+                
+            // Get employee email (who created the transaction)
+            var createdByUser = await _context.AuthUsers
+                .Where(u => u.UserId == transaction.CreatedByUserId)
+                .FirstOrDefaultAsync();
+                
+            var employeeEmail = createdByUser?.Email ?? transaction.Email;
                     
-                await _notificationService.NotifyHighValueTransactionAsync(
-                    transaction.Email,
-                    transaction.TransactionId,
-                    transaction.AmountUSD.Value,
-                    categoryName
-                );
-            }
+            await _notificationService.NotifyFinanceTeamNewTransactionAsync(
+                transaction.TransactionId,
+                employeeEmail,
+                categoryName,
+                transaction.AmountUSD ?? transaction.Amount,
+                transaction.Vendor
+            );
         }
         catch (Exception ex)
         {
             // Log but don't fail transaction creation if notification fails
-            Console.WriteLine($"Failed to send high-value transaction notification: {ex.Message}");
+            Console.WriteLine($"Failed to send new transaction notification to finance team: {ex.Message}");
         }
         
         return transaction;
@@ -518,6 +525,12 @@ public class TransactionService : ITransactionService
         if (transaction == null)
             throw new ArgumentException($"Transaction with ID {transactionId} not found");
 
+        Console.WriteLine($"🔍 LinkTransactionToTripAsync - TransactionId: {transactionId}, TripId: {tripId}, Employee Email: {transaction.Email}");
+
+        // Get current Finance user who is linking
+        var currentUser = await _authService.GetCurrentUserAsync();
+        var financeUserEmail = currentUser?.Email;
+
         var oldTripId = transaction.TripId;
         transaction.TripId = tripId;
         transaction.ModifiedAt = DateTime.UtcNow;
@@ -526,6 +539,46 @@ public class TransactionService : ITransactionService
 
         await _auditService.LogActionAsync("System", "Link", "Transactions", transactionId, 
             new { TripId = oldTripId }, new { TripId = tripId });
+
+        // Send notification to the employee
+        try
+        {
+            if (!string.IsNullOrEmpty(transaction.CreatedByUserId))
+            {
+                Console.WriteLine($"📧 Sending transaction linked notification to user: {transaction.CreatedByUserId}, CreatedBy: {financeUserEmail ?? "System"}");
+                
+                // Get trip details for notification
+                var trip = await _context.Trips.FindAsync(tripId);
+                if (trip != null)
+                {
+                    var amount = transaction.AmountUSD ?? 0;
+                    await _notificationService.NotifyEmployeeTransactionLinkedToTripAsync(
+                        transaction.CreatedByUserId,
+                        transactionId,
+                        tripId,
+                        trip.TripName ?? "Unnamed Trip",
+                        amount,
+                        financeUserEmail  // Pass Finance user email
+                    );
+                    
+                    Console.WriteLine($"✅ Transaction linked notification sent successfully");
+                }
+                else
+                {
+                    Console.WriteLine($"⚠️ Trip {tripId} not found for notification");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"⚠️ Cannot send notification - Transaction CreatedByUserId is empty");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log but don't fail linking if notification fails
+            Console.WriteLine($"❌ Failed to send transaction linked notification: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+        }
     }
 
     public async Task UnlinkTransactionFromTripAsync(string transactionId)
@@ -534,7 +587,20 @@ public class TransactionService : ITransactionService
         if (transaction == null)
             throw new ArgumentException($"Transaction with ID {transactionId} not found");
 
+        // Get current Finance user who is unlinking
+        var currentUser = await _authService.GetCurrentUserAsync();
+        var financeUserEmail = currentUser?.Email;
+
         var oldTripId = transaction.TripId;
+        
+        // Get trip name before unlinking for notification
+        string? tripName = null;
+        if (oldTripId.HasValue)
+        {
+            var trip = await _context.Trips.FindAsync(oldTripId.Value);
+            tripName = trip?.TripName ?? "Unnamed Trip";
+        }
+        
         transaction.TripId = null;
         transaction.ModifiedAt = DateTime.UtcNow;
 
@@ -542,6 +608,32 @@ public class TransactionService : ITransactionService
 
         await _auditService.LogActionAsync("System", "Unlink", "Transactions", transactionId,
             new { TripId = oldTripId }, new { TripId = (int?)null });
+
+        // Send notification to the employee
+        try
+        {
+            if (!string.IsNullOrEmpty(transaction.CreatedByUserId) && !string.IsNullOrEmpty(tripName))
+            {
+                Console.WriteLine($"📧 Sending transaction unlinked notification to user: {transaction.CreatedByUserId}, CreatedBy: {financeUserEmail ?? "System"}");
+                
+                var amount = transaction.AmountUSD ?? 0;
+                await _notificationService.NotifyEmployeeTransactionUnlinkedFromTripAsync(
+                    transaction.CreatedByUserId,
+                    transactionId,
+                    tripName,
+                    amount,
+                    financeUserEmail  // Pass Finance user email
+                );
+                
+                Console.WriteLine($"✅ Transaction unlinked notification sent successfully");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log but don't fail unlinking if notification fails
+            Console.WriteLine($"❌ Failed to send transaction unlinked notification: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+        }
     }
 
     public async Task<IEnumerable<Transaction>> SplitTransactionAsync(string transactionId, List<Transaction> splitTransactions)
@@ -588,6 +680,36 @@ public class TransactionService : ITransactionService
         await _auditService.LogActionAsync("System", "Split", "Transactions", transactionId, 
             originalData, splitData);
 
+        // Send notification to the employee
+        try
+        {
+            if (!string.IsNullOrEmpty(originalTransaction.Email))
+            {
+                // Get current Finance user who is splitting
+                var currentUser = await _authService.GetCurrentUserAsync();
+                var financeUserEmail = currentUser?.Email;
+                
+                Console.WriteLine($"📧 Sending transaction split notification to user: {originalTransaction.CreatedByUserId}, CreatedBy: {financeUserEmail ?? "System"}");
+                
+                var originalAmount = originalTransaction.AmountUSD ?? 0;
+                await _notificationService.NotifyEmployeeTransactionSplitAsync(
+                    originalTransaction.CreatedByUserId,
+                    transactionId,
+                    splitTransactions.Count,
+                    originalAmount,
+                    financeUserEmail  // Pass Finance user email
+                );
+                
+                Console.WriteLine($"✅ Transaction split notification sent successfully");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log but don't fail splitting if notification fails
+            Console.WriteLine($"❌ Failed to send transaction split notification: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+        }
+
         return splitTransactions;
     }
 
@@ -597,6 +719,12 @@ public class TransactionService : ITransactionService
         if (transaction == null)
             throw new ArgumentException($"Transaction with ID {transactionId} not found");
 
+        Console.WriteLine($"🔍 MarkTransactionAsValidAsync - TransactionId: {transactionId}, Employee Email: {transaction.Email}");
+
+        // Get current Finance user who is validating
+        var currentUser = await _authService.GetCurrentUserAsync();
+        var financeUserEmail = currentUser?.Email;
+
         transaction.IsValid = true;
         transaction.ModifiedAt = DateTime.UtcNow;
 
@@ -604,6 +732,38 @@ public class TransactionService : ITransactionService
 
         await _auditService.LogActionAsync("System", "Validate", "Transactions", transactionId, 
             new { IsValid = false }, new { IsValid = true });
+
+        // Send notification to the employee who created the transaction
+        try
+        {
+            if (!string.IsNullOrEmpty(transaction.CreatedByUserId))
+            {
+                Console.WriteLine($"📧 Sending transaction validation notification to UserId: {transaction.CreatedByUserId}, CreatedBy: {financeUserEmail ?? "System"}");
+                
+                // Get category name for the notification
+                var categoryName = transaction.Category?.Name ?? "Unknown";
+                var amount = transaction.AmountUSD ?? 0;
+
+                await _notificationService.NotifyEmployeeTransactionValidatedAsync(
+                    transaction.CreatedByUserId,
+                    transaction.TransactionId,
+                    categoryName,
+                    amount,
+                    financeUserEmail  // Pass Finance user email
+                );
+                
+                Console.WriteLine($"✅ Transaction validation notification sent successfully");
+            }
+            else
+            {
+                Console.WriteLine($"⚠️ Cannot send notification - Transaction CreatedByUserId is empty");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log but don't fail transaction validation if notification fails
+            Console.WriteLine($"Failed to send transaction validation notification: {ex.Message}");
+        }
     }
 
     public async Task<IEnumerable<Transaction>> GetAirfareWithoutCabinClassAsync()

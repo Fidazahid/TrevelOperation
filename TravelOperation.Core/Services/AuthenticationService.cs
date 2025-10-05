@@ -196,6 +196,29 @@ namespace TravelOperation.Core.Services
             }
         }
 
+        public async Task<string?> GetCurrentUserIdAsync()
+        {
+            try
+            {
+                var email = await GetCurrentUserEmailAsync();
+                if (string.IsNullOrEmpty(email))
+                {
+                    return null;
+                }
+                
+                // Query UserId from database
+                var user = await _context.AuthUsers
+                    .FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower() && u.IsActive);
+                
+                return user?.UserId;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Get user ID error: {ex.Message}");
+                return null;
+            }
+        }
+
         public async Task<string?> GetCurrentUserDepartmentAsync()
         {
             try

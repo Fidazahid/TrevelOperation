@@ -8,6 +8,7 @@ namespace TravelOperation.Core.Services
         Task LogoutAsync();
         Task<bool> IsAuthenticatedAsync();
         Task<string?> GetCurrentUserEmailAsync();
+        Task<string?> GetCurrentUserIdAsync();
         Task<string?> GetCurrentUserRoleAsync();
         Task<string?> GetCurrentUserDepartmentAsync();
         Task<string?> GetCurrentUserFullNameAsync();

@@ -56,6 +56,13 @@ public class NotificationService : INotificationService
 
     public async Task<Notification> CreateNotificationAsync(Notification notification)
     {
+        // Validate recipient email
+        if (string.IsNullOrWhiteSpace(notification.RecipientEmail))
+        {
+            _logger.LogWarning("Attempted to create notification without recipient email. Title: {Title}", notification.Title);
+            throw new ArgumentException("RecipientEmail is required for notifications");
+        }
+
         notification.CreatedAt = DateTime.UtcNow;
         
         // Set default expiration to 90 days if not specified
@@ -68,10 +75,12 @@ public class NotificationService : INotificationService
         await _context.SaveChangesAsync();
 
         _logger.LogInformation(
-            "Created notification {NotificationId} for {Email}: {Title}",
+            "✅ NOTIFICATION CREATED - ID: {NotificationId}, Email: {Email}, Title: {Title}, Type: {Type}, Category: {Category}",
             notification.NotificationId,
             notification.RecipientEmail,
-            notification.Title);
+            notification.Title,
+            notification.Type,
+            notification.Category);
 
         return notification;
     }
@@ -339,11 +348,30 @@ public class NotificationService : INotificationService
         await CreateNotificationAsync(notification);
     }
 
-    public async Task NotifyEmployeeTransactionValidatedAsync(string employeeEmail, string transactionId, string categoryName, decimal amount)
+    public async Task NotifyEmployeeTransactionValidatedAsync(string createdByUserId, string transactionId, string categoryName, decimal amount, string? financeUserEmail = null)
     {
+        // Get the registered user's email from the database using UserId
+        var user = await _context.AuthUsers.FirstOrDefaultAsync(u => u.UserId == createdByUserId);
+        
+        if (user == null)
+        {
+            _logger.LogWarning("Cannot send notification: User with ID {UserId} not found", createdByUserId);
+            return;
+        }
+
+        var employeeEmail = user.Email;
+
+        _logger.LogInformation(
+            "🔔 CREATING Transaction Validation Notification - UserId: {UserId}, Email: {Email}, TransactionId: {TransactionId}, Category: {Category}, CreatedBy: {CreatedBy}",
+            createdByUserId,
+            employeeEmail,
+            transactionId,
+            categoryName,
+            financeUserEmail ?? "System");
+
         var notification = new Notification
         {
-            RecipientEmail = employeeEmail,
+            RecipientEmail = employeeEmail, // This is now the registered user's current email
             Type = NotificationType.Success,
             Category = NotificationCategory.Transaction,
             Priority = NotificationPriority.Low,
@@ -353,15 +381,17 @@ public class NotificationService : INotificationService
             ActionLabel = "View Transaction",
             RelatedEntityId = transactionId,
             RelatedEntityType = "Transaction",
-            Icon = "✅"
+            Icon = "✅",
+            CreatedByEmail = financeUserEmail
         };
 
         await CreateNotificationAsync(notification);
 
         _logger.LogInformation(
-            "Employee notification sent: Transaction {TransactionId} validated for {Email}",
+            "✅ Employee notification sent: Transaction {TransactionId} validated for {Email} by {CreatedBy}",
             transactionId,
-            employeeEmail);
+            employeeEmail,
+            financeUserEmail ?? "System");
     }
 
     public async Task NotifyEmployeeInquiryAsync(string employeeEmail, string transactionId, string categoryName, string inquiryReason)
@@ -387,6 +417,234 @@ public class NotificationService : INotificationService
             "Employee inquiry notification sent: Transaction {TransactionId} for {Email}",
             transactionId,
             employeeEmail);
+    }
+
+    public async Task NotifyEmployeeTripValidatedAsync(string createdByUserId, int tripId, string tripName, DateTime startDate, DateTime endDate, decimal totalAmount, string? financeUserEmail = null)
+    {
+        // Get the employee's email from userId
+        var user = await _context.AuthUsers.FirstOrDefaultAsync(u => u.UserId == createdByUserId);
+        if (user == null)
+        {
+            _logger.LogWarning("Cannot send trip validation notification - User with ID {UserId} not found", createdByUserId);
+            return;
+        }
+
+        var employeeEmail = user.Email;
+
+        _logger.LogInformation(
+            "🔔 CREATING Trip Validation Notification - UserId: {UserId}, Email: {Email}, TripId: {TripId}, TripName: {TripName}, CreatedBy: {CreatedBy}",
+            createdByUserId,
+            employeeEmail,
+            tripId,
+            tripName,
+            financeUserEmail ?? "System");
+
+        var notification = new Notification
+        {
+            RecipientEmail = employeeEmail,
+            Type = NotificationType.Success,
+            Category = NotificationCategory.Validation,
+            Priority = NotificationPriority.Normal,
+            Title = $"Trip Validated: {tripName} ✅",
+            Message = $"Your trip '{tripName}' ({startDate:dd/MM/yyyy} - {endDate:dd/MM/yyyy}) has been validated and approved by Finance. Total expenses: ${totalAmount:N2}.",
+            ActionUrl = $"/trips/{tripId}",
+            ActionLabel = "View Trip Details",
+            RelatedEntityId = tripId.ToString(),
+            RelatedEntityType = "Trip",
+            Icon = "✅",
+            CreatedByEmail = financeUserEmail
+        };
+
+        await CreateNotificationAsync(notification);
+
+        _logger.LogInformation(
+            "✅ Trip validation notification sent: Trip {TripId} ({TripName}) for {Email} by {CreatedBy}",
+            tripId,
+            tripName,
+            employeeEmail,
+            financeUserEmail ?? "System");
+    }
+
+    public async Task NotifyEmployeeTransactionLinkedToTripAsync(string createdByUserId, string transactionId, int tripId, string tripName, decimal amount, string? financeUserEmail = null)
+    {
+        // Get the employee's email from userId
+        var user = await _context.AuthUsers.FirstOrDefaultAsync(u => u.UserId == createdByUserId);
+        if (user == null)
+        {
+            _logger.LogWarning("Cannot send transaction linked notification - User with ID {UserId} not found", createdByUserId);
+            return;
+        }
+
+        var employeeEmail = user.Email;
+
+        _logger.LogInformation(
+            "🔔 CREATING Transaction Linked Notification - UserId: {UserId}, Email: {Email}, TransactionId: {TransactionId}, TripId: {TripId}, CreatedBy: {CreatedBy}",
+            createdByUserId,
+            employeeEmail,
+            transactionId,
+            tripId,
+            financeUserEmail ?? "System");
+
+        var notification = new Notification
+        {
+            RecipientEmail = employeeEmail,
+            Type = NotificationType.Info,
+            Category = NotificationCategory.Transaction,
+            Priority = NotificationPriority.Low,
+            Title = "Transaction Linked to Trip 🔗",
+            Message = $"Your transaction {transactionId} (${amount:N2}) has been linked to trip '{tripName}' by Finance.",
+            ActionUrl = $"/trips/{tripId}",
+            ActionLabel = "View Trip",
+            RelatedEntityId = transactionId,
+            RelatedEntityType = "Transaction",
+            Icon = "🔗",
+            CreatedByEmail = financeUserEmail
+        };
+
+        await CreateNotificationAsync(notification);
+
+        _logger.LogInformation(
+            "✅ Transaction linked notification sent: {TransactionId} to Trip {TripId} for {Email} by {CreatedBy}",
+            transactionId,
+            tripId,
+            employeeEmail,
+            financeUserEmail ?? "System");
+    }
+
+    public async Task NotifyEmployeeTransactionUnlinkedFromTripAsync(string createdByUserId, string transactionId, string tripName, decimal amount, string? financeUserEmail = null)
+    {
+        // Get the employee's email from userId
+        var user = await _context.AuthUsers.FirstOrDefaultAsync(u => u.UserId == createdByUserId);
+        if (user == null)
+        {
+            _logger.LogWarning("Cannot send transaction unlinked notification - User with ID {UserId} not found", createdByUserId);
+            return;
+        }
+
+        var employeeEmail = user.Email;
+
+        _logger.LogInformation(
+            "🔔 CREATING Transaction Unlinked Notification - UserId: {UserId}, Email: {Email}, TransactionId: {TransactionId}, CreatedBy: {CreatedBy}",
+            createdByUserId,
+            employeeEmail,
+            transactionId,
+            financeUserEmail ?? "System");
+
+        var notification = new Notification
+        {
+            RecipientEmail = employeeEmail,
+            Type = NotificationType.Warning,
+            Category = NotificationCategory.Transaction,
+            Priority = NotificationPriority.Normal,
+            Title = "Transaction Unlinked from Trip ⛓️‍💥",
+            Message = $"Your transaction {transactionId} (${amount:N2}) has been unlinked from trip '{tripName}' by Finance. Please review.",
+            ActionUrl = $"/transactions?search={transactionId}",
+            ActionLabel = "View Transaction",
+            RelatedEntityId = transactionId,
+            RelatedEntityType = "Transaction",
+            Icon = "⛓️‍💥",
+            CreatedByEmail = financeUserEmail
+        };
+
+        await CreateNotificationAsync(notification);
+
+        _logger.LogInformation(
+            "✅ Transaction unlinked notification sent: {TransactionId} for {Email} by {CreatedBy}",
+            transactionId,
+            employeeEmail,
+            financeUserEmail ?? "System");
+    }
+
+    public async Task NotifyEmployeeTransactionSplitAsync(string createdByUserId, string originalTransactionId, int splitCount, decimal originalAmount, string? financeUserEmail = null)
+    {
+        // Get the employee's email from userId
+        var user = await _context.AuthUsers.FirstOrDefaultAsync(u => u.UserId == createdByUserId);
+        if (user == null)
+        {
+            _logger.LogWarning("Cannot send transaction split notification - User with ID {UserId} not found", createdByUserId);
+            return;
+        }
+
+        var employeeEmail = user.Email;
+
+        _logger.LogInformation(
+            "🔔 CREATING Transaction Split Notification - UserId: {UserId}, Email: {Email}, TransactionId: {TransactionId}, SplitCount: {Count}, CreatedBy: {CreatedBy}",
+            createdByUserId,
+            employeeEmail,
+            originalTransactionId,
+            splitCount,
+            financeUserEmail ?? "System");
+
+        var notification = new Notification
+        {
+            RecipientEmail = employeeEmail,
+            Type = NotificationType.Info,
+            Category = NotificationCategory.Transaction,
+            Priority = NotificationPriority.Normal,
+            Title = "Transaction Split ✂️",
+            Message = $"Your transaction {originalTransactionId} (${originalAmount:N2}) has been split into {splitCount} separate transactions by Finance for proper categorization.",
+            ActionUrl = $"/transactions?search={originalTransactionId}",
+            ActionLabel = "View Transactions",
+            RelatedEntityId = originalTransactionId,
+            RelatedEntityType = "Transaction",
+            Icon = "✂️",
+            CreatedByEmail = financeUserEmail
+        };
+
+        await CreateNotificationAsync(notification);
+
+        _logger.LogInformation(
+            "✅ Transaction split notification sent: {TransactionId} split into {Count} for {Email} by {CreatedBy}",
+            originalTransactionId,
+            splitCount,
+            employeeEmail,
+            financeUserEmail ?? "System");
+    }
+
+    public async Task NotifyFinanceTeamNewTransactionAsync(string transactionId, string employeeEmail, string categoryName, decimal amount, string? vendor = null)
+    {
+        _logger.LogInformation(
+            "🔔 CREATING New Transaction Notification for Finance Team - TransactionId: {TransactionId}, Employee: {Employee}, Category: {Category}, Amount: ${Amount}",
+            transactionId,
+            employeeEmail,
+            categoryName,
+            amount);
+
+        // Get all finance team members
+        var financeEmails = await GetFinanceTeamEmailsAsync();
+        
+        if (!financeEmails.Any())
+        {
+            _logger.LogWarning("No finance team members found - cannot send new transaction notifications");
+            return;
+        }
+
+        // Create notifications for each finance team member
+        foreach (var financeEmail in financeEmails)
+        {
+            var notification = new Notification
+            {
+                RecipientEmail = financeEmail,
+                Type = NotificationType.Info,
+                Category = NotificationCategory.Transaction,
+                Priority = NotificationPriority.Normal,
+                Title = "New Transaction Requires Review 📋",
+                Message = $"New {categoryName.ToLower()} transaction submitted by {employeeEmail} for ${amount:N2}{(vendor != null ? $" at {vendor}" : "")}. Please review and validate.",
+                ActionUrl = $"/transactions?search={transactionId}",
+                ActionLabel = "Review Transaction",
+                RelatedEntityId = transactionId,
+                RelatedEntityType = "Transaction",
+                Icon = "📋",
+                CreatedByEmail = employeeEmail
+            };
+
+            await CreateNotificationAsync(notification);
+        }
+
+        _logger.LogInformation(
+            "✅ New transaction notifications sent to {Count} finance team members for transaction {TransactionId}",
+            financeEmails.Count,
+            transactionId);
     }
 
     private async Task<List<string>> GetFinanceTeamEmailsAsync()

@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace TravelOperation.Core.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreateComplete : Migration
+    public partial class AddUserIdTracking : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -31,6 +31,26 @@ namespace TravelOperation.Core.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AuditLogs", x => x.AuditId);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AuthUsers",
+                columns: table => new
+                {
+                    Email = table.Column<string>(type: "TEXT", nullable: false),
+                    UserId = table.Column<string>(type: "TEXT", nullable: true),
+                    Password = table.Column<string>(type: "TEXT", nullable: false),
+                    Role = table.Column<string>(type: "TEXT", nullable: false),
+                    Department = table.Column<string>(type: "TEXT", nullable: false),
+                    FirstName = table.Column<string>(type: "TEXT", nullable: false),
+                    LastName = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedDate = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    LastLoginDate = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AuthUsers", x => x.Email);
                 });
 
             migrationBuilder.CreateTable(
@@ -179,6 +199,37 @@ namespace TravelOperation.Core.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Headcount", x => x.HeadcountId);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Notifications",
+                columns: table => new
+                {
+                    NotificationId = table.Column<int>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    RecipientEmail = table.Column<string>(type: "TEXT", maxLength: 255, nullable: false),
+                    Type = table.Column<string>(type: "TEXT", maxLength: 50, nullable: false),
+                    Category = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
+                    Title = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
+                    Message = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: false),
+                    ActionUrl = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
+                    ActionLabel = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
+                    RelatedEntityId = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
+                    RelatedEntityType = table.Column<string>(type: "TEXT", maxLength: 50, nullable: true),
+                    Priority = table.Column<string>(type: "TEXT", maxLength: 20, nullable: false),
+                    IsRead = table.Column<bool>(type: "INTEGER", nullable: false),
+                    ReadAt = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    EmailSent = table.Column<bool>(type: "INTEGER", nullable: false),
+                    EmailSentAt = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    ExpiresAt = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    Icon = table.Column<string>(type: "TEXT", maxLength: 10, nullable: true),
+                    CreatedByEmail = table.Column<string>(type: "TEXT", maxLength: 255, nullable: true),
+                    CreatedByName = table.Column<string>(type: "TEXT", maxLength: 255, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Notifications", x => x.NotificationId);
                 });
 
             migrationBuilder.CreateTable(
@@ -472,7 +523,8 @@ namespace TravelOperation.Core.Migrations
                     OwnerId = table.Column<int>(type: "INTEGER", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
                     ModifiedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    ModifiedBy = table.Column<string>(type: "TEXT", nullable: true)
+                    ModifiedBy = table.Column<string>(type: "TEXT", nullable: true),
+                    CreatedByUserId = table.Column<string>(type: "TEXT", maxLength: 50, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -620,7 +672,8 @@ namespace TravelOperation.Core.Migrations
                     OriginalTransactionId = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
                     ModifiedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    ModifiedBy = table.Column<string>(type: "TEXT", nullable: true)
+                    ModifiedBy = table.Column<string>(type: "TEXT", nullable: true),
+                    CreatedByUserId = table.Column<string>(type: "TEXT", maxLength: 50, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -662,6 +715,11 @@ namespace TravelOperation.Core.Migrations
                         principalColumn: "TripId",
                         onDelete: ReferentialAction.SetNull);
                 });
+
+            migrationBuilder.InsertData(
+                table: "AuthUsers",
+                columns: new[] { "Email", "CreatedDate", "Department", "FirstName", "IsActive", "LastLoginDate", "LastName", "Password", "Role", "UserId" },
+                values: new object[] { "admin@company.com", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Finance", "System", true, null, "Administrator", "Admin@123", "Finance", "44180cf6-e9bd-4096-8cbb-e01a88ef0c7d" });
 
             migrationBuilder.InsertData(
                 table: "BookingStatuses",
@@ -748,10 +806,10 @@ namespace TravelOperation.Core.Migrations
                 columns: new[] { "PolicyId", "AdditionalRules", "ApplicableRegion", "Category", "CreatedAt", "Description", "EffectiveFrom", "EffectiveTo", "IsActive", "MaxAmount", "ModifiedAt", "Period" },
                 values: new object[,]
                 {
-                    { 1, null, "Global", "Travel", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Flight bookings", new DateTime(2025, 10, 9, 9, 37, 51, 691, DateTimeKind.Utc).AddTicks(6071), null, true, 1500.00m, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Per Trip" },
-                    { 2, null, "Global", "Meals", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Daily meal allowance", new DateTime(2025, 10, 9, 9, 37, 51, 691, DateTimeKind.Utc).AddTicks(8631), null, true, 75.00m, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Daily" },
-                    { 3, null, "Global", "Accommodation", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Hotel accommodation", new DateTime(2025, 10, 9, 9, 37, 51, 691, DateTimeKind.Utc).AddTicks(8637), null, true, 200.00m, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Daily" },
-                    { 4, null, "Global", "Miscellaneous", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Other travel expenses", new DateTime(2025, 10, 9, 9, 37, 51, 691, DateTimeKind.Utc).AddTicks(8640), null, true, 100.00m, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Daily" }
+                    { 1, null, "Global", "Travel", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Flight bookings", new DateTime(2025, 10, 5, 13, 13, 34, 259, DateTimeKind.Utc).AddTicks(267), null, true, 1500.00m, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Per Trip" },
+                    { 2, null, "Global", "Meals", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Daily meal allowance", new DateTime(2025, 10, 5, 13, 13, 34, 259, DateTimeKind.Utc).AddTicks(4372), null, true, 75.00m, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Daily" },
+                    { 3, null, "Global", "Accommodation", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Hotel accommodation", new DateTime(2025, 10, 5, 13, 13, 34, 259, DateTimeKind.Utc).AddTicks(4382), null, true, 200.00m, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Daily" },
+                    { 4, null, "Global", "Miscellaneous", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Other travel expenses", new DateTime(2025, 10, 5, 13, 13, 34, 259, DateTimeKind.Utc).AddTicks(4388), null, true, 100.00m, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Daily" }
                 });
 
             migrationBuilder.InsertData(
@@ -1039,6 +1097,9 @@ namespace TravelOperation.Core.Migrations
                 name: "AuditLogs");
 
             migrationBuilder.DropTable(
+                name: "AuthUsers");
+
+            migrationBuilder.DropTable(
                 name: "Cities");
 
             migrationBuilder.DropTable(
@@ -1049,6 +1110,9 @@ namespace TravelOperation.Core.Migrations
 
             migrationBuilder.DropTable(
                 name: "Headcount");
+
+            migrationBuilder.DropTable(
+                name: "Notifications");
 
             migrationBuilder.DropTable(
                 name: "Policies");

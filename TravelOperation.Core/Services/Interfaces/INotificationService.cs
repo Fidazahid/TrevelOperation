@@ -95,6 +95,11 @@ public interface INotificationService
     Task NotifyFinanceTeamAsync(string title, string message, string? actionUrl = null);
 
     /// <summary>
+    /// Notify finance team about new transaction that requires review
+    /// </summary>
+    Task NotifyFinanceTeamNewTransactionAsync(string transactionId, string employeeEmail, string categoryName, decimal amount, string? vendor = null);
+
+    /// <summary>
     /// Notify about tax compliance issue
     /// </summary>
     Task NotifyTaxComplianceIssueAsync(string email, int tripId, string tripName, decimal exposure);
@@ -102,10 +107,30 @@ public interface INotificationService
     /// <summary>
     /// Notify employee when their transaction is validated by Finance
     /// </summary>
-    Task NotifyEmployeeTransactionValidatedAsync(string employeeEmail, string transactionId, string categoryName, decimal amount);
+    Task NotifyEmployeeTransactionValidatedAsync(string employeeEmail, string transactionId, string categoryName, decimal amount, string? financeUserEmail = null);
 
     /// <summary>
     /// Notify employee when Finance has questions about their transaction
     /// </summary>
     Task NotifyEmployeeInquiryAsync(string employeeEmail, string transactionId, string categoryName, string inquiryReason);
+
+    /// <summary>
+    /// Notify employee when their trip is validated/approved by Finance
+    /// </summary>
+    Task NotifyEmployeeTripValidatedAsync(string employeeEmail, int tripId, string tripName, DateTime startDate, DateTime endDate, decimal totalAmount, string? financeUserEmail = null);
+
+    /// <summary>
+    /// Notify employee when their transaction is linked to a trip by Finance
+    /// </summary>
+    Task NotifyEmployeeTransactionLinkedToTripAsync(string employeeEmail, string transactionId, int tripId, string tripName, decimal amount, string? financeUserEmail = null);
+
+    /// <summary>
+    /// Notify employee when their transaction is unlinked from a trip by Finance
+    /// </summary>
+    Task NotifyEmployeeTransactionUnlinkedFromTripAsync(string employeeEmail, string transactionId, string tripName, decimal amount, string? financeUserEmail = null);
+
+    /// <summary>
+    /// Notify employee when their transaction is split by Finance
+    /// </summary>
+    Task NotifyEmployeeTransactionSplitAsync(string employeeEmail, string originalTransactionId, int splitCount, decimal originalAmount, string? financeUserEmail = null);
 }

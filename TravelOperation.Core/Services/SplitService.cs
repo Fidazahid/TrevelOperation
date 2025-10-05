@@ -112,6 +112,7 @@ public class SplitService : ISplitService
                     DataValidation = true,
                     ParticipantsValidated = !splitItem.IsExternal,
                     IsValid = !splitItem.IsExternal,
+                    CreatedByUserId = originalTransaction.CreatedByUserId, // Inherit from original transaction
                     CreatedAt = DateTime.UtcNow,
                     ModifiedAt = DateTime.UtcNow,
                     ModifiedBy = userId
@@ -421,6 +422,7 @@ public static class TransactionExtensions
             DataValidation = transaction.DataValidation,
             ParticipantsValidated = transaction.ParticipantsValidated,
             IsValid = transaction.IsValid,
+            CreatedByUserId = transaction.CreatedByUserId,
             CreatedAt = transaction.CreatedAt,
             ModifiedAt = transaction.ModifiedAt,
             ModifiedBy = transaction.ModifiedBy

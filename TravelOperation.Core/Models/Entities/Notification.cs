@@ -112,6 +112,18 @@ public class Notification
     /// </summary>
     [StringLength(10)]
     public string? Icon { get; set; }
+
+    /// <summary>
+    /// Email of the user (Finance/Owner) who created this notification
+    /// </summary>
+    [StringLength(255)]
+    public string? CreatedByEmail { get; set; }
+
+    /// <summary>
+    /// Name of the user who created this notification
+    /// </summary>
+    [StringLength(255)]
+    public string? CreatedByName { get; set; }
 }
 
 /// <summary>

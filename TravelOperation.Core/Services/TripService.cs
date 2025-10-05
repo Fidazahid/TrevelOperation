@@ -191,9 +191,13 @@ public class TripService : ITripService
         // Validate trip before creating
         ValidateTrip(trip);
         
+        // Get current user and set CreatedByUserId
+        var currentUser = await _authService.GetCurrentUserAsync();
+        
         trip.Duration = await CalculateTripDurationAsync(trip.StartDate, trip.EndDate);
         trip.CreatedAt = DateTime.UtcNow;
         trip.ModifiedAt = DateTime.UtcNow;
+        trip.CreatedByUserId = currentUser?.UserId;
         
         _context.Trips.Add(trip);
         await _context.SaveChangesAsync();
@@ -578,6 +582,15 @@ public class TripService : ITripService
         if (trip == null)
             throw new ArgumentException($"Trip with ID {tripId} not found");
 
+        Console.WriteLine($"🔍 ValidateTripAsync - TripId: {tripId}, Employee Email: {trip.Email}");
+
+        // Get current Finance user who is validating
+        var currentUser = await _authService.GetCurrentUserAsync();
+        var financeUserEmail = currentUser?.Email;
+
+        // Calculate total amount for the notification
+        var totalAmount = await CalculateTotalSpendAsync(tripId);
+
         // Set validation status to "Validated"
         trip.ValidationStatusId = 3; // "Validated"
         trip.ModifiedAt = DateTime.UtcNow;
@@ -586,6 +599,37 @@ public class TripService : ITripService
 
         await _auditService.LogActionAsync("System", "Validate", "Trips", tripId.ToString(), 
             new { ValidationStatusId = trip.ValidationStatusId }, new { ValidationStatusId = 3 });
+
+        // Send notification to the employee who created the trip
+        try
+        {
+            if (!string.IsNullOrEmpty(trip.CreatedByUserId))
+            {
+                Console.WriteLine($"📧 Sending trip validation notification to user: {trip.CreatedByUserId}, CreatedBy: {financeUserEmail ?? "System"}");
+                
+                await _notificationService.NotifyEmployeeTripValidatedAsync(
+                    trip.CreatedByUserId,
+                    trip.TripId,
+                    trip.TripName ?? "Unnamed Trip",
+                    trip.StartDate,
+                    trip.EndDate,
+                    totalAmount,
+                    financeUserEmail  // Pass Finance user email
+                );
+                
+                Console.WriteLine($"✅ Trip validation notification sent successfully");
+            }
+            else
+            {
+                Console.WriteLine($"⚠️ Cannot send notification - Trip CreatedByUserId is empty");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log but don't fail trip validation if notification fails
+            Console.WriteLine($"❌ Failed to send trip validation notification: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+        }
     }
 
     public async Task<decimal> CalculateTotalSpendAsync(int tripId)

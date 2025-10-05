@@ -104,4 +104,7 @@ public class Transaction
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime ModifiedAt { get; set; } = DateTime.UtcNow;
     public string? ModifiedBy { get; set; }
+    
+    [MaxLength(50)]
+    public string? CreatedByUserId { get; set; }
 }

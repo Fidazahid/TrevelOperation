@@ -553,6 +553,14 @@ namespace TravelOperation.Core.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CreatedByEmail")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedByName")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("EmailSent")
                         .HasColumnType("INTEGER");
 
@@ -747,7 +755,7 @@ namespace TravelOperation.Core.Migrations
                             Category = "Travel",
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Flight bookings",
-                            EffectiveFrom = new DateTime(2025, 10, 27, 16, 15, 27, 707, DateTimeKind.Utc).AddTicks(4210),
+                            EffectiveFrom = new DateTime(2025, 10, 5, 13, 13, 34, 259, DateTimeKind.Utc).AddTicks(267),
                             IsActive = true,
                             MaxAmount = 1500.00m,
                             ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -760,7 +768,7 @@ namespace TravelOperation.Core.Migrations
                             Category = "Meals",
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Daily meal allowance",
-                            EffectiveFrom = new DateTime(2025, 10, 27, 16, 15, 27, 707, DateTimeKind.Utc).AddTicks(7590),
+                            EffectiveFrom = new DateTime(2025, 10, 5, 13, 13, 34, 259, DateTimeKind.Utc).AddTicks(4372),
                             IsActive = true,
                             MaxAmount = 75.00m,
                             ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -773,7 +781,7 @@ namespace TravelOperation.Core.Migrations
                             Category = "Accommodation",
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Hotel accommodation",
-                            EffectiveFrom = new DateTime(2025, 10, 27, 16, 15, 27, 707, DateTimeKind.Utc).AddTicks(7599),
+                            EffectiveFrom = new DateTime(2025, 10, 5, 13, 13, 34, 259, DateTimeKind.Utc).AddTicks(4382),
                             IsActive = true,
                             MaxAmount = 200.00m,
                             ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -786,7 +794,7 @@ namespace TravelOperation.Core.Migrations
                             Category = "Miscellaneous",
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Other travel expenses",
-                            EffectiveFrom = new DateTime(2025, 10, 27, 16, 15, 27, 707, DateTimeKind.Utc).AddTicks(7602),
+                            EffectiveFrom = new DateTime(2025, 10, 5, 13, 13, 34, 259, DateTimeKind.Utc).AddTicks(4388),
                             IsActive = true,
                             MaxAmount = 100.00m,
                             ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -955,6 +963,10 @@ namespace TravelOperation.Core.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CreatedByUserId")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Currency")
                         .IsRequired()
                         .HasMaxLength(3)
@@ -1118,6 +1130,10 @@ namespace TravelOperation.Core.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasMaxLength(50)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("Duration")
@@ -1896,6 +1912,9 @@ namespace TravelOperation.Core.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Email");
 
                     b.ToTable("AuthUsers", (string)null);
@@ -1910,7 +1929,8 @@ namespace TravelOperation.Core.Migrations
                             IsActive = true,
                             LastName = "Administrator",
                             Password = "Admin@123",
-                            Role = "Finance"
+                            Role = "Finance",
+                            UserId = "44180cf6-e9bd-4096-8cbb-e01a88ef0c7d"
                         });
                 });
 

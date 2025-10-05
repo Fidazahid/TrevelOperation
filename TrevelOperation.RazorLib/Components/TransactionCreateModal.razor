@@ -680,6 +680,7 @@
                 CreatedAt = DateTime.UtcNow,
                 ModifiedAt = DateTime.UtcNow,
                 ModifiedBy = createForm.Email
+                // Note: CreatedByUserId will be set by TransactionService.CreateTransactionAsync
             };
 
             await TransactionService.CreateTransactionAsync(newTransaction);
