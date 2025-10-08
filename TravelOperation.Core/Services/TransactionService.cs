@@ -9,24 +9,61 @@ public class TransactionService : ITransactionService
 {
     private readonly TravelDbContext _context;
     private readonly IAuditService _auditService;
+    private readonly IAuthenticationService _authService;
 
-    public TransactionService(TravelDbContext context, IAuditService auditService)
+    public TransactionService(
+        TravelDbContext context, 
+        IAuditService auditService, 
+        IAuthenticationService authService)
     {
         _context = context;
         _auditService = auditService;
+        _authService = authService;
     }
 
     public async Task<IEnumerable<Transaction>> GetAllTransactionsAsync()
     {
-        return await _context.Transactions
+        var query = _context.Transactions
             .Include(t => t.Source)
             .Include(t => t.Category)
             .Include(t => t.Trip)
             .Include(t => t.CabinClass)
             .Include(t => t.BookingStatus)
             .Include(t => t.BookingType)
+            .AsQueryable();
+
+        // Apply role-based filtering
+        var currentUser = await _authService.GetCurrentUserAsync();
+        if (currentUser != null)
+        {
+            if (currentUser.Role == "Employee")
+            {
+                // Employees see only their own transactions
+                query = query.Where(t => t.Email == currentUser.Email);
+            }
+            else if (currentUser.Role == "Owner")
+            {
+                // Owners see transactions for their department
+                // This requires matching email domain or department lookup
+                // For now, we'll filter by department from user records
+                var departmentEmails = await GetDepartmentEmailsAsync(currentUser.Department);
+                query = query.Where(t => departmentEmails.Contains(t.Email));
+            }
+            // Finance users see all transactions (no filter)
+        }
+
+        return await query
             .OrderByDescending(t => t.TransactionDate)
             .ToListAsync();
+    }
+
+    private async Task<List<string>> GetDepartmentEmailsAsync(string department)
+    {
+        // For now, just return empty list to avoid circular dependency
+        // In production, this would query a separate users/headcount table
+        // TODO: Implement proper department email lookup without circular dependency
+        await Task.CompletedTask;
+        return new List<string>();
     }
 
     public async Task<Transaction?> GetTransactionByIdAsync(string transactionId)

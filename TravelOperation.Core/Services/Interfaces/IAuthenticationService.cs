@@ -1,3 +1,5 @@
+using TravelOperation.Core.Models;
+
 namespace TravelOperation.Core.Services
 {
     public interface IAuthenticationService
@@ -9,6 +11,7 @@ namespace TravelOperation.Core.Services
         Task<string?> GetCurrentUserRoleAsync();
         Task<string?> GetCurrentUserDepartmentAsync();
         Task<string?> GetCurrentUserFullNameAsync();
+        Task<User?> GetCurrentUserAsync();
         event Action<bool>? AuthenticationStateChanged;
     }
 }

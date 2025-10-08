@@ -9,24 +9,59 @@ public class TripService : ITripService
 {
     private readonly TravelDbContext _context;
     private readonly IAuditService _auditService;
+    private readonly IAuthenticationService _authService;
 
-    public TripService(TravelDbContext context, IAuditService auditService)
+    public TripService(
+        TravelDbContext context, 
+        IAuditService auditService, 
+        IAuthenticationService authService)
     {
         _context = context;
         _auditService = auditService;
+        _authService = authService;
     }
 
     public async Task<IEnumerable<Trip>> GetAllTripsAsync()
     {
-        return await _context.Trips
+        var query = _context.Trips
             .Include(t => t.Purpose)
             .Include(t => t.TripType)
             .Include(t => t.Status)
             .Include(t => t.ValidationStatus)
             .Include(t => t.Owner)
             .Include(t => t.Transactions)
+            .AsQueryable();
+
+        // Apply role-based filtering
+        var currentUser = await _authService.GetCurrentUserAsync();
+        if (currentUser != null)
+        {
+            if (currentUser.Role == "Employee")
+            {
+                // Employees see only their own trips
+                query = query.Where(t => t.Email == currentUser.Email);
+            }
+            else if (currentUser.Role == "Owner")
+            {
+                // Owners see trips for their department
+                var departmentEmails = await GetDepartmentEmailsAsync(currentUser.Department);
+                query = query.Where(t => departmentEmails.Contains(t.Email));
+            }
+            // Finance users see all trips (no filter)
+        }
+
+        return await query
             .OrderByDescending(t => t.StartDate)
             .ToListAsync();
+    }
+
+    private async Task<List<string>> GetDepartmentEmailsAsync(string department)
+    {
+        // For now, just return empty list to avoid circular dependency
+        // In production, this would query a separate users/headcount table
+        // TODO: Implement proper department email lookup without circular dependency
+        await Task.CompletedTask;
+        return new List<string>();
     }
 
     public async Task<Trip?> GetTripByIdAsync(int tripId)

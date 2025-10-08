@@ -3,10 +3,12 @@
 @using TravelOperation.Core.Models
 @using Microsoft.AspNetCore.Components.Forms
 @using System.ComponentModel.DataAnnotations
+@using TrevelOperation.RazorLib.Components
 @inject IUserManagementService UserService
 @inject IAuthenticationService AuthService
 @inject IJSRuntime JSRuntime
 
+<AuthorizeRoleView RequiredRole="Finance">
 <div class="admin-container">
     <div class="admin-header">
         <h1 class="admin-title">👥 User Management</h1>
@@ -760,3 +762,4 @@
         public string Department { get; set; } = string.Empty;
     }
 }
+</AuthorizeRoleView>

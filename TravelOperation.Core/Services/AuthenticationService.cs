@@ -1,4 +1,5 @@
 using Microsoft.JSInterop;
+using TravelOperation.Core.Models;
 
 namespace TravelOperation.Core.Services
 {
@@ -376,6 +377,41 @@ namespace TravelOperation.Core.Services
             catch (Exception ex)
             {
                 Console.WriteLine($"Get user full name error: {ex.Message}");
+                return null;
+            }
+        }
+
+        public async Task<User?> GetCurrentUserAsync()
+        {
+            try
+            {
+                var email = await GetCurrentUserEmailAsync();
+                var role = await GetCurrentUserRoleAsync();
+                var department = await GetCurrentUserDepartmentAsync();
+                var fullName = await GetCurrentUserFullNameAsync();
+                
+                if (!string.IsNullOrEmpty(email) && !string.IsNullOrEmpty(role))
+                {
+                    // Extract first and last names
+                    var nameParts = fullName?.Split(' ') ?? Array.Empty<string>();
+                    var firstName = nameParts.Length > 0 ? nameParts[0] : "";
+                    var lastName = nameParts.Length > 1 ? string.Join(" ", nameParts.Skip(1)) : "";
+                    
+                    return new User
+                    {
+                        Email = email,
+                        Role = role,
+                        Department = department ?? "",
+                        FirstName = firstName,
+                        LastName = lastName,
+                        IsActive = true
+                    };
+                }
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Get current user error: {ex.Message}");
                 return null;
             }
         }
