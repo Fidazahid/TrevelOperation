@@ -1,7 +1,10 @@
 @page "/trips/suggestions"
-@using TravelOperation.Core.Models
-@using TravelOperation.Core.Services
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Models.Lookup
+@using TravelOperation.Core.Services.Interfaces
+@inject ITripService TripService
 @inject ITransactionService TransactionService
+@inject TrevelOperation.Service.ISettingsService SettingsService
 @inject IJSRuntime JSRuntime
 
 <div class="container mx-auto p-6">
@@ -232,6 +235,8 @@
 @code {
     private List<TripSuggestion> tripSuggestions = new();
     private List<Purpose> availablePurposes = new();
+    private bool isLoading = false;
+    private string errorMessage = "";
     
     private bool showEditModal = false;
     private TripSuggestion? editingSuggestion;
@@ -244,19 +249,140 @@
 
     private async Task LoadLookupData()
     {
-        availablePurposes = new List<Purpose>
+        try
         {
-            new Purpose { PurposeId = 1, Name = "Business trip", Emoji = "💼" },
-            new Purpose { PurposeId = 2, Name = "Onboarding", Emoji = "🎓" },
-            new Purpose { PurposeId = 3, Name = "Company trip", Emoji = "🏖" },
-            new Purpose { PurposeId = 4, Name = "BCP", Emoji = "🛡" }
-        };
+            var purposes = await SettingsService.GetPurposesAsync();
+            availablePurposes = purposes.ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading lookup data: {ex.Message}";
+            availablePurposes = new List<Purpose>();
+        }
     }
 
     private async Task GenerateTripSuggestions()
     {
-        // This would normally call the actual trip suggestion algorithm
-        tripSuggestions = GenerateMockSuggestions();
+        try
+        {
+            isLoading = true;
+            errorMessage = "";
+            StateHasChanged();
+
+            var suggestedTrips = await TripService.SuggestTripsFromTransactionsAsync();
+            
+            tripSuggestions = new List<TripSuggestion>();
+            int id = 1;
+            
+            foreach (var trip in suggestedTrips)
+            {
+                // Get all unlinked transactions for this email within the date range
+                var transactions = await TransactionService.GetTransactionsByEmailAndDateRangeAsync(
+                    trip.Email, 
+                    trip.StartDate.AddDays(-2), 
+                    trip.EndDate.AddDays(2)
+                );
+                
+                var tripTransactions = transactions.Where(t => t.TripId == null).ToList();
+                
+                if (!tripTransactions.Any())
+                    continue;
+
+                // Identify key transactions (airfare/lodging)
+                var keyTransactionIds = tripTransactions
+                    .Where(t => t.Category?.Name == "Airfare" || t.Category?.Name == "Lodging")
+                    .Select(t => t.TransactionId)
+                    .ToList();
+
+                // Calculate confidence based on transaction types
+                int confidence = CalculateConfidence(tripTransactions);
+
+                var suggestion = new TripSuggestion
+                {
+                    Id = id++,
+                    SuggestedTripName = trip.TripName,
+                    Email = trip.Email,
+                    StartDate = trip.StartDate,
+                    EndDate = trip.EndDate,
+                    Duration = trip.Duration,
+                    DateRange = $"{trip.StartDate:dd/MM/yyyy} - {trip.EndDate:dd/MM/yyyy}",
+                    Destination = trip.City1 ?? "Unknown",
+                    DetectedCountry = trip.Country1 ?? "Unknown",
+                    Confidence = confidence,
+                    DetectionReason = GetDetectionReason(tripTransactions, confidence),
+                    KeyIndicators = GetKeyIndicators(tripTransactions),
+                    Transactions = tripTransactions,
+                    SelectedTransactionIds = new HashSet<string>(tripTransactions.Select(t => t.TransactionId)),
+                    KeyTransactionIds = keyTransactionIds,
+                    TransactionCount = tripTransactions.Count,
+                    TotalAmount = tripTransactions.Sum(t => t.AmountUSD ?? 0),
+                    SuggestedPurposeId = trip.PurposeId,
+                    SuggestedTripTypeId = trip.TripTypeId,
+                    SuggestedStatusId = trip.StatusId,
+                    SuggestedOwnerId = trip.OwnerId
+                };
+
+                tripSuggestions.Add(suggestion);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error generating trip suggestions: {ex.Message}";
+            tripSuggestions = new List<TripSuggestion>();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private int CalculateConfidence(List<Transaction> transactions)
+    {
+        int confidence = 50; // Base confidence
+
+        var hasAirfare = transactions.Any(t => t.Category?.Name == "Airfare");
+        var hasLodging = transactions.Any(t => t.Category?.Name == "Lodging");
+        var transactionCount = transactions.Count;
+
+        if (hasAirfare && hasLodging)
+            confidence += 30;
+        else if (hasAirfare || hasLodging)
+            confidence += 20;
+
+        if (transactionCount >= 5)
+            confidence += 15;
+        else if (transactionCount >= 3)
+            confidence += 10;
+
+        // Cap at 95 (never 100% sure without manual review)
+        return Math.Min(confidence, 95);
+    }
+
+    private string GetDetectionReason(List<Transaction> transactions, int confidence)
+    {
+        if (confidence >= 85)
+            return "Strong pattern detected";
+        else if (confidence >= 70)
+            return "Likely trip pattern";
+        else
+            return "Possible trip cluster";
+    }
+
+    private string GetKeyIndicators(List<Transaction> transactions)
+    {
+        var indicators = new List<string>();
+
+        if (transactions.Any(t => t.Category?.Name == "Airfare"))
+            indicators.Add("Airfare");
+        if (transactions.Any(t => t.Category?.Name == "Lodging"))
+            indicators.Add("Lodging");
+        if (transactions.Any(t => t.Category?.Name == "Meals"))
+            indicators.Add("Meals");
+        if (transactions.Any(t => t.Category?.Name == "Transportation"))
+            indicators.Add("Transportation");
+
+        return indicators.Any() ? string.Join(" + ", indicators) + " detected" : "Transaction clustering";
     }
 
     private async Task RefreshSuggestions()
@@ -271,10 +397,53 @@
         bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Create trip '{suggestion.SuggestedTripName}'?");
         if (confirmed)
         {
-            // TODO: Call trip service to create trip and link transactions
-            tripSuggestions.Remove(suggestion);
-            await JSRuntime.InvokeVoidAsync("alert", "Trip created successfully!");
-            StateHasChanged();
+            try
+            {
+                // Create trip from suggestion
+                var trip = new Trip
+                {
+                    TripName = suggestion.SuggestedTripName,
+                    Email = suggestion.Email,
+                    StartDate = suggestion.StartDate,
+                    EndDate = suggestion.EndDate,
+                    Duration = suggestion.Duration,
+                    Country1 = suggestion.DetectedCountry,
+                    City1 = suggestion.Destination,
+                    PurposeId = suggestion.SuggestedPurposeId ?? 1, // Default to Business trip
+                    TripTypeId = suggestion.SuggestedTripTypeId ?? 1, // Default to Domestic
+                    StatusId = suggestion.SuggestedStatusId ?? 2, // Default to Upcoming
+                    ValidationStatusId = 1, // "Not ready to validate"
+                    IsManual = false,
+                    OwnerId = suggestion.SuggestedOwnerId ?? 1, // Default to first owner
+                    CreatedAt = DateTime.Now,
+                    ModifiedAt = DateTime.Now,
+                    ModifiedBy = "System"
+                };
+
+                // Create the trip
+                var createdTrip = await TripService.CreateTripAsync(trip);
+
+                // Link selected transactions to the trip
+                foreach (var transactionId in suggestion.SelectedTransactionIds)
+                {
+                    var transaction = await TransactionService.GetByIdAsync(transactionId);
+                    if (transaction != null)
+                    {
+                        await TransactionService.LinkTransactionToTripAsync(transactionId, createdTrip.TripId);
+                    }
+                }
+
+                // Remove from suggestions list
+                tripSuggestions.Remove(suggestion);
+                await JSRuntime.InvokeVoidAsync("alert", "Trip created successfully!");
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Error creating trip: {ex.Message}";
+                await JSRuntime.InvokeVoidAsync("alert", $"Error: {ex.Message}");
+                StateHasChanged();
+            }
         }
     }
 
@@ -393,97 +562,6 @@
         };
     }
 
-    private List<TripSuggestion> GenerateMockSuggestions()
-    {
-        var suggestions = new List<TripSuggestion>();
-        var random = new Random();
-        
-        // Generate mock suggestions with different confidence levels
-        var cities = new[] { ("London", "United Kingdom"), ("Paris", "France"), ("New York", "United States"), ("Tokyo", "Japan") };
-        var emails = new[] { "john.doe@company.com", "jane.smith@company.com", "mike.johnson@company.com" };
-
-        for (int i = 1; i <= 4; i++)
-        {
-            var city = cities[random.Next(cities.Length)];
-            var email = emails[random.Next(emails.Length)];
-            var startDate = DateTime.Today.AddDays(random.Next(-30, -5));
-            var endDate = startDate.AddDays(random.Next(2, 10));
-            var confidence = random.Next(65, 95);
-            
-            var mockTransactions = GenerateMockTransactionsForSuggestion(i, startDate, endDate);
-            var keyTransactions = mockTransactions.Where(t => t.Category?.Name == "Airfare" || t.Category?.Name == "Lodging").Select(t => t.TransactionId).ToList();
-
-            suggestions.Add(new TripSuggestion
-            {
-                Id = i,
-                SuggestedTripName = $"Trip to {city.Item1}",
-                Email = email,
-                StartDate = startDate,
-                EndDate = endDate,
-                Duration = (endDate - startDate).Days + 1,
-                DateRange = $"{startDate:dd/MM/yyyy} - {endDate:dd/MM/yyyy}",
-                Destination = city.Item1,
-                DetectedCountry = city.Item2,
-                Confidence = confidence,
-                DetectionReason = confidence >= 85 ? "Strong pattern" : "Partial pattern",
-                KeyIndicators = keyTransactions.Any() ? "Airfare + Lodging detected" : "Transaction clustering",
-                Transactions = mockTransactions,
-                SelectedTransactionIds = new HashSet<string>(mockTransactions.Select(t => t.TransactionId)),
-                KeyTransactionIds = keyTransactions,
-                TransactionCount = mockTransactions.Count,
-                TotalAmount = mockTransactions.Sum(t => t.AmountUSD ?? 0),
-                SuggestedPurposeId = 1
-            });
-        }
-
-        return suggestions;
-    }
-
-    private List<Transaction> GenerateMockTransactionsForSuggestion(int suggestionId, DateTime startDate, DateTime endDate)
-    {
-        var random = new Random();
-        var categories = new List<Category>
-        {
-            new Category { CategoryId = 1, Name = "Airfare", Emoji = "✈" },
-            new Category { CategoryId = 2, Name = "Lodging", Emoji = "🏨" },
-            new Category { CategoryId = 3, Name = "Meals", Emoji = "🍽" },
-            new Category { CategoryId = 4, Name = "Transportation", Emoji = "🚕" }
-        };
-
-        var transactions = new List<Transaction>();
-        var transactionCount = random.Next(3, 8);
-
-        for (int i = 0; i < transactionCount; i++)
-        {
-            var category = categories[random.Next(categories.Count)];
-            var amount = category.Name switch
-            {
-                "Airfare" => random.Next(200, 800),
-                "Lodging" => random.Next(100, 300),
-                "Meals" => random.Next(20, 80),
-                "Transportation" => random.Next(15, 50),
-                _ => random.Next(10, 100)
-            };
-            
-            var transactionDate = startDate.AddDays(random.Next(0, (endDate - startDate).Days + 1));
-
-            transactions.Add(new Transaction
-            {
-                TransactionId = $"SUG-{suggestionId}-{i + 1}",
-                TransactionDate = transactionDate,
-                CategoryId = category.CategoryId,
-                Category = category,
-                Vendor = $"{category.Name} Vendor {i + 1}",
-                Address = $"Address {i + 1}, City, Country",
-                Currency = "USD",
-                Amount = amount,
-                AmountUSD = amount
-            });
-        }
-
-        return transactions.OrderBy(t => t.TransactionDate).ToList();
-    }
-
     // Trip suggestion model
     public class TripSuggestion
     {
@@ -505,5 +583,8 @@
         public int TransactionCount { get; set; }
         public decimal TotalAmount { get; set; }
         public int? SuggestedPurposeId { get; set; }
+        public int? SuggestedTripTypeId { get; set; }
+        public int? SuggestedStatusId { get; set; }
+        public int? SuggestedOwnerId { get; set; }
     }
 }

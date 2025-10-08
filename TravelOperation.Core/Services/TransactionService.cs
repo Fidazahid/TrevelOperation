@@ -78,6 +78,11 @@ public class TransactionService : ITransactionService
             .FirstOrDefaultAsync(t => t.TransactionId == transactionId);
     }
 
+    public async Task<Transaction?> GetByIdAsync(string transactionId)
+    {
+        return await GetTransactionByIdAsync(transactionId);
+    }
+
     public async Task<IEnumerable<Transaction>> GetTransactionsByEmailAsync(string email)
     {
         return await _context.Transactions
@@ -86,6 +91,20 @@ public class TransactionService : ITransactionService
             .Include(t => t.Trip)
             .Where(t => t.Email == email)
             .OrderByDescending(t => t.TransactionDate)
+            .ToListAsync();
+    }
+
+    public async Task<IEnumerable<Transaction>> GetTransactionsByEmailAndDateRangeAsync(string email, DateTime startDate, DateTime endDate)
+    {
+        return await _context.Transactions
+            .Include(t => t.Source)
+            .Include(t => t.Category)
+            .Include(t => t.Trip)
+            .Include(t => t.CabinClass)
+            .Include(t => t.BookingStatus)
+            .Include(t => t.BookingType)
+            .Where(t => t.Email == email && t.TransactionDate >= startDate && t.TransactionDate <= endDate)
+            .OrderBy(t => t.TransactionDate)
             .ToListAsync();
     }
 

@@ -1,7 +1,9 @@
 @page "/trips/create"
 @using TravelOperation.Core.Models
 @using TravelOperation.Core.Services
-@inject ITransactionService TransactionService
+@using TravelOperation.Core.Services.Interfaces
+@inject ILookupService LookupService
+@inject ITripService TripService
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
@@ -379,54 +381,26 @@
 
     private async Task LoadLookupData()
     {
-        // Mock data - replace with actual service calls
-        availablePurposes = new List<Purpose>
+        try
         {
-            new Purpose { PurposeId = 1, Name = "Business trip", Emoji = "💼" },
-            new Purpose { PurposeId = 2, Name = "Onboarding", Emoji = "🎓" },
-            new Purpose { PurposeId = 3, Name = "Company trip", Emoji = "🏖" },
-            new Purpose { PurposeId = 4, Name = "BCP", Emoji = "🛡" }
-        };
-
-        availableTripTypes = new List<TripType>
+            // Load all lookup data from services
+            availablePurposes = (await LookupService.GetPurposesAsync()).ToList();
+            availableTripTypes = (await LookupService.GetTripTypesAsync()).ToList();
+            availableStatuses = (await LookupService.GetStatusesAsync()).ToList();
+            availableValidationStatuses = (await LookupService.GetValidationStatusesAsync()).ToList();
+            availableOwners = (await LookupService.GetOwnersAsync()).ToList();
+            
+            // Load countries and cities
+            var countries = await LookupService.GetCountriesAsync();
+            availableCountries = countries.Select(c => c.Name).ToList();
+            
+            var cities = await LookupService.GetCitiesAsync();
+            availableCities = cities.Select(c => c.Name).ToList();
+        }
+        catch (Exception ex)
         {
-            new TripType { TripTypeId = 1, Name = "Domestic", Emoji = "🏠" },
-            new TripType { TripTypeId = 2, Name = "International", Emoji = "🌍" },
-            new TripType { TripTypeId = 3, Name = "Local", Emoji = "📍" }
-        };
-
-        availableStatuses = new List<Status>
-        {
-            new Status { StatusId = 1, Name = "Canceled", Emoji = "🔴" },
-            new Status { StatusId = 2, Name = "Upcoming", Emoji = "⚪" },
-            new Status { StatusId = 3, Name = "Ongoing", Emoji = "🔵" },
-            new Status { StatusId = 4, Name = "Completed", Emoji = "🟢" }
-        };
-
-        availableValidationStatuses = new List<ValidationStatus>
-        {
-            new ValidationStatus { ValidationStatusId = 1, Name = "Not ready to validate", Emoji = "⚪" },
-            new ValidationStatus { ValidationStatusId = 2, Name = "Ready to validate", Emoji = "🟡" },
-            new ValidationStatus { ValidationStatusId = 3, Name = "Validated", Emoji = "🟢" }
-        };
-
-        availableOwners = new List<Owner>
-        {
-            new Owner { OwnerId = 1, Name = "Maayan Chesler", Email = "maayan@company.com" },
-            new Owner { OwnerId = 2, Name = "Martina Poplinsk", Email = "martina@company.com" }
-        };
-
-        availableCountries = new List<string>
-        {
-            "United States", "United Kingdom", "Germany", "France", "Italy", "Spain", "Netherlands", 
-            "Japan", "Australia", "Canada", "Israel", "Switzerland", "Austria", "Belgium"
-        };
-
-        availableCities = new List<string>
-        {
-            "New York", "London", "Paris", "Berlin", "Tokyo", "Sydney", "Toronto", "Tel Aviv", 
-            "Amsterdam", "Madrid", "Rome", "Vienna", "Brussels", "Zurich", "Milan"
-        };
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading lookup data: {ex.Message}");
+        }
     }
 
     private void CalculateDuration()
@@ -511,18 +485,23 @@
 
         try
         {
-            // Simulate saving
-            await Task.Delay(1000);
+            // Set created timestamp
+            newTrip.CreatedAt = DateTime.UtcNow;
+            newTrip.ModifiedAt = DateTime.UtcNow;
+            newTrip.ModifiedBy = newTrip.Email; // TODO: Get from authenticated user
 
-            // TODO: Call actual service to save trip
-            // await TripService.CreateTripAsync(newTrip);
+            // Call service to save trip
+            var createdTrip = await TripService.CreateTripAsync(newTrip);
 
-            await JSRuntime.InvokeVoidAsync("alert", "Trip created successfully!");
+            // Show success message
+            await JSRuntime.InvokeVoidAsync("alert", $"✅ Trip '{createdTrip.TripName}' created successfully!");
+            
+            // Navigate to trips list or trip detail
             Navigation.NavigateTo("/trips");
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error creating trip: {ex.Message}");
+            await JSRuntime.InvokeVoidAsync("alert", $"❌ Error creating trip: {ex.Message}");
         }
         finally
         {

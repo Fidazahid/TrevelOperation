@@ -1,0 +1,524 @@
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Models.Lookup
+@using TravelOperation.Core.Models
+@using TravelOperation.Core.Interfaces
+@inject IJSRuntime JSRuntime
+
+@if (ShowModal && Transaction != null)
+{
+    <div class="modal modal-open">
+        <div class="modal-box max-w-4xl">
+            <h3 class="font-bold text-lg mb-4">✂️ Split Transaction</h3>
+            
+            <!-- Original Transaction Info -->
+            <div class="alert alert-info mb-4">
+                <div class="flex justify-between items-start w-full">
+                    <div>
+                        <div class="font-bold">Original Transaction</div>
+                        <div class="text-sm mt-1">
+                            <div>ID: <span class="font-mono">@Transaction.TransactionId</span></div>
+                            <div>Date: @Transaction.TransactionDate.ToString("dd/MM/yyyy")</div>
+                            <div>Vendor: @Transaction.Vendor</div>
+                            <div>Category: @Transaction.Category?.Name</div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-2xl font-bold">@Transaction.Currency @Transaction.Amount.ToString("N2")</div>
+                        <div class="text-sm">≈ $@(Transaction.AmountUSD?.ToString("N2") ?? "0.00")</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Split Type Selection -->
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text font-semibold">Split Type</span>
+                </label>
+                <div class="flex gap-4">
+                    <label class="label cursor-pointer gap-2">
+                        <input type="radio" name="splitType" class="radio" checked="@(SplitType == "Equal")" 
+                               @onchange="@(() => ChangeSplitType("Equal"))" />
+                        <span class="label-text">Equal Split</span>
+                    </label>
+                    <label class="label cursor-pointer gap-2">
+                        <input type="radio" name="splitType" class="radio" checked="@(SplitType == "Custom")" 
+                               @onchange="@(() => ChangeSplitType("Custom"))" />
+                        <span class="label-text">Custom Split</span>
+                    </label>
+                    <label class="label cursor-pointer gap-2">
+                        <input type="radio" name="splitType" class="radio" checked="@(SplitType == "Percentage")" 
+                               @onchange="@(() => ChangeSplitType("Percentage"))" />
+                        <span class="label-text">Percentage Split</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Number of Splits -->
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text font-semibold">Number of Splits</span>
+                </label>
+                <div class="flex gap-2 items-center">
+                    <button class="btn btn-sm btn-circle" @onclick="DecrementSplits" disabled="@(SplitItems.Count <= 2)">−</button>
+                    <input type="number" class="input input-bordered w-20 text-center" 
+                           min="2" max="10" @bind="numberOfSplits" @bind:after="UpdateSplitCount" />
+                    <button class="btn btn-sm btn-circle" @onclick="IncrementSplits" disabled="@(SplitItems.Count >= 10)">+</button>
+                    <span class="text-sm text-gray-500">participants</span>
+                </div>
+            </div>
+
+            <!-- Split Items -->
+            <div class="space-y-3 mb-4 max-h-96 overflow-y-auto">
+                @for (int i = 0; i < SplitItems.Count; i++)
+                {
+                    var index = i;
+                    var item = SplitItems[i];
+                    
+                    <div class="card bg-base-200 shadow-sm">
+                        <div class="card-body p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="font-semibold">Split #@(index + 1)</h4>
+                                <button class="btn btn-ghost btn-xs text-error" @onclick="() => RemoveSplit(index)" 
+                                        disabled="@(SplitItems.Count <= 2)">
+                                    🗑️ Remove
+                                </button>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <!-- Email/Participant -->
+                                <div class="form-control">
+                                    <label class="label">
+                                        <span class="label-text">Email/Participant</span>
+                                    </label>
+                                    <div class="flex gap-2">
+                                        <input type="email" class="input input-bordered input-sm flex-1" 
+                                               placeholder="email@company.com" 
+                                               @bind="item.Email" 
+                                               @bind:after="UpdateCalculations" />
+                                        <div class="dropdown dropdown-end">
+                                            <label tabindex="0" class="btn btn-sm btn-ghost">👥</label>
+                                            <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-64 max-h-48 overflow-y-auto">
+                                                @if (AvailableParticipants?.Any() == true)
+                                                {
+                                                    @foreach (var participant in AvailableParticipants)
+                                                    {
+                                                        <li><a @onclick="() => SelectParticipant(index, participant)">@participant</a></li>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <li class="text-sm text-gray-500 p-2">No participants available</li>
+                                                }
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    @if (IsExternalEmail(item.Email))
+                                    {
+                                        <label class="label">
+                                            <span class="label-text-alt text-warning">⚠️ External participant</span>
+                                        </label>
+                                    }
+                                </div>
+
+                                <!-- Category -->
+                                <div class="form-control">
+                                    <label class="label">
+                                        <span class="label-text">Category</span>
+                                    </label>
+                                    <select class="select select-bordered select-sm" @bind="item.CategoryId">
+                                        @if (Categories != null)
+                                        {
+                                            @foreach (var category in Categories)
+                                            {
+                                                <option value="@category.CategoryId">@category.Emoji @category.Name</option>
+                                            }
+                                        }
+                                    </select>
+                                </div>
+
+                                <!-- Amount (Original Currency) -->
+                                <div class="form-control">
+                                    <label class="label">
+                                        <span class="label-text">Amount (@Transaction.Currency)</span>
+                                    </label>
+                                    <input type="number" step="0.01" class="input input-bordered input-sm @(item.Amount > 0 ? "" : "input-error")" 
+                                           @bind="item.Amount" 
+                                           @bind:after="UpdateAmountUSD"
+                                           disabled="@(SplitType == "Equal")" />
+                                </div>
+
+                                <!-- Amount USD -->
+                                <div class="form-control">
+                                    <label class="label">
+                                        <span class="label-text">Amount (USD)</span>
+                                    </label>
+                                    <input type="number" step="0.01" class="input input-bordered input-sm" 
+                                           @bind="item.AmountUSD" 
+                                           @bind:after="UpdateCalculations"
+                                           disabled="@(SplitType == "Equal")" />
+                                </div>
+
+                                <!-- Percentage (if Percentage split) -->
+                                @if (SplitType == "Percentage")
+                                {
+                                    <div class="form-control">
+                                        <label class="label">
+                                            <span class="label-text">Percentage</span>
+                                        </label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="number" step="1" min="0" max="100" 
+                                                   class="input input-bordered input-sm flex-1" 
+                                                   @bind="item.Percentage" 
+                                                   @bind:after="UpdateFromPercentage" />
+                                            <span>%</span>
+                                        </div>
+                                    </div>
+                                }
+
+                                <!-- Notes -->
+                                <div class="form-control md:col-span-2">
+                                    <label class="label">
+                                        <span class="label-text">Notes (optional)</span>
+                                    </label>
+                                    <input type="text" class="input input-bordered input-sm" 
+                                           placeholder="Additional notes for this split..." 
+                                           @bind="item.Notes" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Validation Summary -->
+            <div class="alert @(IsValid ? "alert-success" : "alert-warning") mb-4">
+                <div class="flex flex-col w-full">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="font-bold">Split Summary</span>
+                        <span class="badge @(IsValid ? "badge-success" : "badge-warning")">
+                            @(IsValid ? "✓ Valid" : "⚠ Check totals")
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        <div>Original Amount:</div>
+                        <div class="font-bold text-right">@Transaction.Currency @Transaction.Amount.ToString("N2")</div>
+                        <div>Split Total:</div>
+                        <div class="font-bold text-right @(Math.Abs(TotalSplitAmount - Transaction.Amount) > 0.01m ? "text-error" : "text-success")">
+                            @Transaction.Currency @TotalSplitAmount.ToString("N2")
+                        </div>
+                        <div>Difference:</div>
+                        <div class="font-bold text-right @(Math.Abs(TotalSplitAmount - Transaction.Amount) > 0.01m ? "text-error" : "text-success")">
+                            @Transaction.Currency @((Transaction.Amount - TotalSplitAmount).ToString("N2"))
+                        </div>
+                        <div class="col-span-2 border-t border-gray-300 mt-2 pt-2"></div>
+                        <div>Original USD:</div>
+                        <div class="font-bold text-right">$@(Transaction.AmountUSD?.ToString("N2") ?? "0.00")</div>
+                        <div>Split Total USD:</div>
+                        <div class="font-bold text-right @(Math.Abs(TotalSplitAmountUSD - (Transaction.AmountUSD ?? 0)) > 0.01m ? "text-error" : "text-success")">
+                            $@TotalSplitAmountUSD.ToString("N2")
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(ValidationMessage))
+                    {
+                        <div class="mt-2 text-sm text-error">
+                            ⚠️ @ValidationMessage
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Modal Actions -->
+            <div class="modal-action">
+                <button class="btn btn-ghost" @onclick="Close">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveSplit" disabled="@(!IsValid || IsSaving)">
+                    @if (IsSaving)
+                    {
+                        <span class="loading loading-spinner loading-sm"></span>
+                    }
+                    ✂️ Split Transaction
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool ShowModal { get; set; }
+    [Parameter] public Transaction? Transaction { get; set; }
+    [Parameter] public List<Category>? Categories { get; set; }
+    [Parameter] public List<string>? AvailableParticipants { get; set; }
+    [Parameter] public EventCallback<List<SplitItem>> OnSplitSaved { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string SplitType { get; set; } = "Equal";
+    private int numberOfSplits = 2;
+    private List<SplitItemModel> SplitItems { get; set; } = new();
+    private decimal TotalSplitAmount => SplitItems.Sum(s => s.Amount);
+    private decimal TotalSplitAmountUSD => SplitItems.Sum(s => s.AmountUSD);
+    private decimal TotalPercentage => SplitItems.Sum(s => s.Percentage);
+    private bool IsValid => ValidateSplit();
+    private string ValidationMessage { get; set; } = "";
+    private bool IsSaving { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (ShowModal && Transaction != null && !SplitItems.Any())
+        {
+            InitializeSplits();
+        }
+    }
+
+    private void InitializeSplits()
+    {
+        SplitItems.Clear();
+        
+        for (int i = 0; i < numberOfSplits; i++)
+        {
+            SplitItems.Add(new SplitItemModel
+            {
+                Email = i == 0 ? Transaction!.Email : "",
+                CategoryId = Transaction!.CategoryId,
+                Amount = Transaction.Amount / numberOfSplits,
+                AmountUSD = (Transaction.AmountUSD ?? 0) / numberOfSplits,
+                Percentage = 100m / numberOfSplits,
+                IsExternal = false,
+                Notes = ""
+            });
+        }
+        
+        StateHasChanged();
+    }
+
+    private void ChangeSplitType(string type)
+    {
+        SplitType = type;
+        UpdateCalculations();
+    }
+
+    private void IncrementSplits()
+    {
+        if (SplitItems.Count < 10)
+        {
+            numberOfSplits++;
+            UpdateSplitCount();
+        }
+    }
+
+    private void DecrementSplits()
+    {
+        if (SplitItems.Count > 2)
+        {
+            numberOfSplits--;
+            UpdateSplitCount();
+        }
+    }
+
+    private void UpdateSplitCount()
+    {
+        if (Transaction == null) return;
+
+        if (numberOfSplits > SplitItems.Count)
+        {
+            // Add more splits
+            while (SplitItems.Count < numberOfSplits)
+            {
+                SplitItems.Add(new SplitItemModel
+                {
+                    Email = "",
+                    CategoryId = Transaction.CategoryId,
+                    Amount = 0,
+                    AmountUSD = 0,
+                    Percentage = 0,
+                    IsExternal = false,
+                    Notes = ""
+                });
+            }
+        }
+        else if (numberOfSplits < SplitItems.Count)
+        {
+            // Remove splits
+            while (SplitItems.Count > numberOfSplits)
+            {
+                SplitItems.RemoveAt(SplitItems.Count - 1);
+            }
+        }
+
+        UpdateCalculations();
+    }
+
+    private void RemoveSplit(int index)
+    {
+        if (SplitItems.Count > 2)
+        {
+            SplitItems.RemoveAt(index);
+            numberOfSplits = SplitItems.Count;
+            UpdateCalculations();
+        }
+    }
+
+    private void SelectParticipant(int index, string participant)
+    {
+        if (index < SplitItems.Count)
+        {
+            SplitItems[index].Email = participant;
+            SplitItems[index].IsExternal = IsExternalEmail(participant);
+            StateHasChanged();
+        }
+    }
+
+    private void UpdateCalculations()
+    {
+        if (Transaction == null) return;
+
+        if (SplitType == "Equal")
+        {
+            var amountPerSplit = Transaction.Amount / SplitItems.Count;
+            var amountUSDPerSplit = (Transaction.AmountUSD ?? 0) / SplitItems.Count;
+
+            foreach (var item in SplitItems)
+            {
+                item.Amount = amountPerSplit;
+                item.AmountUSD = amountUSDPerSplit;
+                item.Percentage = 100m / SplitItems.Count;
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private void UpdateAmountUSD()
+    {
+        if (Transaction == null || Transaction.ExchangeRate == null) return;
+
+        foreach (var item in SplitItems)
+        {
+            if (Transaction.ExchangeRate > 0)
+            {
+                item.AmountUSD = item.Amount * Transaction.ExchangeRate.Value;
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private void UpdateFromPercentage()
+    {
+        if (Transaction == null || SplitType != "Percentage") return;
+
+        foreach (var item in SplitItems)
+        {
+            item.Amount = Transaction.Amount * (item.Percentage / 100m);
+            item.AmountUSD = (Transaction.AmountUSD ?? 0) * (item.Percentage / 100m);
+        }
+
+        StateHasChanged();
+    }
+
+    private bool ValidateSplit()
+    {
+        ValidationMessage = "";
+
+        if (Transaction == null || !SplitItems.Any())
+        {
+            ValidationMessage = "No splits defined";
+            return false;
+        }
+
+        // Check all emails are filled
+        if (SplitItems.Any(s => string.IsNullOrWhiteSpace(s.Email)))
+        {
+            ValidationMessage = "All participants must have an email";
+            return false;
+        }
+
+        // Check amounts are positive
+        if (SplitItems.Any(s => s.Amount <= 0 || s.AmountUSD <= 0))
+        {
+            ValidationMessage = "All amounts must be positive";
+            return false;
+        }
+
+        // Check total matches original (with small tolerance for rounding)
+        if (Math.Abs(TotalSplitAmount - Transaction.Amount) > 0.01m)
+        {
+            ValidationMessage = $"Split total ({TotalSplitAmount:N2}) must equal original amount ({Transaction.Amount:N2})";
+            return false;
+        }
+
+        // Check percentage total if using percentage split
+        if (SplitType == "Percentage" && Math.Abs(TotalPercentage - 100m) > 0.01m)
+        {
+            ValidationMessage = $"Percentages must total 100% (currently {TotalPercentage:N1}%)";
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool IsExternalEmail(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return false;
+        
+        var internalDomains = new[] { "@company.com", "@wsc.com" };
+        return !internalDomains.Any(d => email.EndsWith(d, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task SaveSplit()
+    {
+        if (!IsValid || Transaction == null) return;
+
+        IsSaving = true;
+        StateHasChanged();
+
+        try
+        {
+            var splitItems = SplitItems.Select(s => new SplitItem
+            {
+                Email = s.Email,
+                Name = GetNameFromEmail(s.Email),
+                Amount = s.Amount,
+                AmountUSD = s.AmountUSD,
+                CategoryId = s.CategoryId,
+                IsExternal = s.IsExternal,
+                Notes = s.Notes ?? ""
+            }).ToList();
+
+            await OnSplitSaved.InvokeAsync(splitItems);
+            await Close();
+        }
+        finally
+        {
+            IsSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetNameFromEmail(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains("@")) 
+            return email;
+        
+        return email.Split('@')[0].Replace(".", " ").Replace("_", " ");
+    }
+
+    private async Task Close()
+    {
+        SplitItems.Clear();
+        numberOfSplits = 2;
+        SplitType = "Equal";
+        ValidationMessage = "";
+        await OnCancel.InvokeAsync();
+    }
+
+    private class SplitItemModel
+    {
+        public string Email { get; set; } = "";
+        public string Name { get; set; } = "";
+        public decimal Amount { get; set; }
+        public decimal AmountUSD { get; set; }
+        public decimal Percentage { get; set; }
+        public int CategoryId { get; set; }
+        public bool IsExternal { get; set; }
+        public string? Notes { get; set; }
+    }
+}

@@ -1,8 +1,12 @@
 @page "/airfare-control"
 @using TravelOperation.Core.Models
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Models.Lookup
 @using TravelOperation.Core.Services
+@using TravelOperation.Core.Services.Interfaces
 @using TrevelOperation.RazorLib.Components
 @inject ITransactionService TransactionService
+@inject ILookupService LookupService
 @inject IJSRuntime JSRuntime
 
 <AuthorizeRoleView RequiredRole="Finance">
@@ -173,27 +177,28 @@
                                 </td>
                                 <td>@transaction.Currency</td>
                                 <td>@transaction.Amount.ToString("N2")</td>
-                                <td>$@transaction.AmountUSD.ToString("N2")</td>
+                                <td>$@(transaction.AmountUSD?.ToString("N2") ?? "0.00")</td>
                                 <td>
-                                    <select class="select select-bordered select-sm @(string.IsNullOrEmpty(transaction.CabinClass) ? "bg-yellow-100 border-yellow-400" : "")" 
+                                    <select class="select select-bordered select-sm @(transaction.CabinClassId == null ? "bg-yellow-100 border-yellow-400" : "")" 
                                             @onchange="(e) => UpdateCabinClass(transaction.TransactionId, e.Value?.ToString())">
                                         <option value="">Select...</option>
-                                        <option value="Economy" selected="@(transaction.CabinClass == "Economy")">💺 Economy</option>
-                                        <option value="Premium Economy" selected="@(transaction.CabinClass == "Premium Economy")">🛫 Premium Economy</option>
-                                        <option value="Business" selected="@(transaction.CabinClass == "Business")">🧳 Business</option>
-                                        <option value="First" selected="@(transaction.CabinClass == "First")">👑 First</option>
+                                        @foreach (var cabin in cabinClasses)
+                                        {
+                                            <option value="@cabin.CabinClassId" selected="@(transaction.CabinClassId == cabin.CabinClassId)">
+                                                @cabin.Emoji @cabin.Name
+                                            </option>
+                                        }
                                     </select>
                                 </td>
                                 <td>
                                     <select class="select select-bordered select-sm bg-blue-50" 
                                             @onchange="(e) => UpdateCategory(transaction.TransactionId, e.Value?.ToString())">
-                                        <option value="Airfare" selected="@(transaction.Category == "Airfare")">✈ Airfare</option>
-                                        <option value="Lodging" selected="@(transaction.Category == "Lodging")">🏨 Lodging</option>
-                                        <option value="Transportation" selected="@(transaction.Category == "Transportation")">🚕 Transportation</option>
-                                        <option value="Meals" selected="@(transaction.Category == "Meals")">🍽 Meals</option>
-                                        <option value="Client entertainment" selected="@(transaction.Category == "Client entertainment")">🍸 Client entertainment</option>
-                                        <option value="Communication" selected="@(transaction.Category == "Communication")">📱 Communication</option>
-                                        <option value="Other" selected="@(transaction.Category == "Other")">❔ Other</option>
+                                        @foreach (var category in categories)
+                                        {
+                                            <option value="@category.CategoryId" selected="@(transaction.CategoryId == category.CategoryId)">
+                                                @category.Emoji @category.Name
+                                            </option>
+                                        }
                                     </select>
                                 </td>
                                 <td>
@@ -250,8 +255,10 @@
 </div>
 
 @code {
-    private List<AirfareTransactionData> transactions = new();
-    private List<AirfareTransactionData> filteredTransactions = new();
+    private List<Transaction> transactions = new();
+    private List<Transaction> filteredTransactions = new();
+    private List<CabinClass> cabinClasses = new();
+    private List<Category> categories = new();
     private List<string> availableOwners = new();
     private HashSet<string> selectedTransactions = new();
     
@@ -275,31 +282,50 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadLookupData();
         await LoadAirfareTransactions();
         CalculateSummary();
         FilterTransactions();
     }
 
+    private async Task LoadLookupData()
+    {
+        cabinClasses = (await LookupService.GetCabinClassesAsync()).ToList();
+        categories = (await LookupService.GetCategoriesAsync()).ToList();
+    }
+
     private async Task LoadAirfareTransactions()
     {
-        transactions = GenerateMockAirfareData();
-        availableOwners = transactions.Select(t => t.Owner).Where(o => !string.IsNullOrEmpty(o)).Distinct().ToList()!;
+        // Get airfare transactions without cabin class
+        var allAirfare = await TransactionService.GetAirfareWithoutCabinClassAsync();
+        transactions = allAirfare.ToList();
+        
+        // Extract unique owners (you might want to get this from a trip/owner relationship)
+        availableOwners = transactions
+            .Where(t => t.Trip?.Owner?.Name != null)
+            .Select(t => t.Trip!.Owner!.Name)
+            .Distinct()
+            .ToList();
     }
 
     private void CalculateSummary()
     {
-        incompleteCount = filteredTransactions.Count(t => string.IsNullOrEmpty(t.CabinClass));
+        incompleteCount = filteredTransactions.Count(t => t.CabinClassId == null);
         totalAirfareTransactions = filteredTransactions.Count;
-        premiumCount = filteredTransactions.Count(t => t.CabinClass is "Business" or "First");
-        totalAirfareAmount = filteredTransactions.Sum(t => t.AmountUSD);
+        
+        // Premium cabin classes (Business, First)
+        var premiumCabinClasses = cabinClasses.Where(c => c.Name == "Business" || c.Name == "First").Select(c => c.CabinClassId).ToList();
+        premiumCount = filteredTransactions.Count(t => t.CabinClassId.HasValue && premiumCabinClasses.Contains(t.CabinClassId.Value));
+        
+        totalAirfareAmount = filteredTransactions.Sum(t => t.AmountUSD ?? 0);
     }
 
     private void FilterTransactions()
     {
         filteredTransactions = transactions.Where(t =>
-            (string.IsNullOrEmpty(selectedOwner) || t.Owner == selectedOwner) &&
+            (string.IsNullOrEmpty(selectedOwner) || (t.Trip?.Owner?.Name == selectedOwner)) &&
             (string.IsNullOrEmpty(searchText) || 
-             t.Vendor.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+             (t.Vendor?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false) ||
              t.TransactionId.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
             FilterByStatus(t) &&
             FilterByDateRange(t)
@@ -311,18 +337,23 @@
         StateHasChanged();
     }
 
-    private bool FilterByStatus(AirfareTransactionData transaction)
+    private bool FilterByStatus(Transaction transaction)
     {
+        if (string.IsNullOrEmpty(selectedStatus))
+            return true;
+
+        var premiumCabinClasses = cabinClasses.Where(c => c.Name == "Business" || c.Name == "First").Select(c => c.CabinClassId).ToList();
+        
         return selectedStatus switch
         {
-            "missing" => string.IsNullOrEmpty(transaction.CabinClass),
-            "premium" => transaction.CabinClass is "Business" or "First",
-            "economy" => transaction.CabinClass == "Economy",
+            "missing" => transaction.CabinClassId == null,
+            "premium" => transaction.CabinClassId.HasValue && premiumCabinClasses.Contains(transaction.CabinClassId.Value),
+            "economy" => transaction.CabinClass?.Name == "Economy",
             _ => true
         };
     }
 
-    private bool FilterByDateRange(AirfareTransactionData transaction)
+    private bool FilterByDateRange(Transaction transaction)
     {
         return selectedDateRange switch
         {
@@ -375,23 +406,25 @@
         StateHasChanged();
     }
 
-    private async Task UpdateCabinClass(string transactionId, string? cabinClass)
+    private async Task UpdateCabinClass(string transactionId, string? cabinClassIdStr)
     {
         var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-        if (transaction != null)
+        if (transaction != null && !string.IsNullOrEmpty(cabinClassIdStr))
         {
-            transaction.CabinClass = cabinClass ?? "";
+            transaction.CabinClassId = int.Parse(cabinClassIdStr);
+            await TransactionService.UpdateTransactionAsync(transaction);
             CalculateSummary();
             StateHasChanged();
         }
     }
 
-    private async Task UpdateCategory(string transactionId, string? category)
+    private async Task UpdateCategory(string transactionId, string? categoryIdStr)
     {
         var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-        if (transaction != null)
+        if (transaction != null && !string.IsNullOrEmpty(categoryIdStr))
         {
-            transaction.Category = category ?? "";
+            transaction.CategoryId = int.Parse(categoryIdStr);
+            await TransactionService.UpdateTransactionAsync(transaction);
             StateHasChanged();
         }
     }
@@ -409,10 +442,10 @@
         {
             foreach (var transaction in filteredTransactions)
             {
-                transaction.IsValid = true;
+                await TransactionService.MarkAsValidAsync(transaction.TransactionId);
             }
             await JSRuntime.InvokeVoidAsync("alert", $"Marked {filteredTransactions.Count} transactions as valid");
-            StateHasChanged();
+            await RefreshData();
         }
     }
 
@@ -434,6 +467,7 @@
 
     private async Task MarkAsValid(string transactionId)
     {
+        await TransactionService.MarkAsValidAsync(transactionId);
         var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
         if (transaction != null)
         {
@@ -446,15 +480,11 @@
     {
         foreach (var transactionId in selectedTransactions)
         {
-            var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-            if (transaction != null)
-            {
-                transaction.IsValid = true;
-            }
+            await TransactionService.MarkAsValidAsync(transactionId);
         }
         selectedTransactions.Clear();
         await JSRuntime.InvokeVoidAsync("alert", "Selected transactions marked as valid");
-        StateHasChanged();
+        await RefreshData();
     }
 
     private void ClearSelection()
@@ -464,15 +494,17 @@
         StateHasChanged();
     }
 
-    private string GenerateAirfareMessage(AirfareTransactionData transaction)
+    private string GenerateAirfareMessage(Transaction transaction)
     {
+        var cabinClassName = transaction.CabinClass?.Name ?? "Unknown";
+        var categoryName = transaction.Category?.Name ?? "Airfare";
         return $@"Hi {GetFirstName(transaction.Email)},
 
 I have a question about the following travel-related transaction:
 
 Transaction ID: {transaction.TransactionId}
 Date: {transaction.TransactionDate:dd/MM/yyyy}
-Category: Airfare
+Category: {categoryName}
 Vendor: {transaction.Vendor}
 Address: {transaction.Address}
 Amount: {transaction.Currency} {transaction.Amount:N2}
@@ -487,60 +519,13 @@ Thank you!";
 
     private string GetFirstName(string email)
     {
-        return email.Split('@')[0].Split('.')[0];
-    }
-
-    private List<AirfareTransactionData> GenerateMockAirfareData()
-    {
-        var random = new Random();
-        var transactions = new List<AirfareTransactionData>();
-        var emails = new[] { "john.doe@company.com", "jane.smith@company.com", "mike.johnson@company.com", "sarah.wilson@company.com" };
-        var vendors = new[] { "United Airlines", "Delta Air Lines", "American Airlines", "Lufthansa", "Emirates", "British Airways" };
-        var owners = new[] { "Maayan Chesler", "Martina Poplinsk" };
-        var cabinClasses = new[] { "", "Economy", "Premium Economy", "Business", "First" };
-
-        for (int i = 1; i <= 25; i++)
+        var parts = email.Split('@');
+        if (parts.Length > 0)
         {
-            var hasDocumentation = random.NextDouble() > 0.2;
-            var amount = random.Next(250, 2500);
-            var cabinClass = cabinClasses[random.Next(cabinClasses.Length)];
-            
-            transactions.Add(new AirfareTransactionData
-            {
-                TransactionId = $"TXN-AIR-{i:000}",
-                Email = emails[random.Next(emails.Length)],
-                TransactionDate = DateTime.Today.AddDays(random.Next(-120, -1)),
-                Vendor = vendors[random.Next(vendors.Length)],
-                Address = "Airline Reservation",
-                Currency = "USD",
-                Amount = amount,
-                AmountUSD = amount,
-                Category = "Airfare",
-                CabinClass = cabinClass,
-                DocumentUrl = hasDocumentation ? $"https://docs.company.com/receipt-{i}" : "",
-                Owner = owners[random.Next(owners.Length)],
-                IsValid = !string.IsNullOrEmpty(cabinClass)
-            });
+            var nameParts = parts[0].Split('.');
+            return nameParts.Length > 0 ? nameParts[0] : email;
         }
-
-        return transactions.OrderByDescending(t => t.TransactionDate).ToList();
-    }
-
-    public class AirfareTransactionData
-    {
-        public string TransactionId { get; set; } = "";
-        public string Email { get; set; } = "";
-        public DateTime TransactionDate { get; set; }
-        public string Vendor { get; set; } = "";
-        public string Address { get; set; } = "";
-        public string Currency { get; set; } = "";
-        public decimal Amount { get; set; }
-        public decimal AmountUSD { get; set; }
-        public string Category { get; set; } = "";
-        public string CabinClass { get; set; } = "";
-        public string DocumentUrl { get; set; } = "";
-        public string Owner { get; set; } = "";
-        public bool IsValid { get; set; }
+        return email;
     }
 }
 </AuthorizeRoleView>

@@ -1,7 +1,11 @@
 @page "/trips/validation"
 @using TravelOperation.Core.Models
 @using TravelOperation.Core.Services
+@using TravelOperation.Core.Services.Interfaces
+@using TrevelOperation.Service
+@inject ITripService TripService
 @inject ITransactionService TransactionService
+@inject ITaxCalculationService TaxCalculationService
 @inject IJSRuntime JSRuntime
 
 <div class="container mx-auto p-6">
@@ -230,6 +234,9 @@
     private List<Trip> trips = new();
     private List<Trip> filteredTrips = new();
     private List<string> availableOwners = new();
+    private Dictionary<int, TaxExposureResult> taxExposureCache = new();
+    private Dictionary<int, int> transactionCountCache = new();
+    private Dictionary<int, int> missingDocsCache = new();
     
     // Filters
     private string selectedStatus = "";
@@ -246,19 +253,74 @@
     private int readyToValidateCount = 0;
     private int validatedCount = 0;
     private int notReadyCount = 0;
+    
+    private bool isLoading = false;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadTrips();
-        CalculateSummary();
-        FilterTrips();
     }
 
     private async Task LoadTrips()
     {
-        // Mock data - replace with actual service call
-        trips = GenerateMockTripsForValidation();
-        availableOwners = trips.Select(t => t.Owner?.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct().ToList()!;
+        isLoading = true;
+        StateHasChanged();
+        
+        try
+        {
+            // Load all trips with their navigation properties
+            trips = (await TripService.GetAllTripsAsync()).ToList();
+            
+            // Get unique owners
+            availableOwners = trips
+                .Select(t => t.Owner?.Name)
+                .Where(n => !string.IsNullOrEmpty(n))
+                .Distinct()
+                .ToList()!;
+            
+            // Preload tax exposure and transaction counts for visible trips
+            await PreloadTripMetrics();
+            
+            CalculateSummary();
+            FilterTrips();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading trips: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+    
+    private async Task PreloadTripMetrics()
+    {
+        // Calculate metrics for all trips
+        foreach (var trip in trips)
+        {
+            try
+            {
+                // Get tax exposure
+                var taxExposure = await TaxCalculationService.CalculateTaxExposureAsync(trip.TripId);
+                taxExposureCache[trip.TripId] = taxExposure;
+                
+                // Count transactions
+                var transactions = trip.Transactions?.ToList() ?? new List<Transaction>();
+                transactionCountCache[trip.TripId] = transactions.Count;
+                
+                // Count missing documents
+                missingDocsCache[trip.TripId] = transactions.Count(t => string.IsNullOrEmpty(t.DocumentUrl));
+            }
+            catch
+            {
+                // If calculation fails, use defaults
+                taxExposureCache[trip.TripId] = new TaxExposureResult { TripId = trip.TripId };
+                transactionCountCache[trip.TripId] = 0;
+                missingDocsCache[trip.TripId] = 0;
+            }
+        }
     }
 
     private void CalculateSummary()
@@ -315,13 +377,28 @@
         bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Validate trip '{trip.TripName}'?");
         if (confirmed)
         {
-            // Update validation status
-            trip.ValidationStatusId = 3; // Validated
-            trip.ValidationStatus = new ValidationStatus { ValidationStatusId = 3, Name = "Validated", Emoji = "🟢" };
-            
-            CalculateSummary();
-            FilterTrips();
-            await JSRuntime.InvokeVoidAsync("alert", "Trip validated successfully!");
+            try
+            {
+                // Call service to validate trip
+                await TripService.ValidateTripAsync(trip.TripId);
+                
+                // Update local trip object
+                trip.ValidationStatusId = 3; // Validated
+                if (trip.ValidationStatus != null)
+                {
+                    trip.ValidationStatus.ValidationStatusId = 3;
+                    trip.ValidationStatus.Name = "Validated";
+                    trip.ValidationStatus.Emoji = "🟢";
+                }
+                
+                CalculateSummary();
+                FilterTrips();
+                await JSRuntime.InvokeVoidAsync("alert", "✅ Trip validated successfully!");
+            }
+            catch (Exception ex)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", $"❌ Error validating trip: {ex.Message}");
+            }
         }
     }
 
@@ -330,22 +407,54 @@
         var readyTrips = trips.Where(t => t.ValidationStatus?.Name == "Ready to validate").ToList();
         if (!readyTrips.Any())
         {
-            await JSRuntime.InvokeVoidAsync("alert", "No trips ready for validation.");
+            await JSRuntime.InvokeVoidAsync("alert", "ℹ️ No trips ready for validation.");
             return;
         }
 
         bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Validate all {readyTrips.Count} ready trips?");
         if (confirmed)
         {
-            foreach (var trip in readyTrips)
+            try
             {
-                trip.ValidationStatusId = 3; // Validated
-                trip.ValidationStatus = new ValidationStatus { ValidationStatusId = 3, Name = "Validated", Emoji = "🟢" };
+                int successCount = 0;
+                int failCount = 0;
+                
+                foreach (var trip in readyTrips)
+                {
+                    try
+                    {
+                        await TripService.ValidateTripAsync(trip.TripId);
+                        trip.ValidationStatusId = 3; // Validated
+                        if (trip.ValidationStatus != null)
+                        {
+                            trip.ValidationStatus.ValidationStatusId = 3;
+                            trip.ValidationStatus.Name = "Validated";
+                            trip.ValidationStatus.Emoji = "🟢";
+                        }
+                        successCount++;
+                    }
+                    catch
+                    {
+                        failCount++;
+                    }
+                }
+                
+                CalculateSummary();
+                FilterTrips();
+                
+                if (failCount == 0)
+                {
+                    await JSRuntime.InvokeVoidAsync("alert", $"✅ All {successCount} trips validated successfully!");
+                }
+                else
+                {
+                    await JSRuntime.InvokeVoidAsync("alert", $"⚠️ {successCount} trips validated, {failCount} failed.");
+                }
             }
-            
-            CalculateSummary();
-            FilterTrips();
-            await JSRuntime.InvokeVoidAsync("alert", $"{readyTrips.Count} trips validated successfully!");
+            catch (Exception ex)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", $"❌ Error during bulk validation: {ex.Message}");
+            }
         }
     }
 
@@ -385,94 +494,77 @@
 
     private int GetTransactionCount(int tripId)
     {
-        return new Random().Next(3, 12); // Mock data
+        return transactionCountCache.GetValueOrDefault(tripId, 0);
     }
 
     private decimal GetTotalAmount(int tripId)
     {
-        return new Random().Next(500, 3000); // Mock data
+        var trip = trips.FirstOrDefault(t => t.TripId == tripId);
+        if (trip?.Transactions == null) return 0;
+        return trip.Transactions.Sum(t => t.AmountUSD ?? 0);
     }
 
     private decimal GetPerDayCost(int tripId)
     {
         var trip = trips.FirstOrDefault(t => t.TripId == tripId);
-        if (trip == null) return 0;
+        if (trip == null || trip.Duration == 0) return 0;
         return GetTotalAmount(tripId) / trip.Duration;
     }
 
     private decimal GetTaxExposure(int tripId)
     {
-        return new Random().Next(0, 500); // Mock data
+        return taxExposureCache.GetValueOrDefault(tripId)?.TotalTaxExposure ?? 0;
     }
 
     private int GetMissingDocs(int tripId)
     {
-        return new Random().Next(0, 3); // Mock data
+        return missingDocsCache.GetValueOrDefault(tripId, 0);
     }
 
     private List<string> GetValidationIssues(int tripId)
     {
         var issues = new List<string>();
-        var random = new Random(tripId);
+        var trip = trips.FirstOrDefault(t => t.TripId == tripId);
+        if (trip?.Transactions == null) return issues;
         
-        if (random.NextDouble() > 0.7)
-            issues.Add("High meal expenses detected (>$80 per transaction)");
-        if (random.NextDouble() > 0.8)
-            issues.Add("Missing cabin class for airfare transactions");
-        if (random.NextDouble() > 0.9)
-            issues.Add("Client entertainment missing participant details");
-        if (GetMissingDocs(tripId) > 0)
-            issues.Add($"{GetMissingDocs(tripId)} transactions missing receipts");
+        var transactions = trip.Transactions.ToList();
+        
+        // Check for high meal expenses
+        var highMeals = transactions.Where(t => 
+            t.Category?.Name == "Meals" && 
+            Math.Abs(t.AmountUSD ?? 0) >= 80).Count();
+        if (highMeals > 0)
+            issues.Add($"{highMeals} high-value meal transaction(s) detected (≥$80)");
+        
+        // Check for missing cabin class on airfare
+        var missingCabinClass = transactions.Where(t => 
+            t.Category?.Name == "Airfare" && 
+            t.CabinClassId == null).Count();
+        if (missingCabinClass > 0)
+            issues.Add($"{missingCabinClass} airfare transaction(s) missing cabin class");
+        
+        // Check for client entertainment missing participants
+        var missingParticipants = transactions.Where(t => 
+            t.Category?.Name == "Client entertainment" && 
+            !t.ParticipantsValidated).Count();
+        if (missingParticipants > 0)
+            issues.Add($"{missingParticipants} client entertainment transaction(s) missing participant details");
+        
+        // Check for missing documentation
+        var missingDocs = GetMissingDocs(tripId);
+        if (missingDocs > 0)
+            issues.Add($"{missingDocs} transaction(s) missing receipts");
+        
+        // Check tax exposure
+        var taxExposure = GetTaxExposure(tripId);
+        if (taxExposure > 0)
+            issues.Add($"Tax exposure detected: ${taxExposure:N2}");
+        
+        // Check for premium cabin classes
+        var taxResult = taxExposureCache.GetValueOrDefault(tripId);
+        if (taxResult?.HasPremiumAirfare == true)
+            issues.Add($"Premium cabin classes detected: {string.Join(", ", taxResult.PremiumCabinClasses)}");
         
         return issues;
-    }
-
-    private List<Trip> GenerateMockTripsForValidation()
-    {
-        var random = new Random();
-        var validationStatuses = new List<ValidationStatus>
-        {
-            new ValidationStatus { ValidationStatusId = 1, Name = "Not ready to validate", Emoji = "⚪" },
-            new ValidationStatus { ValidationStatusId = 2, Name = "Ready to validate", Emoji = "🟡" },
-            new ValidationStatus { ValidationStatusId = 3, Name = "Validated", Emoji = "🟢" }
-        };
-        
-        var owners = new List<Owner>
-        {
-            new Owner { OwnerId = 1, Name = "Maayan Chesler", Email = "maayan@company.com" },
-            new Owner { OwnerId = 2, Name = "Martina Poplinsk", Email = "martina@company.com" }
-        };
-
-        var mockTrips = new List<Trip>();
-        var cities = new[] { ("London", "United Kingdom"), ("Paris", "France"), ("New York", "United States"), ("Tokyo", "Japan") };
-        var emails = new[] { "john.doe@company.com", "jane.smith@company.com", "mike.johnson@company.com" };
-
-        for (int i = 1; i <= 15; i++)
-        {
-            var startDate = DateTime.Today.AddDays(random.Next(-120, -10));
-            var endDate = startDate.AddDays(random.Next(1, 10));
-            var city = cities[random.Next(cities.Length)];
-            var validation = validationStatuses[random.Next(validationStatuses.Count)];
-            var owner = owners[random.Next(owners.Count)];
-
-            mockTrips.Add(new Trip
-            {
-                TripId = i,
-                TripName = $"Trip to {city.Item1}",
-                Email = emails[random.Next(emails.Length)],
-                StartDate = startDate,
-                EndDate = endDate,
-                Duration = (endDate - startDate).Days + 1,
-                Country1 = city.Item2,
-                City1 = city.Item1,
-                ValidationStatusId = validation.ValidationStatusId,
-                ValidationStatus = validation,
-                OwnerId = owner.OwnerId,
-                Owner = owner,
-                IsManual = random.NextDouble() > 0.7
-            });
-        }
-
-        return mockTrips;
     }
 }

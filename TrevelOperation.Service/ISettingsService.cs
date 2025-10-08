@@ -80,12 +80,20 @@ public interface ISettingsService
 
     // Headcount Management
     Task<List<Headcount>> GetHeadcountAsync();
+    Task<List<Headcount>> GetAllHeadcountAsync(); // Alias for consistency
+    Task<Headcount?> GetHeadcountByEmailAsync(string email);
     Task ImportHeadcountAsync(Stream csvStream);
     Task<Headcount> CreateHeadcountAsync(DateTime period, string userId, string email, string firstName, string lastName, 
         string subsidiary, string site, string department, string domain, string costCenter);
     Task<Headcount> UpdateHeadcountAsync(int headcountId, DateTime period, string userId, string email, string firstName, string lastName, 
         string subsidiary, string site, string department, string domain, string costCenter);
     Task DeleteHeadcountAsync(int headcountId);
+    
+    // Transaction queries for split engine
+    Task<Transaction?> GetTransactionByIdAsync(string transactionId);
+    
+    // Category queries (aliases for consistency)
+    Task<List<Category>> GetAllCategoriesAsync(); // Alias for GetCategoriesAsync
 
     // System Settings
     Task<Dictionary<string, string>> GetSystemSettingsAsync();

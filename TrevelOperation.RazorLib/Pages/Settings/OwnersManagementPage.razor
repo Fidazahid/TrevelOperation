@@ -1,6 +1,10 @@
 @page "/settings/owners"
 @using TravelOperation.Core.Models.Entities
+@using TrevelOperation.Service
+@using TravelOperation.Core.Services.Interfaces
 @inject IJSRuntime JSRuntime
+@inject ISettingsService SettingsService
+@inject ITripService TripService
 
 <PageTitle>Owners - Travel Expense Management</PageTitle>
 
@@ -72,23 +76,23 @@
             <table class="table table-zebra w-full">
                 <thead class="bg-base-300">
                     <tr>
-                        <th class="cursor-pointer" @onclick="() => SortBy(nameof(Owner.Name))">
+                        <th class="cursor-pointer" @onclick='() => SortBy("Name")'>
                             Name
-                            @if (sortColumn == nameof(Owner.Name))
+                            @if (sortColumn == "Name")
                             {
                                 <span class="ml-2">@(sortAscending ? "↑" : "↓")</span>
                             }
                         </th>
-                        <th class="cursor-pointer" @onclick="() => SortBy(nameof(Owner.Email))">
+                        <th class="cursor-pointer" @onclick='() => SortBy("Email")'>
                             Email
-                            @if (sortColumn == nameof(Owner.Email))
+                            @if (sortColumn == "Email")
                             {
                                 <span class="ml-2">@(sortAscending ? "↑" : "↓")</span>
                             }
                         </th>
-                        <th class="cursor-pointer" @onclick="() => SortBy(nameof(Owner.Department))">
+                        <th class="cursor-pointer" @onclick='() => SortBy("Department")'>
                             Department
-                            @if (sortColumn == nameof(Owner.Department))
+                            @if (sortColumn == "Department")
                             {
                                 <span class="ml-2">@(sortAscending ? "↑" : "↓")</span>
                             }
@@ -335,31 +339,40 @@
         <div class="modal-box max-w-4xl">
             <h3 class="font-bold text-lg mb-4">Trips for @selectedOwner.Name</h3>
             
-            <div class="overflow-x-auto">
-                <table class="table table-zebra w-full">
-                    <thead>
-                        <tr>
-                            <th>Trip Name</th>
-                            <th>Dates</th>
-                            <th>Destination</th>
-                            <th>Status</th>
-                            <th>Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var trip in GetOwnerTrips(selectedOwner))
-                        {
+            @if (ownerTrips.Any())
+            {
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra w-full">
+                        <thead>
                             <tr>
-                                <td>@trip.Name</td>
-                                <td>@trip.StartDate.ToString("dd/MM/yyyy") - @trip.EndDate.ToString("dd/MM/yyyy")</td>
-                                <td>@trip.Destination</td>
-                                <td><span class="badge @GetTripStatusClass(trip.Status)">@trip.Status</span></td>
-                                <td class="font-mono">$@trip.Amount.ToString("N2")</td>
+                                <th>Trip Name</th>
+                                <th>Dates</th>
+                                <th>Destination</th>
+                                <th>Status</th>
+                                <th>Purpose</th>
                             </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody>
+                            @foreach (var trip in ownerTrips)
+                            {
+                                <tr>
+                                    <td>@trip.TripName</td>
+                                    <td>@trip.StartDate.ToString("dd/MM/yyyy") - @trip.EndDate.ToString("dd/MM/yyyy")</td>
+                                    <td>@trip.City1, @trip.Country1</td>
+                                    <td><span class="badge @GetTripStatusBadge(trip.Status)">@trip.Status?.Name</span></td>
+                                    <td>@trip.Purpose?.Name</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-8 text-base-content/60">
+                    No trips found for this owner.
+                </div>
+            }
             
             <div class="modal-action">
                 <button class="btn btn-ghost" @onclick="HideTripsModal">Close</button>
@@ -369,15 +382,15 @@
 }
 
 @code {
-    private List<Owner> owners = new();
-    private IEnumerable<Owner> filteredOwners = new List<Owner>();
+    private List<OwnerDisplay> owners = new();
+    private IEnumerable<OwnerDisplay> filteredOwners = new List<OwnerDisplay>();
     
     private string searchTerm = "";
     private string selectedDepartment = "";
     private string selectedDomain = "";
     private string selectedStatus = "";
     
-    private string sortColumn = nameof(Owner.Name);
+    private string sortColumn = "Name";
     private bool sortAscending = true;
     
     private int currentPage = 1;
@@ -390,7 +403,11 @@
     
     // Trips modal state
     private bool showTripsModal = false;
-    private Owner? selectedOwner;
+    private OwnerDisplay? selectedOwner;
+    private List<Trip> ownerTrips = new();
+    
+    private bool isLoading = false;
+    private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
@@ -399,8 +416,42 @@
 
     private async Task LoadOwners()
     {
-        owners = GenerateMockOwners();
-        FilterOwners();
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            
+            var ownerEntities = await SettingsService.GetOwnersAsync();
+            var allTrips = await TripService.GetAllTripsAsync();
+            
+            // Create display objects with calculated fields
+            owners = ownerEntities.Select(o => new OwnerDisplay
+            {
+                OwnerId = o.OwnerId,
+                Name = o.Name,
+                Email = o.Email,
+                Department = o.Department ?? "Not set",
+                Domain = o.Domain ?? "Not set",
+                CostCenter = o.CostCenter ?? "Not set",
+                Title = "", // Not in database
+                IsActive = true, // Not in database, default to true
+                TripCount = allTrips.Count(t => t.OwnerId == o.OwnerId),
+                LastActivity = allTrips.Where(t => t.OwnerId == o.OwnerId)
+                    .OrderByDescending(t => t.ModifiedAt)
+                    .FirstOrDefault()?.ModifiedAt
+            }).ToList();
+            
+            FilterOwners();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading owners: {ex.Message}";
+            Console.WriteLine($"Error: {ex}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 
     private void FilterOwners()
@@ -432,19 +483,19 @@
         }
 
         // Apply sorting
-        if (sortColumn == nameof(Owner.Name))
+        if (sortColumn == "Name")
         {
             filteredOwners = sortAscending 
                 ? filteredOwners.OrderBy(o => o.Name)
                 : filteredOwners.OrderByDescending(o => o.Name);
         }
-        else if (sortColumn == nameof(Owner.Email))
+        else if (sortColumn == "Email")
         {
             filteredOwners = sortAscending 
                 ? filteredOwners.OrderBy(o => o.Email)
                 : filteredOwners.OrderByDescending(o => o.Email);
         }
-        else if (sortColumn == nameof(Owner.Department))
+        else if (sortColumn == "Department")
         {
             filteredOwners = sortAscending 
                 ? filteredOwners.OrderBy(o => o.Department)
@@ -523,27 +574,21 @@
 
     private void ShowAddModal()
     {
-        editingOwner = new Owner { IsActive = true };
+        editingOwner = new Owner();
         isEditing = false;
         showModal = true;
     }
 
-    private void EditOwner(Owner owner)
+    private void EditOwner(OwnerDisplay owner)
     {
         editingOwner = new Owner
         {
-            Id = owner.Id,
+            OwnerId = owner.OwnerId,
             Name = owner.Name,
             Email = owner.Email,
-            Title = owner.Title,
             Department = owner.Department,
             Domain = owner.Domain,
-            CostCenter = owner.CostCenter,
-            ManagerEmail = owner.ManagerEmail,
-            IsActive = owner.IsActive,
-            Notes = owner.Notes,
-            TripCount = owner.TripCount,
-            LastActivity = owner.LastActivity
+            CostCenter = owner.CostCenter
         };
         isEditing = true;
         showModal = true;
@@ -551,78 +596,87 @@
 
     private async Task SaveOwner()
     {
-        if (string.IsNullOrWhiteSpace(editingOwner.Name) || string.IsNullOrWhiteSpace(editingOwner.Email) || 
-            string.IsNullOrWhiteSpace(editingOwner.Department) || string.IsNullOrWhiteSpace(editingOwner.Domain))
+        if (string.IsNullOrWhiteSpace(editingOwner.Name) || string.IsNullOrWhiteSpace(editingOwner.Email))
             return;
 
-        if (isEditing)
+        try
         {
-            var existing = owners.FirstOrDefault(o => o.Id == editingOwner.Id);
-            if (existing != null)
+            if (isEditing)
             {
-                existing.Name = editingOwner.Name.Trim();
-                existing.Email = editingOwner.Email.Trim().ToLower();
-                existing.Title = editingOwner.Title?.Trim();
-                existing.Department = editingOwner.Department;
-                existing.Domain = editingOwner.Domain;
-                existing.CostCenter = editingOwner.CostCenter?.Trim();
-                existing.ManagerEmail = editingOwner.ManagerEmail?.Trim().ToLower();
-                existing.IsActive = editingOwner.IsActive;
-                existing.Notes = editingOwner.Notes?.Trim();
+                await SettingsService.UpdateOwnerAsync(
+                    editingOwner.OwnerId,
+                    editingOwner.Name.Trim(),
+                    editingOwner.Email.Trim().ToLower(),
+                    editingOwner.CostCenter?.Trim(),
+                    editingOwner.Department?.Trim(),
+                    editingOwner.Domain?.Trim());
             }
-        }
-        else
-        {
-            var newOwner = new Owner
+            else
             {
-                Id = owners.Count > 0 ? owners.Max(o => o.Id) + 1 : 1,
-                Name = editingOwner.Name.Trim(),
-                Email = editingOwner.Email.Trim().ToLower(),
-                Title = editingOwner.Title?.Trim(),
-                Department = editingOwner.Department,
-                Domain = editingOwner.Domain,
-                CostCenter = editingOwner.CostCenter?.Trim(),
-                ManagerEmail = editingOwner.ManagerEmail?.Trim().ToLower(),
-                IsActive = editingOwner.IsActive,
-                Notes = editingOwner.Notes?.Trim(),
-                TripCount = 0,
-                LastActivity = null
-            };
-            owners.Add(newOwner);
-        }
+                await SettingsService.CreateOwnerAsync(
+                    editingOwner.Name.Trim(),
+                    editingOwner.Email.Trim().ToLower(),
+                    editingOwner.CostCenter?.Trim(),
+                    editingOwner.Department?.Trim(),
+                    editingOwner.Domain?.Trim());
+            }
 
-        HideModal();
-        FilterOwners();
-        
-        await JSRuntime.InvokeVoidAsync("alert", $"Owner {(isEditing ? "updated" : "added")} successfully!");
+            HideModal();
+            await LoadOwners();
+            await JSRuntime.InvokeVoidAsync("alert", $"Owner {(isEditing ? "updated" : "added")} successfully!");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error saving owner: {ex.Message}");
+        }
     }
 
-    private async Task DeleteOwner(Owner owner)
+    private async Task DeleteOwner(OwnerDisplay owner)
     {
         bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
             $"Delete owner '{owner.Name}'? This action cannot be undone and may affect trip assignments.");
         
         if (confirmed)
         {
-            owners.Remove(owner);
-            FilterOwners();
-            await JSRuntime.InvokeVoidAsync("alert", "Owner deleted successfully!");
+            try
+            {
+                await SettingsService.DeleteOwnerAsync(owner.OwnerId);
+                await LoadOwners();
+                await JSRuntime.InvokeVoidAsync("alert", "Owner deleted successfully!");
+            }
+            catch (Exception ex)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", $"Error deleting owner: {ex.Message}");
+            }
         }
     }
 
-    private void ToggleOwnerStatus(Owner owner)
+    private void ToggleOwnerStatus(OwnerDisplay owner)
     {
+        // IsActive is not in database, so this is just UI toggle for now
         owner.IsActive = !owner.IsActive;
         StateHasChanged();
     }
 
-    private void ViewTrips(Owner owner)
+    private async Task ViewTrips(OwnerDisplay owner)
     {
         selectedOwner = owner;
-        showTripsModal = true;
+        try
+        {
+            // Load actual trips for this owner
+            ownerTrips = (await TripService.GetAllTripsAsync())
+                .Where(t => t.OwnerId == owner.OwnerId)
+                .OrderByDescending(t => t.StartDate)
+                .ToList();
+            showTripsModal = true;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error loading trips: {ex.Message}");
+        }
     }
 
-    private async Task SendEmail(Owner owner)
+    private async Task SendEmail(OwnerDisplay owner)
     {
         var emailUrl = $"mailto:{owner.Email}?subject=Travel%20Expense%20Management";
         await JSRuntime.InvokeVoidAsync("open", emailUrl, "_blank");
@@ -638,42 +692,55 @@
     {
         showTripsModal = false;
         selectedOwner = null;
+        ownerTrips.Clear();
     }
 
     private async Task ImportFromHeadcount()
     {
         bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-            "Sync with headcount data? This will add new employees and update existing ones.");
+            "Sync with headcount data? This will create owners from unique emails in headcount table.");
         
         if (confirmed)
         {
-            // Simulate import from headcount
-            var addedCount = 3; // Mock data
-            await JSRuntime.InvokeVoidAsync("alert", $"Synced {addedCount} owners from headcount data!");
-            await LoadOwners();
+            try
+            {
+                var headcount = await SettingsService.GetHeadcountAsync();
+                var existingEmails = owners.Select(o => o.Email.ToLower()).ToHashSet();
+                var addedCount = 0;
+                
+                foreach (var emp in headcount)
+                {
+                    if (!existingEmails.Contains(emp.Email.ToLower()))
+                    {
+                        await SettingsService.CreateOwnerAsync(
+                            $"{emp.FirstName} {emp.LastName}",
+                            emp.Email,
+                            emp.CostCenter,
+                            emp.Department,
+                            emp.Domain);
+                        addedCount++;
+                    }
+                }
+                
+                await LoadOwners();
+                await JSRuntime.InvokeVoidAsync("alert", $"Synced {addedCount} new owners from headcount data!");
+            }
+            catch (Exception ex)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", $"Error syncing headcount: {ex.Message}");
+            }
         }
     }
 
     private async Task ExportOwners()
     {
-        var csv = "Name,Email,Title,Department,Domain,CostCenter,ManagerEmail,IsActive,TripCount,LastActivity,Notes\n";
+        var csv = "Name,Email,Department,Domain,CostCenter,TripCount,LastActivity\n";
         foreach (var owner in owners.OrderBy(o => o.Name))
         {
-            csv += $"\"{owner.Name}\",\"{owner.Email}\",\"{owner.Title ?? ""}\",\"{owner.Department}\",\"{owner.Domain}\",\"{owner.CostCenter ?? ""}\",\"{owner.ManagerEmail ?? ""}\",{owner.IsActive},{owner.TripCount},{owner.LastActivity?.ToString("yyyy-MM-dd") ?? ""},\"{owner.Notes ?? ""}\"\n";
+            csv += $"\"{owner.Name}\",\"{owner.Email}\",\"{owner.Department}\",\"{owner.Domain}\",\"{owner.CostCenter}\",{owner.TripCount},{owner.LastActivity?.ToString("yyyy-MM-dd") ?? ""}\n";
         }
         
         await JSRuntime.InvokeVoidAsync("downloadFile", "owners.csv", "text/csv", csv);
-    }
-
-    private List<OwnerTrip> GetOwnerTrips(Owner owner)
-    {
-        // Mock trip data for the selected owner
-        return new List<OwnerTrip>
-        {
-            new OwnerTrip { Name = "Business Trip to New York", StartDate = DateTime.Today.AddDays(-30), EndDate = DateTime.Today.AddDays(-25), Destination = "New York, USA", Status = "Completed", Amount = 2450.00m },
-            new OwnerTrip { Name = "Client Meeting in London", StartDate = DateTime.Today.AddDays(-15), EndDate = DateTime.Today.AddDays(-12), Destination = "London, UK", Status = "Completed", Amount = 1850.00m },
-            new OwnerTrip { Name = "Conference in Berlin", StartDate = DateTime.Today.AddDays(10), EndDate = DateTime.Today.AddDays(15), Destination = "Berlin, Germany", Status = "Upcoming", Amount = 0m }
-        };
     }
 
     private string GetTripStatusClass(string status)
@@ -688,44 +755,32 @@
         };
     }
 
-    private List<Owner> GenerateMockOwners()
+    private string GetTripStatusBadge(Status? status)
     {
-        return new List<Owner>
+        if (status == null) return "badge-neutral";
+        
+        return status.Name.ToLower() switch
         {
-            new Owner { Id = 1, Name = "Maayan Chesler", Email = "maayan.chesler@company.com", Title = "Travel Manager", Department = "Operations", Domain = "Operations", CostCenter = "CC-OPS-001", IsActive = true, TripCount = 45, LastActivity = DateTime.Today.AddDays(-2) },
-            new Owner { Id = 2, Name = "Martina Poplinsk", Email = "martina.poplinsk@company.com", Title = "Finance Manager", Department = "Finance", Domain = "Corporate", CostCenter = "CC-FIN-001", IsActive = true, TripCount = 28, LastActivity = DateTime.Today.AddDays(-5) },
-            new Owner { Id = 3, Name = "John Smith", Email = "john.smith@company.com", Title = "Senior Software Engineer", Department = "Engineering", Domain = "R&D", CostCenter = "CC-ENG-001", IsActive = true, TripCount = 12, LastActivity = DateTime.Today.AddDays(-10) },
-            new Owner { Id = 4, Name = "Sarah Johnson", Email = "sarah.johnson@company.com", Title = "Sales Director", Department = "Sales", Domain = "Go-to-Market", CostCenter = "CC-SAL-001", IsActive = true, TripCount = 32, LastActivity = DateTime.Today.AddDays(-1) },
-            new Owner { Id = 5, Name = "Michael Brown", Email = "michael.brown@company.com", Title = "Product Manager", Department = "Product", Domain = "R&D", CostCenter = "CC-PRD-001", IsActive = true, TripCount = 18, LastActivity = DateTime.Today.AddDays(-7) },
-            new Owner { Id = 6, Name = "Emily Davis", Email = "emily.davis@company.com", Title = "Marketing Manager", Department = "Marketing", Domain = "Go-to-Market", CostCenter = "CC-MKT-001", IsActive = true, TripCount = 22, LastActivity = DateTime.Today.AddDays(-4) },
-            new Owner { Id = 7, Name = "David Wilson", Email = "david.wilson@company.com", Title = "Customer Success Manager", Department = "Customer Success", Domain = "Go-to-Market", CostCenter = "CC-CS-001", IsActive = false, TripCount = 8, LastActivity = DateTime.Today.AddDays(-45) },
-            new Owner { Id = 8, Name = "Lisa Anderson", Email = "lisa.anderson@company.com", Title = "HR Director", Department = "HR", Domain = "Corporate", CostCenter = "CC-HR-001", IsActive = true, TripCount = 15, LastActivity = DateTime.Today.AddDays(-8) }
+            "completed" => "badge-success",
+            "upcoming" => "badge-info",
+            "ongoing" => "badge-warning",
+            "canceled" => "badge-error",
+            _ => "badge-neutral"
         };
     }
 
-    public class Owner
+    // Display wrapper class for UI (includes calculated fields)
+    public class OwnerDisplay
     {
-        public int Id { get; set; }
+        public int OwnerId { get; set; }
         public string Name { get; set; } = "";
         public string Email { get; set; } = "";
         public string? Title { get; set; }
         public string Department { get; set; } = "";
         public string Domain { get; set; } = "";
         public string? CostCenter { get; set; }
-        public string? ManagerEmail { get; set; }
         public bool IsActive { get; set; }
-        public string? Notes { get; set; }
         public int TripCount { get; set; }
         public DateTime? LastActivity { get; set; }
-    }
-
-    public class OwnerTrip
-    {
-        public string Name { get; set; } = "";
-        public DateTime StartDate { get; set; }
-        public DateTime EndDate { get; set; }
-        public string Destination { get; set; } = "";
-        public string Status { get; set; } = "";
-        public decimal Amount { get; set; }
     }
 }

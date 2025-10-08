@@ -6,7 +6,9 @@ public interface ITransactionService
 {
     Task<IEnumerable<Transaction>> GetAllTransactionsAsync();
     Task<Transaction?> GetTransactionByIdAsync(string transactionId);
+    Task<Transaction?> GetByIdAsync(string transactionId);
     Task<IEnumerable<Transaction>> GetTransactionsByEmailAsync(string email);
+    Task<IEnumerable<Transaction>> GetTransactionsByEmailAndDateRangeAsync(string email, DateTime startDate, DateTime endDate);
     Task<IEnumerable<Transaction>> GetUnlinkedTransactionsAsync();
     Task<IEnumerable<Transaction>> GetTransactionsByTripIdAsync(int tripId);
     Task<Transaction> CreateTransactionAsync(Transaction transaction);

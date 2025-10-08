@@ -16,6 +16,9 @@ public class Owner
     [MaxLength(255)]
     public string Email { get; set; } = string.Empty;
     
+    [MaxLength(200)]
+    public string? Title { get; set; }
+    
     [MaxLength(100)]
     public string? CostCenter { get; set; }
     
@@ -24,6 +27,13 @@ public class Owner
     
     [MaxLength(100)]
     public string? Domain { get; set; }
+    
+    [MaxLength(255)]
+    public string? ManagerEmail { get; set; }
+    
+    public bool IsActive { get; set; } = true;
+    
+    public string? Notes { get; set; }
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime ModifiedAt { get; set; } = DateTime.UtcNow;

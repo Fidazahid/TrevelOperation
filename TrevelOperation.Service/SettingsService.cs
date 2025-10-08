@@ -629,6 +629,15 @@ public class SettingsService : ISettingsService
         return await _context.Headcount.OrderByDescending(h => h.Period).ThenBy(h => h.LastName).ToListAsync();
     }
 
+    public async Task<Headcount?> GetHeadcountByEmailAsync(string email)
+    {
+        // Get the most recent headcount record for this email
+        return await _context.Headcount
+            .Where(h => h.Email.ToLower() == email.ToLower())
+            .OrderByDescending(h => h.Period)
+            .FirstOrDefaultAsync();
+    }
+
     public async Task ImportHeadcountAsync(Stream csvStream)
     {
         using var reader = new StreamReader(csvStream, Encoding.UTF8);
@@ -833,5 +842,32 @@ public class SettingsService : ISettingsService
         return settings.TryGetValue(key, out var value) ? value : null;
     }
 
+    #endregion
+    
+    #region Additional Helper Methods
+    
+    public async Task<List<Headcount>> GetAllHeadcountAsync()
+    {
+        // Alias for consistency with other methods
+        return await GetHeadcountAsync();
+    }
+    
+    public async Task<Transaction?> GetTransactionByIdAsync(string transactionId)
+    {
+        return await _context.Transactions
+            .Include(t => t.Category)
+            .Include(t => t.Source)
+            .Include(t => t.CabinClass)
+            .Include(t => t.BookingStatus)
+            .Include(t => t.BookingType)
+            .FirstOrDefaultAsync(t => t.TransactionId == transactionId);
+    }
+    
+    public async Task<List<Category>> GetAllCategoriesAsync()
+    {
+        // Alias for consistency with other methods
+        return await GetCategoriesAsync();
+    }
+    
     #endregion
 }

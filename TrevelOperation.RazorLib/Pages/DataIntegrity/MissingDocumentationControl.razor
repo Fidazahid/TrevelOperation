@@ -1,9 +1,12 @@
 @page "/missing-documentation-control"
 @using TravelOperation.Core.Models
 @using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Models.Lookup
 @using TravelOperation.Core.Services
+@using TravelOperation.Core.Services.Interfaces
 @using TrevelOperation.Service
 @inject ITransactionService TransactionService
+@inject ILookupService LookupService
 @inject IMessageTemplateService MessageTemplateService
 @inject IJSRuntime JSRuntime
 
@@ -183,13 +186,13 @@
                                 </td>
                                 <td>@transaction.Vendor</td>
                                 <td>
-                                    <span class="badge badge-outline">@GetCategoryIcon(transaction.Category) @transaction.Category</span>
+                                    <span class="badge badge-outline">@GetCategoryIcon(transaction.Category?.Name) @transaction.Category?.Name</span>
                                 </td>
                                 <td>@transaction.Currency</td>
                                 <td>@transaction.Amount.ToString("N2")</td>
                                 <td>
-                                    <div class="font-bold @(GetAmountColorClass(transaction.AmountUSD))">
-                                        $@transaction.AmountUSD.ToString("N2")
+                                    <div class="font-bold @(GetAmountColorClass(transaction.AmountUSD ?? 0))">
+                                        $@((transaction.AmountUSD ?? 0).ToString("N2"))
                                     </div>
                                 </td>
                                 <td>
@@ -250,8 +253,8 @@
 </div>
 
 @code {
-    private List<MissingDocTransactionData> transactions = new();
-    private List<MissingDocTransactionData> filteredTransactions = new();
+    private List<Transaction> transactions = new();
+    private List<Transaction> filteredTransactions = new();
     private List<string> availableOwners = new();
     private HashSet<string> selectedTransactions = new();
     
@@ -283,32 +286,38 @@
 
     private async Task LoadMissingDocTransactions()
     {
-        transactions = GenerateMockMissingDocData();
-        availableOwners = transactions.Select(t => t.Owner).Where(o => !string.IsNullOrEmpty(o)).Distinct().ToList()!;
+        var allMissing = await TransactionService.GetTransactionsWithoutDocumentationAsync();
+        transactions = allMissing.ToList();
+        
+        availableOwners = transactions
+            .Where(t => t.Trip?.Owner?.Name != null)
+            .Select(t => t.Trip!.Owner!.Name)
+            .Distinct()
+            .ToList();
     }
 
     private void CalculateSummary()
     {
         missingDocCount = filteredTransactions.Count;
-        missingDocAmount = filteredTransactions.Sum(t => t.AmountUSD);
-        highValueMissingCount = filteredTransactions.Count(t => t.AmountUSD >= 100);
+        missingDocAmount = filteredTransactions.Sum(t => t.AmountUSD ?? 0);
+        highValueMissingCount = filteredTransactions.Count(t => (t.AmountUSD ?? 0) >= 100);
         
-        // Simulate compliance rate (assuming total transactions include those with docs)
-        var totalTransactions = filteredTransactions.Count + 150; // Mock total including those with docs
+        // Simulate compliance rate - in real app, would need total transaction count
+        var totalTransactions = filteredTransactions.Count + 150; // Mock total
         complianceRate = totalTransactions > 0 ? (150.0m / totalTransactions) * 100 : 0;
     }
 
     private void FilterTransactions()
     {
         filteredTransactions = transactions.Where(t =>
-            (string.IsNullOrEmpty(selectedOwner) || t.Owner == selectedOwner) &&
-            (string.IsNullOrEmpty(selectedCategory) || t.Category == selectedCategory) &&
+            (string.IsNullOrEmpty(selectedOwner) || (t.Trip?.Owner?.Name == selectedOwner)) &&
+            (string.IsNullOrEmpty(selectedCategory) || (t.Category?.Name == selectedCategory)) &&
             (string.IsNullOrEmpty(searchText) || 
-             t.Vendor.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+             (t.Vendor?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false) ||
              t.TransactionId.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
             FilterByAmountRange(t) &&
             FilterByAge(t)
-        ).OrderByDescending(t => GetPriority(t)).ThenByDescending(t => t.AmountUSD).ToList();
+        ).OrderByDescending(t => GetPriority(t)).ThenByDescending(t => t.AmountUSD ?? 0).ToList();
         
         CalculateSummary();
         currentPage = 1;
@@ -316,18 +325,19 @@
         StateHasChanged();
     }
 
-    private bool FilterByAmountRange(MissingDocTransactionData transaction)
+    private bool FilterByAmountRange(Transaction transaction)
     {
+        var amount = transaction.AmountUSD ?? 0;
         return selectedAmountRange switch
         {
-            "high" => transaction.AmountUSD >= 100,
-            "medium" => transaction.AmountUSD >= 50 && transaction.AmountUSD < 100,
-            "low" => transaction.AmountUSD < 50,
+            "high" => amount >= 100,
+            "medium" => amount >= 50 && amount < 100,
+            "low" => amount < 50,
             _ => true
         };
     }
 
-    private bool FilterByAge(MissingDocTransactionData transaction)
+    private bool FilterByAge(Transaction transaction)
     {
         var ageInDays = GetAgeInDays(transaction);
         return selectedAge switch
@@ -339,7 +349,7 @@
         };
     }
 
-    private string GetRowHighlight(MissingDocTransactionData transaction)
+    private string GetRowHighlight(Transaction transaction)
     {
         var priority = GetPriority(transaction);
         return priority switch
@@ -351,10 +361,10 @@
         };
     }
 
-    private int GetPriority(MissingDocTransactionData transaction)
+    private int GetPriority(Transaction transaction)
     {
         var ageInDays = GetAgeInDays(transaction);
-        var amount = transaction.AmountUSD;
+        var amount = transaction.AmountUSD ?? 0;
         
         // Critical: High amount + old OR very high amount
         if ((amount >= 100 && ageInDays > 60) || amount >= 300) return 3;
@@ -369,7 +379,7 @@
         return 0;
     }
 
-    private string GetPriorityText(MissingDocTransactionData transaction)
+    private string GetPriorityText(Transaction transaction)
     {
         return GetPriority(transaction) switch
         {
@@ -380,7 +390,7 @@
         };
     }
 
-    private string GetPriorityBadgeClass(MissingDocTransactionData transaction)
+    private string GetPriorityBadgeClass(Transaction transaction)
     {
         return GetPriority(transaction) switch
         {
@@ -391,17 +401,17 @@
         };
     }
 
-    private int GetAgeInDays(MissingDocTransactionData transaction)
+    private int GetAgeInDays(Transaction transaction)
     {
         return (DateTime.Today - transaction.TransactionDate).Days;
     }
 
-    private string GetAgeText(MissingDocTransactionData transaction)
+    private string GetAgeText(Transaction transaction)
     {
         return GetAgeInDays(transaction).ToString();
     }
 
-    private string GetAgeColorClass(MissingDocTransactionData transaction)
+    private string GetAgeColorClass(Transaction transaction)
     {
         var ageInDays = GetAgeInDays(transaction);
         if (ageInDays > 60) return "text-red-600 font-bold";
@@ -417,7 +427,7 @@
         return "text-gray-600";
     }
 
-    private string GetCategoryIcon(string category)
+    private string GetCategoryIcon(string? category)
     {
         return category switch
         {
@@ -516,12 +526,8 @@
 
     private async Task MarkAsExempt(string transactionId)
     {
-        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-        if (transaction != null)
-        {
-            transaction.IsExempt = true;
-            FilterTransactions();
-        }
+        // In real implementation, this would update a field like "DocumentationExempt"
+        await JSRuntime.InvokeVoidAsync("alert", "Document exemption feature pending - requires DB field");
     }
 
     private async Task BulkRequestDocuments()
@@ -533,17 +539,9 @@
 
     private async Task BulkMarkAsExempt()
     {
-        foreach (var transactionId in selectedTransactions)
-        {
-            var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-            if (transaction != null)
-            {
-                transaction.IsExempt = true;
-            }
-        }
+        await JSRuntime.InvokeVoidAsync("alert", "Bulk exemption feature pending - requires DB field");
         selectedTransactions.Clear();
-        await JSRuntime.InvokeVoidAsync("alert", "Selected transactions marked as exempt");
-        FilterTransactions();
+        StateHasChanged();
     }
 
     private void ClearSelection()
@@ -553,11 +551,12 @@
         StateHasChanged();
     }
 
-    private string GenerateDocumentRequestMessage(MissingDocTransactionData transaction)
+    private string GenerateDocumentRequestMessage(Transaction transaction)
     {
         var ageInDays = GetAgeInDays(transaction);
         var urgencyText = ageInDays > 60 ? "URGENT - " : ageInDays > 30 ? "Important - " : "";
         var additionalNote = ageInDays > 60 ? "This expense is over 60 days old and requires immediate attention." : "";
+        var categoryName = transaction.Category?.Name ?? "Unknown";
         
         return $@"Hi {GetFirstName(transaction.Email)},
 
@@ -568,7 +567,7 @@ We are missing documentation for the following expense:
 Transaction ID: {transaction.TransactionId}
 Date: {transaction.TransactionDate:dd/MM/yyyy}
 Vendor: {transaction.Vendor}
-Category: {transaction.Category}
+Category: {categoryName}
 Amount: {transaction.Currency} {transaction.Amount:N2}
 Age: {ageInDays} days
 
@@ -583,52 +582,12 @@ Thank you for your prompt attention to this matter!";
 
     private string GetFirstName(string email)
     {
-        return email.Split('@')[0].Split('.')[0];
-    }
-
-    private List<MissingDocTransactionData> GenerateMockMissingDocData()
-    {
-        var random = new Random();
-        var transactions = new List<MissingDocTransactionData>();
-        var emails = new[] { "john.doe@company.com", "jane.smith@company.com", "mike.johnson@company.com", "sarah.wilson@company.com" };
-        var vendors = new[] { "Restaurant ABC", "Taxi Service", "Hotel Chain", "Airlines Co", "Gas Station", "Coffee Shop", "Equipment Rental" };
-        var owners = new[] { "Maayan Chesler", "Martina Poplinsk" };
-        var categories = new[] { "Meals", "Transportation", "Lodging", "Airfare", "Other", "Client entertainment" };
-
-        for (int i = 1; i <= 28; i++)
+        var parts = email.Split('@');
+        if (parts.Length > 0)
         {
-            var amount = random.Next(20, 400);
-            var daysAgo = random.Next(1, 120);
-            
-            transactions.Add(new MissingDocTransactionData
-            {
-                TransactionId = $"TXN-MISS-{i:000}",
-                Email = emails[random.Next(emails.Length)],
-                TransactionDate = DateTime.Today.AddDays(-daysAgo),
-                Vendor = vendors[random.Next(vendors.Length)],
-                Category = categories[random.Next(categories.Length)],
-                Currency = "USD",
-                Amount = amount,
-                AmountUSD = amount,
-                Owner = owners[random.Next(owners.Length)],
-                IsExempt = false
-            });
+            var nameParts = parts[0].Split('.');
+            return nameParts.Length > 0 ? nameParts[0] : email;
         }
-
-        return transactions.Where(t => !t.IsExempt).ToList();
-    }
-
-    public class MissingDocTransactionData
-    {
-        public string TransactionId { get; set; } = "";
-        public string Email { get; set; } = "";
-        public DateTime TransactionDate { get; set; }
-        public string Vendor { get; set; } = "";
-        public string Category { get; set; } = "";
-        public string Currency { get; set; } = "";
-        public decimal Amount { get; set; }
-        public decimal AmountUSD { get; set; }
-        public string Owner { get; set; } = "";
-        public bool IsExempt { get; set; }
+        return email;
     }
 }

@@ -21,4 +21,6 @@ public interface ILookupService
     Task<IEnumerable<BookingType>> GetBookingTypesAsync();
     Task<IEnumerable<BookingStatus>> GetBookingStatusesAsync();
     Task<IEnumerable<Owner>> GetOwnersAsync();
+    Task<IEnumerable<Country>> GetCountriesAsync();
+    Task<IEnumerable<City>> GetCitiesAsync();
 }

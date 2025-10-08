@@ -22,6 +22,7 @@ public partial class DataTable<TItem> : ComponentBase where TItem : class
     [Parameter] public Func<TItem, string>? RowClassProvider { get; set; }
 
     private ElementReference tableElement;
+    private ElementReference columnManagerElement;
     private string SearchTerm = string.Empty;
     private string SortColumn = string.Empty;
     private bool SortAscending = true;
@@ -32,6 +33,8 @@ public partial class DataTable<TItem> : ComponentBase where TItem : class
     private Dictionary<string, int> ColumnWidths = new();
     private bool IsResizing;
     private string ResizingColumn = string.Empty;
+    private TableColumn? DraggedColumn;
+    private int DraggedOverIndex = -1;
 
     protected List<TableColumn> AllColumns => Columns;
     protected IEnumerable<TableColumn> VisibleColumns => AllColumns.Where(c => c.IsVisible);
@@ -591,6 +594,47 @@ public partial class DataTable<TItem> : ComponentBase where TItem : class
         {
             await OnRowDoubleClick.InvokeAsync(item);
         }
+    }
+
+    // Drag and Drop for Column Reordering
+    private void HandleDragStart(TableColumn column)
+    {
+        DraggedColumn = column;
+    }
+
+    private void HandleDragOver(Microsoft.AspNetCore.Components.Web.DragEventArgs e, TableColumn column)
+    {
+        if (DraggedColumn == null || DraggedColumn == column)
+            return;
+
+        var draggedIndex = AllColumns.IndexOf(DraggedColumn);
+        var targetIndex = AllColumns.IndexOf(column);
+
+        if (draggedIndex != targetIndex)
+        {
+            AllColumns.RemoveAt(draggedIndex);
+            AllColumns.Insert(targetIndex, DraggedColumn);
+
+            // Update order property
+            for (int i = 0; i < AllColumns.Count; i++)
+            {
+                AllColumns[i].Order = i;
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private void HandleDrop(TableColumn column)
+    {
+        // Finalize drop
+        StateHasChanged();
+    }
+
+    private void HandleDragEnd()
+    {
+        DraggedColumn = null;
+        DraggedOverIndex = -1;
     }
 }
 

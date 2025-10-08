@@ -465,10 +465,15 @@
 
     private async Task GenerateMessage(string transactionId)
     {
-        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-        if (transaction != null)
+        var entertainmentTransaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+        if (entertainmentTransaction != null)
         {
-            var message = GenerateEntertainmentMessage(transaction);
+            var transaction = ConvertToTransaction(entertainmentTransaction);
+            var participantsList = string.IsNullOrWhiteSpace(entertainmentTransaction.Participants) 
+                ? new List<string>() 
+                : entertainmentTransaction.Participants.Split(',').Select(p => p.Trim()).ToList();
+            
+            var message = MessageTemplateService.GenerateClientEntertainmentMessage(transaction, participantsList);
             await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", message);
             await JSRuntime.InvokeVoidAsync("alert", "Message copied to clipboard!");
         }
@@ -513,6 +518,24 @@
         selectedTransactions.Clear();
         allSelected = false;
         StateHasChanged();
+    }
+
+    private Transaction ConvertToTransaction(EntertainmentTransactionData data)
+    {
+        return new Transaction
+        {
+            TransactionId = data.TransactionId,
+            Email = data.Email,
+            TransactionDate = data.TransactionDate,
+            Vendor = data.Vendor,
+            Address = data.Address,
+            Currency = data.Currency,
+            Amount = data.Amount,
+            AmountUSD = data.AmountUSD,
+            Participants = data.Participants,
+            DocumentUrl = data.DocumentUrl,
+            Category = new Category { Name = data.Category }
+        };
     }
 
     private string GenerateEntertainmentMessage(EntertainmentTransactionData transaction)

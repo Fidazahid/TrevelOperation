@@ -155,24 +155,35 @@
                         </div>
                     }
                     
-                    <div class="column-manager">
+                    <div class="column-manager" @ref="columnManagerElement">
                         @foreach (var column in AllColumns.OrderBy(c => c.Order))
                         {
-                            <div class="column-item d-flex align-items-center mb-2">
-                                <div class="drag-handle me-2">
+                            <div class="column-item d-flex align-items-center mb-2" 
+                                 draggable="true"
+                                 data-column="@column.PropertyName"
+                                 @ondragstart="@((e) => HandleDragStart(column))"
+                                 @ondragover:preventDefault="true"
+                                 @ondragover="@((e) => HandleDragOver(e, column))"
+                                 @ondrop="@((e) => HandleDrop(column))"
+                                 @ondragend="HandleDragEnd">
+                                <div class="drag-handle me-2" title="Drag to reorder">
                                     <i class="fas fa-grip-vertical"></i>
                                 </div>
-                                <div class="form-check me-3">
+                                <div class="form-check me-3 flex-grow-1">
                                     <input class="form-check-input" type="checkbox" 
                                            @bind="column.IsVisible" id="col-@column.PropertyName">
                                     <label class="form-check-label" for="col-@column.PropertyName">
                                         @column.DisplayName
                                     </label>
                                 </div>
-                                <input type="number" class="form-control form-control-sm" 
-                                       style="width: 80px;" 
-                                       @bind="column.Width" 
-                                       placeholder="Width" />
+                                <div class="d-flex align-items-center">
+                                    <label class="me-2 small text-muted">Width:</label>
+                                    <input type="number" class="form-control form-control-sm" 
+                                           style="width: 80px;" 
+                                           @bind="column.Width" 
+                                           min="50"
+                                           placeholder="Width" />
+                                </div>
                             </div>
                         }
                     </div>
@@ -256,11 +267,32 @@
         border: 1px solid #dee2e6;
         border-radius: 4px;
         background: #f8f9fa;
+        cursor: move;
+        transition: all 0.2s ease;
+    }
+
+    .column-item:hover {
+        background: #e9ecef;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .column-item[draggable="true"] {
+        cursor: grab;
+    }
+
+    .column-item[draggable="true"]:active {
+        cursor: grabbing;
+        opacity: 0.7;
     }
 
     .drag-handle {
         cursor: move;
         color: #6c757d;
+        user-select: none;
+    }
+
+    .drag-handle:hover {
+        color: #007bff;
     }
 
     .editable-cell {

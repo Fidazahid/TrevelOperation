@@ -117,4 +117,18 @@ public class LookupService : ILookupService
             .OrderBy(o => o.Name)
             .ToListAsync();
     }
+
+    public async Task<IEnumerable<Country>> GetCountriesAsync()
+    {
+        return await _context.Countries
+            .OrderBy(c => c.Name)
+            .ToListAsync();
+    }
+
+    public async Task<IEnumerable<City>> GetCitiesAsync()
+    {
+        return await _context.Cities
+            .OrderBy(c => c.Name)
+            .ToListAsync();
+    }
 }

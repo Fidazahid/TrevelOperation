@@ -1,8 +1,14 @@
 @page "/data-integrity/split-engine"
 @using TravelOperation.Core.Models.Entities
-@using TravelOperation.Core.Services.Interfaces
+@using TravelOperation.Core.Models.Lookup
+@using TravelOperation.Core.Models
+@using TravelOperation.Core.Interfaces
+@using TrevelOperation.Service
+@using TrevelOperation.RazorLib.Components
 @using Microsoft.AspNetCore.Components.Forms
 @inject IJSRuntime JSRuntime
+@inject ISplitService SplitService
+@inject ISettingsService SettingsService
 
 <div class="container mx-auto p-6">
     <div class="flex justify-between items-center mb-6">
@@ -150,40 +156,40 @@
                                 </td>
                                 <td>
                                     <div class="font-mono text-sm">@suggestion.TransactionId</div>
-                                    <div class="text-xs text-gray-500">@suggestion.TransactionDate.ToString("dd/MM/yyyy")</div>
+                                    <div class="text-xs text-gray-500">@suggestion.Transaction.TransactionDate.ToString("dd/MM/yyyy")</div>
                                 </td>
                                 <td>
-                                    <div class="font-semibold">@suggestion.Vendor</div>
-                                    <div class="text-xs text-gray-500">@suggestion.Address</div>
+                                    <div class="font-semibold">@suggestion.Transaction.Vendor</div>
+                                    <div class="text-xs text-gray-500">@(suggestion.Transaction.Address ?? "")</div>
                                 </td>
                                 <td>
-                                    <span class="badge @GetCategoryBadgeClass(suggestion.Category)">
-                                        @GetCategoryIcon(suggestion.Category) @suggestion.Category
+                                    <span class="badge @GetCategoryBadgeClass(suggestion.Transaction.Category?.Name ?? "Other")">
+                                        @GetCategoryIcon(suggestion.Transaction.Category?.Name ?? "Other") @(suggestion.Transaction.Category?.Name ?? "Other")
                                     </span>
                                 </td>
                                 <td>
-                                    <div class="font-bold">$@suggestion.Amount.ToString("N2")</div>
-                                    <div class="text-xs text-gray-500">@suggestion.Currency</div>
+                                    <div class="font-bold">$@suggestion.TotalAmount.ToString("N2")</div>
+                                    <div class="text-xs text-gray-500">@suggestion.Transaction.Currency</div>
                                 </td>
                                 <td>
                                     <div class="max-w-xs">
-                                        @foreach (var participant in suggestion.DetectedParticipants.Take(3))
+                                        @foreach (var participant in suggestion.SuggestedParticipants.Take(3))
                                         {
                                             <div class="badge badge-outline badge-sm mr-1 mb-1">@GetParticipantDisplay(participant)</div>
                                         }
-                                        @if (suggestion.DetectedParticipants.Count > 3)
+                                        @if (suggestion.SuggestedParticipants.Count > 3)
                                         {
-                                            <div class="badge badge-neutral badge-sm">+@(suggestion.DetectedParticipants.Count - 3) more</div>
+                                            <div class="badge badge-neutral badge-sm">+@(suggestion.SuggestedParticipants.Count - 3) more</div>
                                         }
                                     </div>
                                 </td>
                                 <td>
                                     <div class="text-sm">
-                                        <div class="font-semibold">@suggestion.SplitType split</div>
+                                        <div class="font-semibold">@(suggestion.SuggestedSplits.Any() ? "Suggested" : "Equal") split</div>
                                         <div class="text-xs text-gray-500">
-                                            @if (suggestion.SplitType == "Equal")
+                                            @if (suggestion.SuggestedSplits.Any())
                                             {
-                                                <span>$@suggestion.SuggestedAmountPerPerson.ToString("N2") each</span>
+                                                <span>$@((suggestion.TotalAmount / suggestion.SuggestedSplits.Count).ToString("N2")) each</span>
                                             }
                                             else
                                             {
@@ -254,10 +260,25 @@
     </div>
 </div>
 
+<!-- Split Transaction Modal -->
+<TransactionSplitModal 
+    ShowModal="@showSplitModal"
+    Transaction="@selectedTransaction"
+    Categories="@categories"
+    AvailableParticipants="@availableParticipants"
+    OnSplitSaved="@HandleSplitSaved"
+    OnCancel="@HandleModalCancel" />
+
 @code {
     private List<SplitSuggestion> splitSuggestions = new();
     private List<SplitSuggestion> filteredSuggestions = new();
     private HashSet<string> selectedSuggestions = new();
+    
+    // Modal state
+    private bool showSplitModal = false;
+    private Transaction? selectedTransaction = null;
+    private List<Category> categories = new();
+    private List<string> availableParticipants = new();
     
     // Filters
     private string selectedCategory = "";
@@ -275,36 +296,77 @@
     private int totalParticipants = 0;
     private int highConfidenceSuggestions = 0;
     private bool allSelected = false;
+    
+    // Loading state
+    private bool isLoading = false;
+    private string errorMessage = "";
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadCategoriesAndParticipants();
         await LoadSplitSuggestions();
         CalculateStatistics();
         FilterSuggestions();
     }
 
+    private async Task LoadCategoriesAndParticipants()
+    {
+        try
+        {
+            categories = await SettingsService.GetAllCategoriesAsync();
+            
+            var headcount = await SettingsService.GetAllHeadcountAsync();
+            availableParticipants = headcount
+                .Select(h => h.Email)
+                .Distinct()
+                .OrderBy(e => e)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading data: {ex.Message}";
+        }
+    }
+
     private async Task LoadSplitSuggestions()
     {
-        // In a real implementation, this would call SplitService
-        splitSuggestions = GenerateMockSplitSuggestions();
+        try
+        {
+            isLoading = true;
+            errorMessage = "";
+            StateHasChanged();
+
+            var suggestions = await SplitService.GetSplitSuggestionsAsync();
+            splitSuggestions = suggestions.ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading split suggestions: {ex.Message}";
+            splitSuggestions = new();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
     }
 
     private void CalculateStatistics()
     {
-        totalSplitAmount = filteredSuggestions.Sum(s => s.Amount);
-        totalParticipants = filteredSuggestions.SelectMany(s => s.DetectedParticipants).Distinct().Count();
+        totalSplitAmount = filteredSuggestions.Sum(s => s.TotalAmount);
+        totalParticipants = filteredSuggestions.SelectMany(s => s.SuggestedParticipants).Distinct().Count();
         highConfidenceSuggestions = filteredSuggestions.Count(s => s.ConfidenceScore >= 80);
     }
 
     private void FilterSuggestions()
     {
         filteredSuggestions = splitSuggestions.Where(s =>
-            (string.IsNullOrEmpty(selectedCategory) || s.Category == selectedCategory) &&
+            (string.IsNullOrEmpty(selectedCategory) || (s.Transaction.Category?.Name ?? "") == selectedCategory) &&
             (string.IsNullOrEmpty(selectedConfidence) || FilterByConfidence(s)) &&
             (string.IsNullOrEmpty(selectedAmountRange) || FilterByAmountRange(s)) &&
             (string.IsNullOrEmpty(searchText) || 
-             s.Vendor.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-             s.DetectedParticipants.Any(p => p.Contains(searchText, StringComparison.OrdinalIgnoreCase)))
+             (s.Transaction.Vendor?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false) ||
+             s.SuggestedParticipants.Any(p => p.Contains(searchText, StringComparison.OrdinalIgnoreCase)))
         ).ToList();
         
         CalculateStatistics();
@@ -328,9 +390,9 @@
     {
         return selectedAmountRange switch
         {
-            "high" => suggestion.Amount >= 200,
-            "medium" => suggestion.Amount >= 50 && suggestion.Amount < 200,
-            "low" => suggestion.Amount < 50,
+            "high" => suggestion.TotalAmount >= 200,
+            "medium" => suggestion.TotalAmount >= 50 && suggestion.TotalAmount < 200,
+            "low" => suggestion.TotalAmount < 50,
             _ => true
         };
     }
@@ -378,44 +440,133 @@
 
     private async Task RefreshSuggestions()
     {
+        selectedSuggestions.Clear();
+        allSelected = false;
         await LoadSplitSuggestions();
         FilterSuggestions();
-        await JSRuntime.InvokeVoidAsync("alert", "Split suggestions refreshed!");
     }
 
     private async Task ProcessAllSuggestions()
     {
-        var result = await JSRuntime.InvokeAsync<bool>("confirm", 
-            $"Process all {filteredSuggestions.Count} split suggestions? This will create split transactions.");
-        
-        if (result)
+        if (!filteredSuggestions.Any())
         {
-            // Process all suggestions
-            await JSRuntime.InvokeVoidAsync("alert", $"Processed {filteredSuggestions.Count} split suggestions!");
-            await LoadSplitSuggestions();
+            await JSRuntime.InvokeVoidAsync("alert", "No suggestions to process");
+            return;
+        }
+
+        var result = await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"Process all {filteredSuggestions.Count} split suggestions? This will create split transactions for each.");
+        
+        if (!result) return;
+
+        try
+        {
+            isLoading = true;
+            errorMessage = "";
+            StateHasChanged();
+
+            var processed = 0;
+            var errors = new List<string>();
+
+            foreach (var suggestion in filteredSuggestions.ToList())
+            {
+                try
+                {
+                    await SplitService.ApplySplitAsync(suggestion.TransactionId, suggestion.SuggestedSplits, "System");
+                    processed++;
+                    splitSuggestions.Remove(suggestion);
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"{suggestion.TransactionId}: {ex.Message}");
+                }
+            }
+
             FilterSuggestions();
+            
+            var message = $"Processed {processed} split suggestions";
+            if (errors.Any())
+            {
+                message += $"\n{errors.Count} errors occurred";
+            }
+            
+            await JSRuntime.InvokeVoidAsync("alert", message);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error processing suggestions: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
         }
     }
 
     private async Task ViewDetails(string transactionId)
     {
-        await JSRuntime.InvokeVoidAsync("alert", $"View details for transaction {transactionId} - Navigation pending");
+        await JSRuntime.InvokeVoidAsync("alert", $"View details for transaction {transactionId} - Navigation to transaction page pending");
     }
 
     private async Task EditSplit(SplitSuggestion suggestion)
     {
-        await JSRuntime.InvokeVoidAsync("alert", $"Edit split for {suggestion.TransactionId} - Modal pending");
+        try
+        {
+            var transaction = await SettingsService.GetTransactionByIdAsync(suggestion.TransactionId);
+            if (transaction != null)
+            {
+                selectedTransaction = transaction;
+                showSplitModal = true;
+                StateHasChanged();
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("alert", "Transaction not found");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error loading transaction: {ex.Message}");
+        }
     }
 
     private async Task ProcessSplit(SplitSuggestion suggestion)
     {
-        await JSRuntime.InvokeVoidAsync("alert", $"Split processed for {suggestion.TransactionId}!");
-        splitSuggestions.Remove(suggestion);
-        FilterSuggestions();
+        var result = await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"Apply suggested split for {suggestion.TransactionId}?\nThis will create {suggestion.SuggestedParticipants.Count} split transactions.");
+        
+        if (!result) return;
+
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            await SplitService.ApplySplitAsync(suggestion.TransactionId, suggestion.SuggestedSplits, "System");
+            
+            splitSuggestions.Remove(suggestion);
+            FilterSuggestions();
+            
+            await JSRuntime.InvokeVoidAsync("alert", $"Split processed successfully for {suggestion.TransactionId}");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error processing split: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
     }
 
     private async Task RejectSplit(string transactionId)
     {
+        var result = await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"Reject split suggestion for {transactionId}?\nYou can always manually split this transaction later.");
+        
+        if (!result) return;
+
         var suggestion = splitSuggestions.FirstOrDefault(s => s.TransactionId == transactionId);
         if (suggestion != null)
         {
@@ -427,22 +578,78 @@
 
     private async Task ProcessSelectedSplits()
     {
-        await JSRuntime.InvokeVoidAsync("alert", $"Processed {selectedSuggestions.Count} selected splits!");
-        foreach (var transactionId in selectedSuggestions.ToList())
+        if (!selectedSuggestions.Any())
         {
-            var suggestion = splitSuggestions.FirstOrDefault(s => s.TransactionId == transactionId);
-            if (suggestion != null)
-            {
-                splitSuggestions.Remove(suggestion);
-            }
+            await JSRuntime.InvokeVoidAsync("alert", "No suggestions selected");
+            return;
         }
-        selectedSuggestions.Clear();
-        FilterSuggestions();
+
+        var result = await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"Process {selectedSuggestions.Count} selected split suggestions?");
+        
+        if (!result) return;
+
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            var processed = 0;
+            var errors = new List<string>();
+
+            foreach (var transactionId in selectedSuggestions.ToList())
+            {
+                var suggestion = splitSuggestions.FirstOrDefault(s => s.TransactionId == transactionId);
+                if (suggestion != null)
+                {
+                    try
+                    {
+                        await SplitService.ApplySplitAsync(transactionId, suggestion.SuggestedSplits, "System");
+                        processed++;
+                        splitSuggestions.Remove(suggestion);
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"{transactionId}: {ex.Message}");
+                    }
+                }
+            }
+
+            selectedSuggestions.Clear();
+            FilterSuggestions();
+            
+            var message = $"Processed {processed} split suggestions";
+            if (errors.Any())
+            {
+                message += $"\n{errors.Count} errors occurred";
+            }
+            
+            await JSRuntime.InvokeVoidAsync("alert", message);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error processing selected splits: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
     }
 
     private async Task RejectSelectedSplits()
     {
-        await JSRuntime.InvokeVoidAsync("alert", $"Rejected {selectedSuggestions.Count} selected splits!");
+        if (!selectedSuggestions.Any())
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "No suggestions selected");
+            return;
+        }
+
+        var result = await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"Reject {selectedSuggestions.Count} selected split suggestions?");
+        
+        if (!result) return;
+
         foreach (var transactionId in selectedSuggestions.ToList())
         {
             var suggestion = splitSuggestions.FirstOrDefault(s => s.TransactionId == transactionId);
@@ -453,6 +660,8 @@
         }
         selectedSuggestions.Clear();
         FilterSuggestions();
+        
+        await JSRuntime.InvokeVoidAsync("alert", "Selected suggestions rejected");
     }
 
     private void ClearSelection()
@@ -504,67 +713,54 @@
         }
         return participant;
     }
-
-    private List<SplitSuggestion> GenerateMockSplitSuggestions()
+    
+    private string GetNameFromEmail(string email)
     {
-        var random = new Random();
-        var suggestions = new List<SplitSuggestion>();
-        var vendors = new[] { "Team Restaurant", "Client Dinner", "Uber Ride", "Conference Lunch", "Taxi Service", "Business Dinner" };
-        var categories = new[] { "Client entertainment", "Meals", "Transportation", "Other" };
-        var participants = new[] { "john.doe@company.com", "jane.smith@company.com", "client@external.com", "partner@vendor.com" };
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains("@")) 
+            return email;
+        
+        return email.Split('@')[0].Replace(".", " ").Replace("_", " ");
+    }
+    
+    private async Task HandleSplitSaved(List<SplitItem> splitItems)
+    {
+        if (selectedTransaction == null) return;
 
-        for (int i = 1; i <= 25; i++)
+        try
         {
-            var amount = random.Next(30, 500);
-            var participantCount = random.Next(2, 5);
-            var selectedParticipants = participants.OrderBy(x => random.Next()).Take(participantCount).ToList();
-            var confidence = random.Next(40, 95);
+            isLoading = true;
+            StateHasChanged();
+
+            await SplitService.ApplySplitAsync(selectedTransaction.TransactionId, splitItems, "User");
             
-            suggestions.Add(new SplitSuggestion
+            var suggestion = splitSuggestions.FirstOrDefault(s => s.TransactionId == selectedTransaction.TransactionId);
+            if (suggestion != null)
             {
-                TransactionId = $"TXN-SPLIT-{i:000}",
-                TransactionDate = DateTime.Today.AddDays(-random.Next(1, 60)),
-                Vendor = vendors[random.Next(vendors.Length)],
-                Address = "Business Location",
-                Category = categories[random.Next(categories.Length)],
-                Currency = "USD",
-                Amount = amount,
-                DetectedParticipants = selectedParticipants,
-                SplitType = random.NextDouble() > 0.7 ? "Custom" : "Equal",
-                SuggestedAmountPerPerson = amount / selectedParticipants.Count,
-                ConfidenceScore = confidence,
-                Reason = GetSplitReason(selectedParticipants.Count, amount)
-            });
+                splitSuggestions.Remove(suggestion);
+                FilterSuggestions();
+            }
+            
+            showSplitModal = false;
+            selectedTransaction = null;
+            
+            await JSRuntime.InvokeVoidAsync("alert", "Transaction split successfully!");
         }
-
-        return suggestions.OrderByDescending(s => s.ConfidenceScore).ToList();
-    }
-
-    private string GetSplitReason(int participantCount, decimal amount)
-    {
-        var reasons = new[]
+        catch (Exception ex)
         {
-            $"Multiple participants detected ({participantCount} people)",
-            $"High amount (${amount:N0}) suggests shared expense",
-            "Vendor pattern indicates group activity",
-            "Time pattern suggests team meal/event"
-        };
-        return reasons[new Random().Next(reasons.Length)];
+            await JSRuntime.InvokeVoidAsync("alert", $"Error saving split: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
     }
 
-    public class SplitSuggestion
+    private Task HandleModalCancel()
     {
-        public string TransactionId { get; set; } = "";
-        public DateTime TransactionDate { get; set; }
-        public string Vendor { get; set; } = "";
-        public string Address { get; set; } = "";
-        public string Category { get; set; } = "";
-        public string Currency { get; set; } = "";
-        public decimal Amount { get; set; }
-        public List<string> DetectedParticipants { get; set; } = new();
-        public string SplitType { get; set; } = "";
-        public decimal SuggestedAmountPerPerson { get; set; }
-        public int ConfidenceScore { get; set; }
-        public string Reason { get; set; } = "";
+        showSplitModal = false;
+        selectedTransaction = null;
+        StateHasChanged();
+        return Task.CompletedTask;
     }
 }

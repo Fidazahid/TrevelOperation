@@ -1,7 +1,11 @@
 @page "/travel-spend"
 @using TravelOperation.Core.Models
 @using TravelOperation.Core.Services
+@using TravelOperation.Core.Services.Interfaces
+@using TrevelOperation.Service
+@inject ITripService TripService
 @inject ITransactionService TransactionService
+@inject ITaxCalculationService TaxCalculationService
 @inject IJSRuntime JSRuntime
 
 <div class="container mx-auto p-6">
@@ -238,6 +242,8 @@
     private List<TravelSpendData> spendData = new();
     private List<TravelSpendData> filteredSpendData = new();
     private List<string> availableOwners = new();
+    private List<string> availablePurposes = new();
+    private bool isLoading = false;
     
     // Filters
     private string selectedDateRange = "";
@@ -260,14 +266,150 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadSpendData();
-        CalculateSummary();
-        FilterTrips();
     }
 
     private async Task LoadSpendData()
     {
-        spendData = GenerateMockSpendData();
-        availableOwners = spendData.Select(s => s.Owner).Where(o => !string.IsNullOrEmpty(o)).Distinct().ToList()!;
+        isLoading = true;
+        StateHasChanged();
+        
+        try
+        {
+            spendData = new List<TravelSpendData>();
+            
+            // Load all trips with their transactions
+            var trips = await TripService.GetAllTripsAsync();
+            
+            foreach (var trip in trips)
+            {
+                try
+                {
+                    var transactions = trip.Transactions?.ToList() ?? new List<Transaction>();
+                    
+                    // Calculate category totals
+                    var airfare = transactions
+                        .Where(t => t.Category?.Name == "Airfare")
+                        .Sum(t => t.AmountUSD ?? 0);
+                    
+                    var lodging = transactions
+                        .Where(t => t.Category?.Name == "Lodging")
+                        .Sum(t => t.AmountUSD ?? 0);
+                    
+                    var meals = transactions
+                        .Where(t => t.Category?.Name == "Meals")
+                        .Sum(t => t.AmountUSD ?? 0);
+                    
+                    var transportation = transactions
+                        .Where(t => t.Category?.Name == "Transportation")
+                        .Sum(t => t.AmountUSD ?? 0);
+                    
+                    var clientEntertainment = transactions
+                        .Where(t => t.Category?.Name == "Client entertainment")
+                        .Sum(t => t.AmountUSD ?? 0);
+                    
+                    var communication = transactions
+                        .Where(t => t.Category?.Name == "Communication")
+                        .Sum(t => t.AmountUSD ?? 0);
+                    
+                    var other = transactions
+                        .Where(t => t.Category?.Name == "Other")
+                        .Sum(t => t.AmountUSD ?? 0);
+                    
+                    var totalAmount = transactions.Sum(t => t.AmountUSD ?? 0);
+                    
+                    // Get cabin classes for airfare
+                    var cabinClasses = transactions
+                        .Where(t => t.Category?.Name == "Airfare" && t.CabinClass != null)
+                        .Select(t => t.CabinClass!.Name)
+                        .Distinct()
+                        .ToList();
+                    
+                    // Calculate tax exposure
+                    TaxExposureResult? taxExposure = null;
+                    try
+                    {
+                        taxExposure = await TaxCalculationService.CalculateTaxExposureAsync(trip.TripId);
+                    }
+                    catch
+                    {
+                        // If tax calculation fails, create default
+                        taxExposure = new TaxExposureResult
+                        {
+                            TripId = trip.TripId,
+                            MealsExposure = 0,
+                            LodgingExposure = 0,
+                            TotalTaxExposure = 0,
+                            HasPremiumAirfare = false
+                        };
+                    }
+                    
+                    // Create spend data object
+                    var spendItem = new TravelSpendData
+                    {
+                        TripId = trip.TripId,
+                        TripName = trip.TripName ?? "",
+                        Email = trip.Email ?? "",
+                        StartDate = trip.StartDate,
+                        EndDate = trip.EndDate,
+                        Duration = trip.Duration,
+                        Destination = $"{trip.City1}, {trip.Country1}",
+                        Owner = trip.Owner?.Name ?? "",
+                        Purpose = trip.Purpose?.Name ?? "",
+                        TransactionCount = transactions.Count,
+                        TotalAmount = totalAmount,
+                        CostPerDay = trip.Duration > 0 ? totalAmount / trip.Duration : 0,
+                        AirfareAmount = airfare,
+                        LodgingAmount = lodging,
+                        MealsAmount = meals,
+                        TransportationAmount = transportation,
+                        ClientEntertainmentAmount = clientEntertainment,
+                        CommunicationAmount = communication,
+                        OtherAmount = other,
+                        LodgingPerNight = trip.Duration > 0 ? lodging / trip.Duration : 0,
+                        MealsPerDay = trip.Duration > 0 ? meals / trip.Duration : 0,
+                        TransportationPerDay = trip.Duration > 0 ? transportation / trip.Duration : 0,
+                        CabinClasses = string.Join(", ", cabinClasses),
+                        HasPremiumCabin = taxExposure.HasPremiumAirfare,
+                        MealsTaxExposure = taxExposure.MealsExposure,
+                        LodgingTaxExposure = taxExposure.LodgingExposure,
+                        TaxExposure = taxExposure.TotalTaxExposure
+                    };
+                    
+                    spendData.Add(spendItem);
+                }
+                catch (Exception ex)
+                {
+                    await JSRuntime.InvokeVoidAsync("console.error", $"Error processing trip {trip.TripId}: {ex.Message}");
+                }
+            }
+            
+            // Get unique owners and purposes for filters
+            availableOwners = spendData
+                .Select(s => s.Owner)
+                .Where(o => !string.IsNullOrEmpty(o))
+                .Distinct()
+                .OrderBy(o => o)
+                .ToList();
+            
+            availablePurposes = spendData
+                .Select(s => s.Purpose)
+                .Where(p => !string.IsNullOrEmpty(p))
+                .Distinct()
+                .OrderBy(p => p)
+                .ToList();
+            
+            CalculateSummary();
+            FilterTrips();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error loading travel spend data: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
     }
 
     private void CalculateSummary()
@@ -346,88 +488,48 @@
 
     private async Task ShowTaxBreakdown(int tripId)
     {
-        var spend = spendData.FirstOrDefault(s => s.TripId == tripId);
-        if (spend != null)
+        try
         {
-            var message = $"Tax Breakdown for {spend.TripName}:\n\n";
-            message += $"Meals Cap Exceeded: ${spend.MealsTaxExposure:N2}\n";
-            message += $"Lodging Cap Exceeded: ${spend.LodgingTaxExposure:N2}\n";
-            message += $"Premium Cabin Flag: {(spend.HasPremiumCabin ? "Yes" : "No")}\n\n";
-            message += $"Total Tax Exposure: ${spend.TaxExposure:N2}";
+            var breakdown = await TaxCalculationService.GetTaxBreakdownAsync(tripId);
+            var spend = spendData.FirstOrDefault(s => s.TripId == tripId);
             
-            await JSRuntime.InvokeVoidAsync("alert", message);
+            if (breakdown != null && spend != null)
+            {
+                var message = $"Tax Breakdown for {spend.TripName}:\n\n";
+                message += $"--- MEALS ---\n";
+                message += $"Total Spent: ${breakdown.MealsCalculation.TotalMealsSpent:N2}\n";
+                message += $"Per Day: ${breakdown.MealsCalculation.MealsPerDay:N2}\n";
+                message += $"Cap: ${breakdown.MealsCalculation.MealsCap:N2}\n";
+                message += $"Exposure: ${breakdown.MealsCalculation.TotalExposure:N2}\n\n";
+                
+                message += $"--- LODGING ---\n";
+                message += $"Total Spent: ${breakdown.LodgingCalculation.TotalLodgingSpent:N2}\n";
+                message += $"Per Night: ${breakdown.LodgingCalculation.LodgingPerNight:N2}\n";
+                message += $"Cap: ${breakdown.LodgingCalculation.LodgingCap:N2}\n";
+                message += $"Exposure: ${breakdown.LodgingCalculation.TotalExposure:N2}\n\n";
+                
+                message += $"--- AIRFARE ---\n";
+                message += $"Total Spent: ${breakdown.AirfareAnalysis.TotalAirfareSpent:N2}\n";
+                message += $"Premium Cabin: {(breakdown.AirfareAnalysis.HasPremiumCabins ? "Yes" : "No")}\n";
+                if (breakdown.AirfareAnalysis.HasPremiumCabins)
+                {
+                    message += $"Classes: {string.Join(", ", breakdown.AirfareAnalysis.PremiumCabinClasses)}\n";
+                }
+                message += $"\n--- TOTAL TAX EXPOSURE ---\n";
+                message += $"${breakdown.Summary.TotalTaxExposure:N2}";
+                
+                await JSRuntime.InvokeVoidAsync("alert", message);
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error loading tax breakdown: {ex.Message}");
         }
     }
 
     private async Task ExportTripReport(int tripId)
     {
         await JSRuntime.InvokeVoidAsync("alert", $"Exporting report for trip ID {tripId} - Coming soon!");
-    }
-
-    private List<TravelSpendData> GenerateMockSpendData()
-    {
-        var random = new Random();
-        var spendList = new List<TravelSpendData>();
-        var cities = new[] { ("London", "United Kingdom"), ("Paris", "France"), ("New York", "United States"), ("Tokyo", "Japan"), ("Berlin", "Germany") };
-        var emails = new[] { "john.doe@company.com", "jane.smith@company.com", "mike.johnson@company.com", "sarah.wilson@company.com" };
-        var owners = new[] { "Maayan Chesler", "Martina Poplinsk" };
-        var purposes = new[] { "Business trip", "Onboarding", "Company trip" };
-
-        for (int i = 1; i <= 30; i++)
-        {
-            var startDate = DateTime.Today.AddDays(random.Next(-180, -10));
-            var duration = random.Next(2, 12);
-            var endDate = startDate.AddDays(duration - 1);
-            var city = cities[random.Next(cities.Length)];
-
-            var airfare = random.Next(200, 1200);
-            var lodging = random.Next(80, 350) * duration;
-            var meals = random.Next(30, 120) * duration;
-            var transport = random.Next(20, 80) * duration;
-            var other = random.Next(0, 200);
-            var totalAmount = airfare + lodging + meals + transport + other;
-
-            // Calculate tax exposure
-            var mealsPerDay = (decimal)meals / duration;
-            var lodgingPerNight = (decimal)lodging / duration;
-            var mealsCap = 75; // Mock cap
-            var lodgingCap = 250; // Mock cap
-            
-            var mealsTaxExposure = Math.Max(0, (mealsPerDay - mealsCap) * duration);
-            var lodgingTaxExposure = Math.Max(0, (lodgingPerNight - lodgingCap) * duration);
-            var hasPremiumCabin = random.NextDouble() > 0.8;
-
-            spendList.Add(new TravelSpendData
-            {
-                TripId = i,
-                TripName = $"Trip to {city.Item1}",
-                Email = emails[random.Next(emails.Length)],
-                StartDate = startDate,
-                EndDate = endDate,
-                Duration = duration,
-                Destination = $"{city.Item1}, {city.Item2}",
-                Owner = owners[random.Next(owners.Length)],
-                Purpose = purposes[random.Next(purposes.Length)],
-                TransactionCount = random.Next(4, 15),
-                TotalAmount = totalAmount,
-                CostPerDay = totalAmount / duration,
-                AirfareAmount = airfare,
-                LodgingAmount = lodging,
-                MealsAmount = meals,
-                TransportationAmount = transport,
-                OtherAmount = other,
-                LodgingPerNight = lodgingPerNight,
-                MealsPerDay = mealsPerDay,
-                TransportationPerDay = (decimal)transport / duration,
-                CabinClasses = hasPremiumCabin ? "Business" : "Economy",
-                HasPremiumCabin = hasPremiumCabin,
-                MealsTaxExposure = mealsTaxExposure,
-                LodgingTaxExposure = lodgingTaxExposure,
-                TaxExposure = mealsTaxExposure + lodgingTaxExposure
-            });
-        }
-
-        return spendList.OrderByDescending(s => s.TotalAmount).ToList();
     }
 
     public class TravelSpendData
@@ -448,6 +550,8 @@
         public decimal LodgingAmount { get; set; }
         public decimal MealsAmount { get; set; }
         public decimal TransportationAmount { get; set; }
+        public decimal ClientEntertainmentAmount { get; set; }
+        public decimal CommunicationAmount { get; set; }
         public decimal OtherAmount { get; set; }
         public decimal LodgingPerNight { get; set; }
         public decimal MealsPerDay { get; set; }

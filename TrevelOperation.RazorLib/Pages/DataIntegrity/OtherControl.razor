@@ -457,10 +457,31 @@
 
     private async Task GenerateMessage(string transactionId)
     {
-        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-        if (transaction != null)
+        var otherTransaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+        if (otherTransaction != null)
         {
-            var message = GenerateOtherMessage(transaction);
+            var transaction = ConvertToTransaction(otherTransaction);
+            Trip? trip = null;
+            
+            // If transaction is linked to a trip, create trip object
+            if (!string.IsNullOrEmpty(otherTransaction.TripName))
+            {
+                trip = new Trip { TripName = otherTransaction.TripName };
+                // Parse trip dates if available
+                if (!string.IsNullOrEmpty(otherTransaction.TripDates))
+                {
+                    var dates = otherTransaction.TripDates.Split('-');
+                    if (dates.Length == 2)
+                    {
+                        if (DateTime.TryParseExact(dates[0].Trim(), "dd/MM/yyyy", null, System.Globalization.DateTimeStyles.None, out var startDate))
+                            trip.StartDate = startDate;
+                        if (DateTime.TryParseExact(dates[1].Trim(), "dd/MM/yyyy", null, System.Globalization.DateTimeStyles.None, out var endDate))
+                            trip.EndDate = endDate;
+                    }
+                }
+            }
+            
+            var message = MessageTemplateService.GenerateOtherCategoryMessage(transaction, trip);
             await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", message);
             await JSRuntime.InvokeVoidAsync("alert", "Message copied to clipboard!");
         }
@@ -490,6 +511,23 @@
         selectedTransactions.Clear();
         allSelected = false;
         StateHasChanged();
+    }
+
+    private Transaction ConvertToTransaction(OtherTransactionData data)
+    {
+        return new Transaction
+        {
+            TransactionId = data.TransactionId,
+            Email = data.Email,
+            TransactionDate = data.TransactionDate,
+            Vendor = data.Vendor,
+            Address = data.Address,
+            Currency = data.Currency,
+            Amount = data.Amount,
+            AmountUSD = data.AmountUSD,
+            DocumentUrl = data.DocumentUrl,
+            Category = new Category { Name = data.Category }
+        };
     }
 
     private string GenerateOtherMessage(OtherTransactionData transaction)

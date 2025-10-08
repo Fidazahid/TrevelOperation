@@ -1,7 +1,10 @@
 @page "/lodging-control"
 @using TravelOperation.Core.Models
-@using TravelOperation.Core.Services
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Models.Lookup
+@using TravelOperation.Core.Services.Interfaces
 @inject ITransactionService TransactionService
+@inject ILookupService LookupService
 @inject IJSRuntime JSRuntime
 
 <div class="container mx-auto p-6">
@@ -171,8 +174,8 @@
                                 <td>@transaction.Currency</td>
                                 <td>@transaction.Amount.ToString("N2")</td>
                                 <td>
-                                    <div class="font-bold @(transaction.AmountUSD <= 25 ? "text-red-600" : transaction.AmountUSD <= 50 ? "text-orange-500" : "text-yellow-600")">
-                                        $@transaction.AmountUSD.ToString("N2")
+                                    <div class="font-bold @((transaction.AmountUSD ?? 0) <= 25 ? "text-red-600" : (transaction.AmountUSD ?? 0) <= 50 ? "text-orange-500" : "text-yellow-600")">
+                                        $@((transaction.AmountUSD ?? 0).ToString("N2"))
                                     </div>
                                 </td>
                                 <td>
@@ -181,10 +184,12 @@
                                 <td>
                                     <select class="select select-bordered select-sm bg-blue-50" 
                                             @onchange="(e) => UpdateCategory(transaction.TransactionId, e.Value?.ToString())">
-                                        <option value="Lodging" selected="@(transaction.Category == "Lodging")">🏨 Lodging</option>
-                                        <option value="Transportation" selected="@(transaction.Category == "Transportation")">🚕 Transportation</option>
-                                        <option value="Meals" selected="@(transaction.Category == "Meals")">🍽 Meals</option>
-                                        <option value="Other" selected="@(transaction.Category == "Other")">❔ Other</option>
+                                        @foreach (var category in categories)
+                                        {
+                                            <option value="@category.CategoryId" selected="@(transaction.CategoryId == category.CategoryId)">
+                                                @category.Emoji @category.Name
+                                            </option>
+                                        }
                                     </select>
                                 </td>
                                 <td>
@@ -241,8 +246,9 @@
 </div>
 
 @code {
-    private List<LodgingTransactionData> transactions = new();
-    private List<LodgingTransactionData> filteredTransactions = new();
+    private List<Transaction> transactions = new();
+    private List<Transaction> filteredTransactions = new();
+    private List<Category> categories = new();
     private List<string> availableOwners = new();
     private HashSet<string> selectedTransactions = new();
     
@@ -266,24 +272,38 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadLookupData();
         await LoadLodgingTransactions();
         CalculateSummary();
         FilterTransactions();
     }
 
+    private async Task LoadLookupData()
+    {
+        categories = (await LookupService.GetCategoriesAsync()).ToList();
+    }
+
     private async Task LoadLodgingTransactions()
     {
-        transactions = GenerateMockLodgingData();
-        availableOwners = transactions.Select(t => t.Owner).Where(o => !string.IsNullOrEmpty(o)).Distinct().ToList()!;
+        // Get low-value lodging transactions
+        var threshold = decimal.Parse(selectedAmountFilter);
+        var allLodging = await TransactionService.GetLowValueLodgingAsync(threshold);
+        transactions = allLodging.ToList();
+        
+        availableOwners = transactions
+            .Where(t => t.Trip?.Owner?.Name != null)
+            .Select(t => t.Trip!.Owner!.Name)
+            .Distinct()
+            .ToList();
     }
 
     private void CalculateSummary()
     {
         var maxAmount = decimal.Parse(selectedAmountFilter);
-        lowValueCount = filteredTransactions.Count(t => t.AmountUSD <= maxAmount);
+        lowValueCount = filteredTransactions.Count(t => (t.AmountUSD ?? 0) <= maxAmount);
         totalLodgingTransactions = filteredTransactions.Count;
-        averageAmount = filteredTransactions.Any() ? filteredTransactions.Average(t => t.AmountUSD) : 0;
-        totalAmount = filteredTransactions.Sum(t => t.AmountUSD);
+        averageAmount = filteredTransactions.Any() ? filteredTransactions.Average(t => t.AmountUSD ?? 0) : 0;
+        totalAmount = filteredTransactions.Sum(t => t.AmountUSD ?? 0);
     }
 
     private void FilterTransactions()
@@ -291,14 +311,14 @@
         var maxAmount = decimal.Parse(selectedAmountFilter);
         
         filteredTransactions = transactions.Where(t =>
-            t.AmountUSD <= maxAmount &&
+            (t.AmountUSD ?? 0) <= maxAmount &&
             !t.IsValid &&
-            (string.IsNullOrEmpty(selectedOwner) || t.Owner == selectedOwner) &&
+            (string.IsNullOrEmpty(selectedOwner) || (t.Trip?.Owner?.Name == selectedOwner)) &&
             (string.IsNullOrEmpty(searchText) || 
-             t.Vendor.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+             (t.Vendor?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false) ||
              t.TransactionId.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
             FilterByStatus(t)
-        ).OrderBy(t => t.AmountUSD).ToList();
+        ).OrderBy(t => t.AmountUSD ?? 0).ToList();
         
         CalculateSummary();
         currentPage = 1;
@@ -306,7 +326,7 @@
         StateHasChanged();
     }
 
-    private bool FilterByStatus(LodgingTransactionData transaction)
+    private bool FilterByStatus(Transaction transaction)
     {
         return selectedStatus switch
         {
@@ -316,11 +336,12 @@
         };
     }
 
-    private string GetRowHighlight(LodgingTransactionData transaction)
+    private string GetRowHighlight(Transaction transaction)
     {
-        if (transaction.AmountUSD <= 25)
+        var amount = transaction.AmountUSD ?? 0;
+        if (amount <= 25)
             return "bg-red-50";
-        if (transaction.AmountUSD <= 50)
+        if (amount <= 50)
             return "bg-orange-50";
         return "";
     }
@@ -366,12 +387,13 @@
         StateHasChanged();
     }
 
-    private async Task UpdateCategory(string transactionId, string? category)
+    private async Task UpdateCategory(string transactionId, string? categoryIdStr)
     {
         var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-        if (transaction != null)
+        if (transaction != null && !string.IsNullOrEmpty(categoryIdStr))
         {
-            transaction.Category = category ?? "";
+            transaction.CategoryId = int.Parse(categoryIdStr);
+            await TransactionService.UpdateTransactionAsync(transaction);
             StateHasChanged();
         }
     }
@@ -389,10 +411,10 @@
         {
             foreach (var transaction in filteredTransactions)
             {
-                transaction.IsValid = true;
+                await TransactionService.MarkAsValidAsync(transaction.TransactionId);
             }
             await JSRuntime.InvokeVoidAsync("alert", $"Marked {filteredTransactions.Count} transactions as valid");
-            FilterTransactions();
+            await RefreshData();
         }
     }
 
@@ -414,27 +436,24 @@
 
     private async Task MarkAsValid(string transactionId)
     {
+        await TransactionService.MarkAsValidAsync(transactionId);
         var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
         if (transaction != null)
         {
             transaction.IsValid = true;
-            FilterTransactions();
         }
+        FilterTransactions();
     }
 
     private async Task MarkSelectedAsValid()
     {
         foreach (var transactionId in selectedTransactions)
         {
-            var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-            if (transaction != null)
-            {
-                transaction.IsValid = true;
-            }
+            await TransactionService.MarkAsValidAsync(transactionId);
         }
         selectedTransactions.Clear();
         await JSRuntime.InvokeVoidAsync("alert", "Selected transactions marked as valid");
-        FilterTransactions();
+        await RefreshData();
     }
 
     private void ClearSelection()
@@ -444,21 +463,23 @@
         StateHasChanged();
     }
 
-    private string GenerateLodgingMessage(LodgingTransactionData transaction)
+    private string GenerateLodgingMessage(Transaction transaction)
     {
+        var categoryName = transaction.Category?.Name ?? "Lodging";
+        var amountUSD = transaction.AmountUSD ?? 0;
         return $@"Hi {GetFirstName(transaction.Email)},
 
 I have a question about the following travel-related transaction:
 
 Transaction ID: {transaction.TransactionId}
 Date: {transaction.TransactionDate:dd/MM/yyyy}
-Category: Lodging
+Category: {categoryName}
 Vendor: {transaction.Vendor}
 Address: {transaction.Address}
 Amount: {transaction.Currency} {transaction.Amount:N2}
 Documentation: {transaction.DocumentUrl}
 
-This lodging transaction appears to have an unusually low amount (${transaction.AmountUSD:N2}). Could you please confirm:
+This lodging transaction appears to have an unusually low amount (${amountUSD:N2}). Could you please confirm:
 
 1. Is this the correct amount for the lodging expense?
 2. If this is a partial payment or deposit, are there additional charges?
@@ -471,57 +492,12 @@ Thank you!";
 
     private string GetFirstName(string email)
     {
-        return email.Split('@')[0].Split('.')[0];
-    }
-
-    private List<LodgingTransactionData> GenerateMockLodgingData()
-    {
-        var random = new Random();
-        var transactions = new List<LodgingTransactionData>();
-        var emails = new[] { "john.doe@company.com", "jane.smith@company.com", "mike.johnson@company.com", "sarah.wilson@company.com" };
-        var vendors = new[] { "Hotel Budget", "Motel 6", "Hostel Stay", "Airbnb", "Extended Stay", "Local Inn" };
-        var owners = new[] { "Maayan Chesler", "Martina Poplinsk" };
-
-        for (int i = 1; i <= 15; i++)
+        var parts = email.Split('@');
+        if (parts.Length > 0)
         {
-            var hasDocumentation = random.NextDouble() > 0.1;
-            var amount = random.Next(15, 100); // Low-value lodging only
-            
-            transactions.Add(new LodgingTransactionData
-            {
-                TransactionId = $"TXN-LODG-{i:000}",
-                Email = emails[random.Next(emails.Length)],
-                TransactionDate = DateTime.Today.AddDays(random.Next(-90, -1)),
-                Vendor = vendors[random.Next(vendors.Length)],
-                Address = "Lodging Location",
-                Currency = "USD",
-                Amount = amount,
-                AmountUSD = amount,
-                Category = "Lodging",
-                Participants = "",
-                DocumentUrl = hasDocumentation ? $"https://docs.company.com/receipt-{i}" : "",
-                Owner = owners[random.Next(owners.Length)],
-                IsValid = false
-            });
+            var nameParts = parts[0].Split('.');
+            return nameParts.Length > 0 ? nameParts[0] : email;
         }
-
-        return transactions.OrderBy(t => t.AmountUSD).ToList();
-    }
-
-    public class LodgingTransactionData
-    {
-        public string TransactionId { get; set; } = "";
-        public string Email { get; set; } = "";
-        public DateTime TransactionDate { get; set; }
-        public string Vendor { get; set; } = "";
-        public string Address { get; set; } = "";
-        public string Currency { get; set; } = "";
-        public decimal Amount { get; set; }
-        public decimal AmountUSD { get; set; }
-        public string Category { get; set; } = "";
-        public string Participants { get; set; } = "";
-        public string DocumentUrl { get; set; } = "";
-        public string Owner { get; set; } = "";
-        public bool IsValid { get; set; }
+        return email;
     }
 }
