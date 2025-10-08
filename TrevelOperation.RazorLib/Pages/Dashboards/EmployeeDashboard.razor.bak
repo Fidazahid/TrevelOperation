@@ -1,0 +1,503 @@
+@page "/dashboard/employee"
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Services.Interfaces
+@inject IJSRuntime JSRuntime
+
+<div class="container mx-auto p-6">
+    <!-- Welcome Header -->
+    <div class="hero bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg mb-6">
+        <div class="hero-content text-center">
+            <div class="max-w-md">
+                <h1 class="mb-5 text-4xl font-bold">👋 Welcome, John Doe!</h1>
+                <p class="mb-5">Manage your travel requests and expense submissions</p>
+                <button class="btn btn-primary" @onclick="CreateNewTripRequest">
+                    ✈️ New Trip Request
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+        <div class="card bg-blue-50 border-l-4 border-blue-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">📋</div>
+                    <div>
+                        <div class="text-2xl font-bold text-blue-700">@pendingRequests</div>
+                        <div class="text-blue-600">Pending Requests</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card bg-green-50 border-l-4 border-green-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">✅</div>
+                    <div>
+                        <div class="text-2xl font-bold text-green-700">@approvedTrips</div>
+                        <div class="text-green-600">Approved Trips</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card bg-yellow-50 border-l-4 border-yellow-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">💰</div>
+                    <div>
+                        <div class="text-2xl font-bold text-yellow-700">$@pendingExpenses.ToString("N0")</div>
+                        <div class="text-yellow-600">Pending Expenses</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card bg-purple-50 border-l-4 border-purple-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">📊</div>
+                    <div>
+                        <div class="text-2xl font-bold text-purple-700">$@totalReimbursed.ToString("N0")</div>
+                        <div class="text-purple-600">Total Reimbursed</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Tabs -->
+    <div class="tabs tabs-boxed mb-6">
+        <a class="tab @(activeTab == "trips" ? "tab-active" : "")" @onclick="() => SetActiveTab(\"trips\")">
+            🧳 My Trip Requests
+        </a>
+        <a class="tab @(activeTab == "expenses" ? "tab-active" : "")" @onclick="() => SetActiveTab(\"expenses\")">
+            💵 My Expenses
+        </a>
+        <a class="tab @(activeTab == "reports" ? "tab-active" : "")" @onclick="() => SetActiveTab(\"reports\")">
+            📊 My Reports
+        </a>
+    </div>
+
+    @if (activeTab == "trips")
+    {
+        <!-- Trip Requests -->
+        <div class="card bg-base-100 shadow-md">
+            <div class="card-body">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="card-title">🧳 My Trip Requests</h2>
+                    <button class="btn btn-primary" @onclick="CreateNewTripRequest">
+                        ➕ New Trip Request
+                    </button>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra">
+                        <thead>
+                            <tr>
+                                <th>Request ID</th>
+                                <th>Destination</th>
+                                <th>Purpose</th>
+                                <th>Dates</th>
+                                <th>Estimated Cost</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var request in tripRequests)
+                            {
+                                <tr>
+                                    <td class="font-mono text-sm">TR-@request.TripRequestId.ToString("000")</td>
+                                    <td>
+                                        <div class="font-semibold">@request.Destination</div>
+                                        <div class="text-xs text-gray-500">@request.Country</div>
+                                    </td>
+                                    <td>@request.Purpose</td>
+                                    <td>
+                                        <div class="text-sm">@request.StartDate.ToString("dd/MM/yyyy")</div>
+                                        <div class="text-xs text-gray-500">to @request.EndDate.ToString("dd/MM/yyyy")</div>
+                                    </td>
+                                    <td class="font-bold">$@request.EstimatedCost.ToString("N2")</td>
+                                    <td>
+                                        <span class="badge @GetStatusBadgeClass(request.Status)">
+                                            @GetStatusIcon(request.Status) @request.Status
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="dropdown dropdown-end">
+                                            <label tabindex="0" class="btn btn-ghost btn-sm">⋮</label>
+                                            <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52">
+                                                <li><a @onclick="() => ViewTripDetails(request.TripRequestId)">👁️ View Details</a></li>
+                                                @if (request.Status == "Draft" || request.Status == "Rejected")
+                                                {
+                                                    <li><a @onclick="() => EditTripRequest(request.TripRequestId)">✏️ Edit</a></li>
+                                                    <li><a @onclick="() => SubmitTripRequest(request.TripRequestId)">📤 Submit</a></li>
+                                                }
+                                                @if (request.Status == "Approved")
+                                                {
+                                                    <li><a @onclick="() => AddExpenses(request.TripRequestId)">💰 Add Expenses</a></li>
+                                                }
+                                                <li><hr /></li>
+                                                <li><a @onclick="() => DeleteTripRequest(request.TripRequestId)">🗑️ Delete</a></li>
+                                            </ul>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+    else if (activeTab == "expenses")
+    {
+        <!-- Expenses -->
+        <div class="card bg-base-100 shadow-md">
+            <div class="card-body">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="card-title">💵 My Expenses</h2>
+                    <button class="btn btn-primary" @onclick="AddNewExpense">
+                        ➕ Add Expense
+                    </button>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Trip</th>
+                                <th>Category</th>
+                                <th>Description</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var expense in expenses)
+                            {
+                                <tr>
+                                    <td>@expense.ExpenseDate.ToString("dd/MM/yyyy")</td>
+                                    <td>
+                                        <div class="text-sm font-semibold">@expense.TripRequest.Destination</div>
+                                        <div class="text-xs text-gray-500">TR-@expense.TripRequestId.ToString("000")</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-outline">@expense.Category</span>
+                                    </td>
+                                    <td>
+                                        <div class="max-w-xs truncate">@expense.Description</div>
+                                        <div class="text-xs text-gray-500">@expense.Vendor</div>
+                                    </td>
+                                    <td class="font-bold">$@expense.Amount.ToString("N2")</td>
+                                    <td>
+                                        <span class="badge @GetExpenseStatusBadgeClass(expense.Status)">
+                                            @expense.Status
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="dropdown dropdown-end">
+                                            <label tabindex="0" class="btn btn-ghost btn-sm">⋮</label>
+                                            <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52">
+                                                <li><a @onclick="() => ViewExpenseDetails(expense.ExpenseId)">👁️ View Details</a></li>
+                                                @if (expense.Status == "Draft")
+                                                {
+                                                    <li><a @onclick="() => EditExpense(expense.ExpenseId)">✏️ Edit</a></li>
+                                                    <li><a @onclick="() => SubmitExpense(expense.ExpenseId)">📤 Submit</a></li>
+                                                }
+                                                <li><a @onclick="() => DownloadReceipt(expense.ExpenseId)">📄 Receipt</a></li>
+                                                <li><hr /></li>
+                                                <li><a @onclick="() => DeleteExpense(expense.ExpenseId)">🗑️ Delete</a></li>
+                                            </ul>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+    else if (activeTab == "reports")
+    {
+        <!-- Reports -->
+        <div class="card bg-base-100 shadow-md">
+            <div class="card-body">
+                <h2 class="card-title mb-4">📊 My Reports</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="card bg-blue-50">
+                        <div class="card-body">
+                            <h3 class="card-title text-blue-700">Monthly Expense Report</h3>
+                            <p class="text-sm mb-4">View your monthly travel expenses breakdown</p>
+                            <div class="card-actions justify-end">
+                                <button class="btn btn-sm btn-primary" @onclick="GenerateMonthlyReport">
+                                    📊 Generate Report
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card bg-green-50">
+                        <div class="card-body">
+                            <h3 class="card-title text-green-700">Trip Summary Report</h3>
+                            <p class="text-sm mb-4">Download detailed trip summaries for records</p>
+                            <div class="card-actions justify-end">
+                                <button class="btn btn-sm btn-success" @onclick="GenerateTripReport">
+                                    🧳 Generate Report
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card bg-purple-50">
+                        <div class="card-body">
+                            <h3 class="card-title text-purple-700">Reimbursement History</h3>
+                            <p class="text-sm mb-4">Track all your approved reimbursements</p>
+                            <div class="card-actions justify-end">
+                                <button class="btn btn-sm btn-secondary" @onclick="GenerateReimbursementReport">
+                                    💰 Generate Report
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card bg-yellow-50">
+                        <div class="card-body">
+                            <h3 class="card-title text-yellow-700">Policy Compliance</h3>
+                            <p class="text-sm mb-4">Review your compliance with company policies</p>
+                            <div class="card-actions justify-end">
+                                <button class="btn btn-sm btn-warning" @onclick="GenerateComplianceReport">
+                                    ⚖️ Generate Report
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string activeTab = "trips";
+    private Employee currentEmployee = new();
+    private List<TripRequest> tripRequests = new();
+    private List<Expense> expenses = new();
+    
+    // Statistics
+    private int pendingRequests = 0;
+    private int approvedTrips = 0;
+    private decimal pendingExpenses = 0;
+    private decimal totalReimbursed = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEmployeeData();
+        await LoadDashboardData();
+    }
+
+    private async Task LoadEmployeeData()
+    {
+        // Mock current employee - replace with actual authentication
+        currentEmployee = new Employee
+        {
+            EmployeeId = 1,
+            FirstName = "John",
+            LastName = "Doe",
+            Email = "john.doe@company.com",
+            Department = "Marketing",
+            CostCenter = "MKT001",
+            Manager = new Employee { FirstName = "Jane", LastName = "Smith" }
+        };
+    }
+
+    private async Task LoadDashboardData()
+    {
+        // Mock data - replace with actual service calls
+        tripRequests = GenerateMockTripRequests();
+        expenses = GenerateMockExpenses();
+        
+        pendingRequests = tripRequests.Count(r => r.Status == "Submitted");
+        approvedTrips = tripRequests.Count(r => r.Status == "Approved");
+        pendingExpenses = expenses.Where(e => e.Status == "Submitted").Sum(e => e.Amount);
+        totalReimbursed = expenses.Where(e => e.Status == "Approved").Sum(e => e.Amount);
+    }
+
+    private void SetActiveTab(string tab)
+    {
+        activeTab = tab;
+    }
+
+    // Trip Request Actions
+    private async Task CreateNewTripRequest()
+    {
+        await JSRuntime.InvokeVoidAsync("alert", "Navigate to New Trip Request form - Feature pending");
+    }
+
+    private async Task ViewTripDetails(int tripRequestId)
+    {
+        await JSRuntime.InvokeVoidAsync("alert", $"View trip request details for TR-{tripRequestId:000}");
+    }
+
+    private async Task EditTripRequest(int tripRequestId)
+    {
+        await JSRuntime.InvokeVoidAsync("alert", $"Edit trip request TR-{tripRequestId:000}");
+    }
+
+    private async Task SubmitTripRequest(int tripRequestId)
+    {
+        var request = tripRequests.FirstOrDefault(r => r.TripRequestId == tripRequestId);
+        if (request != null)
+        {
+            request.Status = "Submitted";
+            StateHasChanged();
+            await JSRuntime.InvokeVoidAsync("alert", $"Trip request TR-{tripRequestId:000} submitted for approval!");
+        }
+    }
+
+    private async Task DeleteTripRequest(int tripRequestId)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Delete this trip request? This action cannot be undone.");
+        if (confirmed)
+        {
+            tripRequests.RemoveAll(r => r.TripRequestId == tripRequestId);
+            await LoadDashboardData();
+            StateHasChanged();
+        }
+    }
+
+    // Expense Actions
+    private async Task AddExpenses(int tripRequestId)
+    {
+        await JSRuntime.InvokeVoidAsync("alert", $"Navigate to Add Expenses for trip TR-{tripRequestId:000}");
+    }
+
+    private async Task AddNewExpense()
+    {
+        await JSRuntime.InvokeVoidAsync("alert", "Navigate to Add New Expense form - Feature pending");
+    }
+
+    private async Task ViewExpenseDetails(int expenseId)
+    {
+        await JSRuntime.InvokeVoidAsync("alert", $"View expense details for EXP-{expenseId:000}");
+    }
+
+    private async Task EditExpense(int expenseId)
+    {
+        await JSRuntime.InvokeVoidAsync("alert", $"Edit expense EXP-{expenseId:000}");
+    }
+
+    private async Task SubmitExpense(int expenseId)
+    {
+        var expense = expenses.FirstOrDefault(e => e.ExpenseId == expenseId);
+        if (expense != null)
+        {
+            expense.Status = "Submitted";
+            StateHasChanged();
+            await JSRuntime.InvokeVoidAsync("alert", $"Expense EXP-{expenseId:000} submitted for approval!");
+        }
+    }
+
+    private async Task DeleteExpense(int expenseId)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Delete this expense? This action cannot be undone.");
+        if (confirmed)
+        {
+            expenses.RemoveAll(e => e.ExpenseId == expenseId);
+            await LoadDashboardData();
+            StateHasChanged();
+        }
+    }
+
+    private async Task DownloadReceipt(int expenseId)
+    {
+        await JSRuntime.InvokeVoidAsync("alert", $"Download receipt for expense EXP-{expenseId:000}");
+    }
+
+    // Report Actions
+    private async Task GenerateMonthlyReport()
+    {
+        await JSRuntime.InvokeVoidAsync("alert", "Generating monthly expense report - Feature pending");
+    }
+
+    private async Task GenerateTripReport()
+    {
+        await JSRuntime.InvokeVoidAsync("alert", "Generating trip summary report - Feature pending");
+    }
+
+    private async Task GenerateReimbursementReport()
+    {
+        await JSRuntime.InvokeVoidAsync("alert", "Generating reimbursement history report - Feature pending");
+    }
+
+    private async Task GenerateComplianceReport()
+    {
+        await JSRuntime.InvokeVoidAsync("alert", "Generating policy compliance report - Feature pending");
+    }
+
+    // Helper Methods
+    private string GetStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Draft" => "badge-neutral",
+            "Submitted" => "badge-warning",
+            "Approved" => "badge-success",
+            "Rejected" => "badge-error",
+            "Completed" => "badge-info",
+            _ => "badge-ghost"
+        };
+    }
+
+    private string GetStatusIcon(string status)
+    {
+        return status switch
+        {
+            "Draft" => "📝",
+            "Submitted" => "⏳",
+            "Approved" => "✅",
+            "Rejected" => "❌",
+            "Completed" => "🏆",
+            _ => "❔"
+        };
+    }
+
+    private string GetExpenseStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Draft" => "badge-neutral",
+            "Submitted" => "badge-warning",
+            "Approved" => "badge-success",
+            "Rejected" => "badge-error",
+            _ => "badge-ghost"
+        };
+    }
+
+    private List<TripRequest> GenerateMockTripRequests()
+    {
+        return new List<TripRequest>
+        {
+            new() { TripRequestId = 1, Destination = "New York", Country = "USA", Purpose = "Client Meeting", StartDate = DateTime.Today.AddDays(10), EndDate = DateTime.Today.AddDays(13), EstimatedCost = 2500.00m, Status = "Submitted" },
+            new() { TripRequestId = 2, Destination = "London", Country = "UK", Purpose = "Conference", StartDate = DateTime.Today.AddDays(25), EndDate = DateTime.Today.AddDays(28), EstimatedCost = 3200.00m, Status = "Approved" },
+            new() { TripRequestId = 3, Destination = "Tokyo", Country = "Japan", Purpose = "Training", StartDate = DateTime.Today.AddDays(-5), EndDate = DateTime.Today.AddDays(-2), EstimatedCost = 4100.00m, Status = "Completed" }
+        };
+    }
+
+    private List<Expense> GenerateMockExpenses()
+    {
+        return new List<Expense>
+        {
+            new() { ExpenseId = 1, TripRequestId = 2, ExpenseDate = DateTime.Today.AddDays(-3), Category = "Hotel", Description = "Marriott London", Vendor = "Marriott", Amount = 450.00m, Status = "Submitted", TripRequest = new TripRequest { Destination = "London" } },
+            new() { ExpenseId = 2, TripRequestId = 2, ExpenseDate = DateTime.Today.AddDays(-2), Category = "Meals", Description = "Business Dinner", Vendor = "Restaurant XYZ", Amount = 125.00m, Status = "Draft", TripRequest = new TripRequest { Destination = "London" } },
+            new() { ExpenseId = 3, TripRequestId = 3, ExpenseDate = DateTime.Today.AddDays(-1), Category = "Transportation", Description = "Airport Transfer", Vendor = "Uber", Amount = 45.00m, Status = "Approved", TripRequest = new TripRequest { Destination = "Tokyo" } }
+        };
+    }
+}

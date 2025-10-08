@@ -32,7 +32,7 @@ public class SplitService : ISplitService
                        (!string.IsNullOrEmpty(t.Participants) || // Has participants
                         t.Category!.Name == "Client entertainment" || // Client entertainment category
                         t.Category!.Name == "Meals")) // Meals category
-            .OrderByDescending(t => t.AmountUSD)
+            .OrderByDescending(t => (double)(t.AmountUSD ?? 0)) // Convert to double for SQLite compatibility
             .Take(50) // Limit for performance
             .ToListAsync();
 

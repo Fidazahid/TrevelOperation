@@ -1,29 +1,39 @@
 ﻿@inject NavigationManager NavigationManager
 @using Microsoft.AspNetCore.Components.Routing
+@implements IDisposable
 
-<div class="h-full w-72 bg-base-200 text-base-content shadow-lg">
+<div class="h-full w-72 sidebar-nav text-white shadow-lg min-h-screen" style="background: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%) !important; color: white !important; min-height: 100vh;">
     <div class="p-4">
-        <a href="/" class="text-2xl font-bold block mb-4 text-center link link-hover text-primary">
+        <a href="/" class="text-2xl font-bold block mb-4 text-center link link-hover" style="color: white !important;">
             ✈️ Travel Expense
         </a>
     </div>
-    <ul class="menu p-4 space-y-1 text-sm">
+    <ul class="menu p-4 space-y-1 text-sm" style="color: white !important; background: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%) !important;">
         @foreach (var item in navItems)
         {
             @if (item.IsSection)
             {
-                <li class="menu-title text-xs font-semibold text-base-content/70 mt-4 mb-2">
+                <li class="menu-title text-xs font-semibold mt-4 mb-2" style="color: rgba(255, 255, 255, 0.7);">
                     <span>@item.Label</span>
                 </li>
             }
             else
             {
-                <li>
+                var isCurrentLocation = IsCurrentLocation(item.Href);
+                var menuItemClass = $"menu-item {(isCurrentLocation ? "active" : "")}";
+                var linkClass = $"flex items-center space-x-3 rounded-lg text-sm py-2 transition-colors duration-200 {(isCurrentLocation ? "active" : "")}";
+                var linkStyle = isCurrentLocation 
+                    ? "color: white; background-color: rgba(255, 255, 255, 0.2);" 
+                    : "color: rgba(255, 255, 255, 0.9);";
+                
+                <li class="@menuItemClass" style="background: linear-gradient(180deg, rgb(5, 39, 103) 0%">
                     <NavLink href="@item.Href" Match="@item.Match"
-                             class="flex items-center space-x-3 rounded-lg text-sm py-2"
-                             ActiveClass="bg-primary text-primary-content font-semibold">
+                             class="@linkClass"
+                             style="@linkStyle"
+                             ActiveClass="active"
+                             @onclick="@(() => HandleNavClick(item.Href))">
                         <span class="text-lg w-5 text-center">@item.Icon</span>
-                        <span>@item.Label</span>
+                        <span style="color: inherit;">@item.Label</span>
                     </NavLink>
                 </li>
             }
@@ -32,6 +42,8 @@
 </div>
 
 @code {
+    private string currentLocation = "";
+    
     private List<NavItem> navItems = new List<NavItem>
     {
         // Dashboard
@@ -69,7 +81,49 @@
         new NavItem { Href = "/audit-log", Icon = "📋", Label = "Audit log" }
     };
 
-    private class NavItem
+    protected override void OnInitialized()
+    {
+        NavigationManager.LocationChanged += OnLocationChanged;
+        currentLocation = NavigationManager.Uri;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        currentLocation = e.Location;
+        StateHasChanged();
+    }
+
+    private void HandleNavClick(string href)
+    {
+        // Force state update to ensure proper highlighting
+        StateHasChanged();
+    }
+
+    private bool IsCurrentLocation(string href)
+    {
+        var currentUri = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        
+        // Handle root path
+        if (href == "/" && (currentUri == "" || currentUri == "/"))
+        {
+            return true;
+        }
+        
+        // Handle other paths
+        if (href != "/" && currentUri.StartsWith(href.TrimStart('/'), StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        
+        return false;
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+
+    public class NavItem
     {
         public string Href { get; set; } = "";
         public string Icon { get; set; } = "";

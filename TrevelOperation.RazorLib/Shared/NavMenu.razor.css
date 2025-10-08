@@ -1,0 +1,92 @@
+/* Sidebar Navigation Styling */
+.sidebar-nav {
+    background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%) !important;
+    position: relative;
+    overflow: hidden;
+    color: white !important;
+    min-height: 100vh !important;
+    height: 100% !important;
+}
+
+/* Ensure the gradient covers the entire sidebar consistently */
+.sidebar-nav::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    min-height: 100vh;
+    background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
+    z-index: -1;
+}
+
+/* Menu title styling for the gradient background */
+.sidebar-nav .menu-title {
+    color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* Additional navigation-specific styles */
+.menu-item {
+    position: relative;
+    overflow: hidden;
+}
+
+.menu-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 3px;
+    height: 100%;
+    background-color: transparent;
+    transition: background-color 0.2s ease-in-out;
+}
+
+.menu-item.active::before {
+    background-color: rgba(255, 255, 255, 0.8);
+}
+
+/* Force proper NavLink behavior */
+.sidebar-nav .menu li > a {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    padding: 0.5rem !important;
+    border-radius: 0.5rem !important;
+    transition: all 0.2s ease-in-out !important;
+    text-decoration: none !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Default state */
+.sidebar-nav .menu li > a:not(.active) {
+    background-color: transparent !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Hover state */
+.sidebar-nav .menu li > a:not(.active):hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: rgba(255, 255, 255, 1) !important;
+}
+
+/* Active state - highest specificity */
+.sidebar-nav .menu li > a.active,
+.sidebar-nav .menu li > a[aria-current="page"] {
+    background-color: rgba(255, 255, 255, 0.2) !important;
+    color: rgba(255, 255, 255, 1) !important;
+    font-weight: 600 !important;
+    border-left: 3px solid rgba(255, 255, 255, 0.8);
+    padding-left: 0.375rem !important;
+}
+
+/* Ensure all text elements are white */
+.sidebar-nav * {
+    color: inherit !important;
+}
+
+/* Ensure span elements inherit color */
+.sidebar-nav span {
+    color: inherit !important;
+}

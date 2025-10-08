@@ -30,6 +30,14 @@ public class TravelDbContext : DbContext
     public DbSet<CountryCity> CountriesCities { get; set; }
     public DbSet<SystemSetting> SystemSettings { get; set; }
     public DbSet<AuditLog> AuditLogs { get; set; }
+    
+    // Approval Workflow entities
+    public DbSet<Employee> Employees { get; set; }
+    public DbSet<TripRequest> TripRequests { get; set; }
+    public DbSet<Expense> Expenses { get; set; }
+    public DbSet<Policy> Policies { get; set; }
+    public DbSet<Approval> Approvals { get; set; }
+    public DbSet<User> Users { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -124,6 +132,84 @@ public class TravelDbContext : DbContext
             entity.HasIndex(e => e.Timestamp);
             entity.HasIndex(e => e.LinkedTable);
             entity.HasIndex(e => e.LinkedRecordId);
+        });
+
+        // Approval Workflow entity configurations
+        modelBuilder.Entity<Employee>(entity =>
+        {
+            entity.HasKey(e => e.EmployeeId);
+            entity.HasIndex(e => e.Email).IsUnique();
+            entity.HasIndex(e => e.Department);
+            entity.HasIndex(e => e.Role);
+        });
+
+        modelBuilder.Entity<TripRequest>(entity =>
+        {
+            entity.HasKey(e => e.TripRequestId);
+            entity.HasIndex(e => e.EmployeeId);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.StartDate);
+            
+            entity.HasOne(d => d.Employee)
+                .WithMany(p => p.TripRequests)
+                .HasForeignKey(d => d.EmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Expense>(entity =>
+        {
+            entity.HasKey(e => e.ExpenseId);
+            entity.HasIndex(e => e.TripRequestId);
+            entity.HasIndex(e => e.EmployeeId);
+            entity.HasIndex(e => e.Category);
+            entity.HasIndex(e => e.ExpenseDate);
+            
+            entity.HasOne(d => d.TripRequest)
+                .WithMany(p => p.Expenses)
+                .HasForeignKey(d => d.TripRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+                
+            entity.HasOne(d => d.Employee)
+                .WithMany(p => p.Expenses)
+                .HasForeignKey(d => d.EmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Policy>(entity =>
+        {
+            entity.HasKey(e => e.PolicyId);
+            entity.HasIndex(e => e.Category);
+            entity.HasIndex(e => e.IsActive);
+        });
+
+        modelBuilder.Entity<Approval>(entity =>
+        {
+            entity.HasKey(e => e.ApprovalId);
+            entity.HasIndex(e => e.TripRequestId);
+            entity.HasIndex(e => e.ApprovedByEmployeeId);
+            entity.HasIndex(e => e.Status);
+            
+            entity.HasOne(d => d.TripRequest)
+                .WithMany(p => p.Approvals)
+                .HasForeignKey(d => d.TripRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+                
+            entity.HasOne(d => d.ApprovedBy)
+                .WithMany(p => p.ApprovalsGiven)
+                .HasForeignKey(d => d.ApprovedByEmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.HasKey(e => e.UserId);
+            entity.HasIndex(e => e.Username).IsUnique();
+            entity.HasIndex(e => e.EmployeeId).IsUnique();
+            
+            entity.HasOne(d => d.Employee)
+                .WithOne()
+                .HasForeignKey<User>(d => d.EmployeeId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         SeedData(modelBuilder);
@@ -227,6 +313,21 @@ public class TravelDbContext : DbContext
             new SystemSetting { SystemSettingId = 2, Key = "DateFormat", Value = "dd/MM/yyyy", Description = "Date display format", CreatedAt = seedDate, ModifiedAt = seedDate },
             new SystemSetting { SystemSettingId = 3, Key = "HighValueMealThreshold", Value = "80", Description = "Threshold for flagging high-value meals", CreatedAt = seedDate, ModifiedAt = seedDate },
             new SystemSetting { SystemSettingId = 4, Key = "LowValueLodgingThreshold", Value = "100", Description = "Threshold for flagging low-value lodging", CreatedAt = seedDate, ModifiedAt = seedDate }
+        );
+
+        // Approval Workflow seed data
+        modelBuilder.Entity<Employee>().HasData(
+            new Employee { EmployeeId = 1, Name = "John Doe", Email = "john.doe@company.com", Department = "Engineering", Title = "Software Engineer", ManagerEmail = "sarah.manager@company.com", Role = "Employee", CostCenter = "CC-ENG-001", CreatedAt = seedDate, ModifiedAt = seedDate },
+            new Employee { EmployeeId = 2, Name = "Sara Manager", Email = "sara.manager@company.com", Department = "Engineering", Title = "Engineering Manager", Role = "Manager", CostCenter = "CC-ENG-001", CreatedAt = seedDate, ModifiedAt = seedDate },
+            new Employee { EmployeeId = 3, Name = "Finance Officer", Email = "finance@company.com", Department = "Finance", Title = "Finance Officer", Role = "Finance", CostCenter = "CC-FIN-001", CreatedAt = seedDate, ModifiedAt = seedDate },
+            new Employee { EmployeeId = 4, Name = "Admin User", Email = "admin@company.com", Department = "Operations", Title = "System Administrator", Role = "Admin", CostCenter = "CC-OPS-001", CreatedAt = seedDate, ModifiedAt = seedDate }
+        );
+
+        modelBuilder.Entity<Policy>().HasData(
+            new Policy { PolicyId = 1, Category = "Travel", Description = "Flight bookings", MaxAmount = 1500.00m, Period = "Per Trip", CreatedAt = seedDate, ModifiedAt = seedDate },
+            new Policy { PolicyId = 2, Category = "Meals", Description = "Daily meal allowance", MaxAmount = 75.00m, Period = "Daily", CreatedAt = seedDate, ModifiedAt = seedDate },
+            new Policy { PolicyId = 3, Category = "Accommodation", Description = "Hotel accommodation", MaxAmount = 200.00m, Period = "Daily", CreatedAt = seedDate, ModifiedAt = seedDate },
+            new Policy { PolicyId = 4, Category = "Miscellaneous", Description = "Other travel expenses", MaxAmount = 100.00m, Period = "Daily", CreatedAt = seedDate, ModifiedAt = seedDate }
         );
     }
 }

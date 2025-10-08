@@ -7,6 +7,8 @@ namespace TrevelOperation.RazorLib.Pages.DataIntegrity;
 
 public partial class Matching
 {
+    [Inject] private IMatchingService MatchingService { get; set; } = default!;
+    [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
     private IEnumerable<TripMatchingSuggestion>? matchingSuggestions;
     private IEnumerable<Transaction>? manualSearchResults;
     private MatchingStatistics? statistics;

@@ -5,8 +5,8 @@
 
 // Store references
 let themeProviderRef = null;
-const THEME_STORAGE_KEY = 'docuqa-theme-preference';
-const DARK_THEME = 'forest-dark';
+const THEME_STORAGE_KEY = 'travel-expense-theme-preference';
+const DARK_THEME = 'dark';
 const LIGHT_THEME = 'light';
 
 const themeManager = {
@@ -15,7 +15,7 @@ const themeManager = {
      * @param {Object} dotNetRef - Reference to the .NET ThemeProvider component
      * @param {String} defaultTheme - The default theme to use if no preference is stored
      */
-    initialize: function (dotNetRef, defaultTheme = DARK_THEME) {
+    initialize: function (dotNetRef, defaultTheme = LIGHT_THEME) {
         themeProviderRef = dotNetRef;
 
         // Get stored theme or use default
@@ -24,6 +24,9 @@ const themeManager = {
 
         // Apply the theme without animation on initial load
         this.applyThemeWithoutAnimation(initialTheme);
+
+        // Ensure body has proper background
+        this.fixBackgroundColors();
 
         // Listen for system preference changes
         this.listenForSystemPreferenceChanges();
@@ -57,6 +60,7 @@ const themeManager = {
         if (currentTheme === theme) return;
 
         this.applyThemeWithAnimation(theme);
+        this.fixBackgroundColors();
         localStorage.setItem(THEME_STORAGE_KEY, theme);
 
         if (themeProviderRef) {
@@ -74,13 +78,34 @@ const themeManager = {
     },
 
     /**
+     * Fix background colors to ensure proper theme display
+     */
+    fixBackgroundColors: function () {
+        const body = document.body;
+        const html = document.documentElement;
+        
+        // Remove any conflicting background styles
+        body.style.backgroundColor = '';
+        html.style.backgroundColor = '';
+        
+        // Force proper theme classes
+        const currentTheme = this.getCurrentTheme();
+        if (currentTheme === LIGHT_THEME) {
+            body.classList.remove('dark');
+            body.classList.add('light');
+        } else {
+            body.classList.remove('light');
+            body.classList.add('dark');
+        }
+    },
+
+    /**
      * Apply theme with smooth animation
      * @param {String} theme - The theme to apply
      */
     applyThemeWithAnimation: function (theme) {
         const htmlEl = document.documentElement;
-       
-            htmlEl.setAttribute('data-theme', theme);
+        htmlEl.setAttribute('data-theme', theme);
     },
 
     /**
@@ -102,6 +127,7 @@ const themeManager = {
             if (!localStorage.getItem(THEME_STORAGE_KEY)) {
                 const theme = mediaQuery.matches ? DARK_THEME : LIGHT_THEME;
                 this.applyThemeWithoutAnimation(theme);
+                this.fixBackgroundColors();
             }
 
             // Listen for changes
@@ -110,6 +136,7 @@ const themeManager = {
                 if (!localStorage.getItem(THEME_STORAGE_KEY)) {
                     const theme = e.matches ? DARK_THEME : LIGHT_THEME;
                     this.applyThemeWithAnimation(theme);
+                    this.fixBackgroundColors();
                 }
             });
         }

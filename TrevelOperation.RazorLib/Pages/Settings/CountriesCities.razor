@@ -1,0 +1,519 @@
+@page "/settings/countries"
+@using TravelOperation.Core.Models.Entities
+@using Microsoft.AspNetCore.Components.Forms
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Countries & Cities - Travel Expense Management</PageTitle>
+
+<div class="p-6">
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-base-content mb-2">Countries & cities</h1>
+        <p class="text-base-content/70">Manage the list of countries and cities for trip destinations</p>
+    </div>
+
+    <!-- Actions Bar -->
+    <div class="bg-base-200 rounded-lg p-4 mb-6">
+        <div class="flex flex-wrap gap-4 items-center justify-between">
+            <div class="flex flex-wrap gap-4 items-center">
+                <!-- Search -->
+                <div class="form-control">
+                    <input type="text" placeholder="Search countries or cities..." 
+                           class="input input-bordered w-64" @bind="searchTerm" @oninput="FilterCountries" />
+                </div>
+                
+                <!-- Country Filter -->
+                <div class="form-control">
+                    <select class="select select-bordered" @bind="selectedCountryFilter" @bind:after="FilterCountries">
+                        <option value="">All countries</option>
+                        @foreach (var country in countries.Select(c => c.Country).Distinct().OrderBy(c => c))
+                        {
+                            <option value="@country">@country</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            
+            <div class="flex gap-2">
+                <button class="btn btn-secondary" @onclick="ImportFromCSV">
+                    📥 Import CSV
+                </button>
+                <button class="btn btn-primary" @onclick="ShowAddModal">
+                    ➕ Add Country/City
+                </button>
+                <button class="btn btn-outline" @onclick="ExportToCSV">
+                    📄 Export CSV
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Countries & Cities Table -->
+    <div class="bg-base-100 rounded-lg shadow-lg overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="table table-zebra w-full">
+                <thead class="bg-base-300">
+                    <tr>
+                        <th class="cursor-pointer" @onclick="() => SortBy(nameof(CountryCity.Country))">
+                            Country
+                            @if (sortColumn == nameof(CountryCity.Country))
+                            {
+                                <span class="ml-2">@(sortAscending ? "↑" : "↓")</span>
+                            }
+                        </th>
+                        <th class="cursor-pointer" @onclick="() => SortBy(nameof(CountryCity.City))">
+                            City
+                            @if (sortColumn == nameof(CountryCity.City))
+                            {
+                                <span class="ml-2">@(sortAscending ? "↑" : "↓")</span>
+                            }
+                        </th>
+                        <th>Usage Count</th>
+                        <th>Last Used</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (filteredCountries.Any())
+                    {
+                        @foreach (var item in filteredCountries.Skip((currentPage - 1) * pageSize).Take(pageSize))
+                        {
+                            <tr class="hover">
+                                <td class="font-semibold">@item.Country</td>
+                                <td>@item.City</td>
+                                <td>
+                                    <span class="badge badge-neutral">@item.UsageCount trips</span>
+                                </td>
+                                <td>
+                                    @if (item.LastUsed.HasValue)
+                                    {
+                                        <span class="text-sm">@item.LastUsed.Value.ToString("dd/MM/yyyy")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-base-content/50">Never used</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="dropdown dropdown-end">
+                                        <label tabindex="0" class="btn btn-ghost btn-sm">⋮</label>
+                                        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-200 rounded-box w-40">
+                                            <li><a @onclick="@(() => EditCountryCity(item))">✏️ Edit</a></li>
+                                            <li><a @onclick="@(() => DeleteCountryCity(item))" class="text-error">🗑️ Delete</a></li>
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="5" class="text-center py-8 text-base-content/60">
+                                @if (string.IsNullOrEmpty(searchTerm) && string.IsNullOrEmpty(selectedCountryFilter))
+                                {
+                                    <span>No countries and cities configured. Click "Add Country/City" to get started.</span>
+                                }
+                                else
+                                {
+                                    <span>No countries or cities found matching your criteria.</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        @if (filteredCountries.Count() > pageSize)
+        {
+            <div class="flex justify-between items-center p-4 bg-base-200">
+                <div class="text-sm text-base-content/70">
+                    Showing @Math.Min(pageSize, filteredCountries.Count()) of @filteredCountries.Count() entries
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-sm" disabled="@(currentPage == 1)" @onclick="PreviousPage">❮</button>
+                    <span class="btn btn-sm btn-active">@currentPage</span>
+                    <button class="btn btn-sm" disabled="@(currentPage * pageSize >= filteredCountries.Count())" @onclick="NextPage">❯</button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+@if (showModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">@(isEditing ? "Edit" : "Add") Country/City</h3>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Country *</span>
+                </label>
+                <input type="text" class="input input-bordered" @bind="editingItem.Country" placeholder="Enter country name" />
+            </div>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">City *</span>
+                </label>
+                <input type="text" class="input input-bordered" @bind="editingItem.City" placeholder="Enter city name" />
+            </div>
+            
+            <div class="modal-action">
+                <button class="btn btn-ghost" @onclick="HideModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveCountryCity" 
+                        disabled="@(string.IsNullOrWhiteSpace(editingItem.Country) || string.IsNullOrWhiteSpace(editingItem.City))">
+                    @(isEditing ? "Update" : "Add")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Import CSV Modal -->
+@if (showImportModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">Import Countries & Cities from CSV</h3>
+            
+            <div class="alert alert-info mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>CSV format: Country,City (header row required)</span>
+            </div>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Select CSV File</span>
+                </label>
+                <InputFile class="file-input file-input-bordered" accept=".csv" OnChange="HandleFileSelection" />
+            </div>
+            
+            @if (!string.IsNullOrEmpty(importPreview))
+            {
+                <div class="form-control mb-4">
+                    <label class="label">
+                        <span class="label-text">Preview (first 5 rows)</span>
+                    </label>
+                    <textarea class="textarea textarea-bordered h-32" readonly>@importPreview</textarea>
+                </div>
+            }
+            
+            <div class="modal-action">
+                <button class="btn btn-ghost" @onclick="HideImportModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="ProcessImport" disabled="@(selectedFile == null)">
+                    Import Data
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<CountryCity> countries = new();
+    private IEnumerable<CountryCity> filteredCountries = new List<CountryCity>();
+    
+    private string searchTerm = "";
+    private string selectedCountryFilter = "";
+    
+    private string sortColumn = nameof(CountryCity.Country);
+    private bool sortAscending = true;
+    
+    private int currentPage = 1;
+    private int pageSize = 20;
+    
+    // Modal state
+    private bool showModal = false;
+    private bool isEditing = false;
+    private CountryCity editingItem = new();
+    
+    // Import state
+    private bool showImportModal = false;
+    private IBrowserFile? selectedFile;
+    private string importPreview = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCountries();
+    }
+
+    private async Task LoadCountries()
+    {
+        // Generate mock data - replace with actual service call
+        countries = GenerateMockCountriesData();
+        FilterCountries();
+    }
+
+    private void FilterCountries()
+    {
+        filteredCountries = countries.AsEnumerable();
+
+        if (!string.IsNullOrEmpty(searchTerm))
+        {
+            filteredCountries = filteredCountries.Where(c => 
+                c.Country.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                c.City.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrEmpty(selectedCountryFilter))
+        {
+            filteredCountries = filteredCountries.Where(c => c.Country == selectedCountryFilter);
+        }
+
+        // Apply sorting
+        if (sortColumn == nameof(CountryCity.Country))
+        {
+            filteredCountries = sortAscending 
+                ? filteredCountries.OrderBy(c => c.Country)
+                : filteredCountries.OrderByDescending(c => c.Country);
+        }
+        else if (sortColumn == nameof(CountryCity.City))
+        {
+            filteredCountries = sortAscending 
+                ? filteredCountries.OrderBy(c => c.City)
+                : filteredCountries.OrderByDescending(c => c.City);
+        }
+
+        currentPage = 1;
+        StateHasChanged();
+    }
+
+    private void SortBy(string columnName)
+    {
+        if (sortColumn == columnName)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = columnName;
+            sortAscending = true;
+        }
+        FilterCountries();
+    }
+
+    private void PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            StateHasChanged();
+        }
+    }
+
+    private void NextPage()
+    {
+        if (currentPage * pageSize < filteredCountries.Count())
+        {
+            currentPage++;
+            StateHasChanged();
+        }
+    }
+
+    private void ShowAddModal()
+    {
+        editingItem = new CountryCity();
+        isEditing = false;
+        showModal = true;
+    }
+
+    private void EditCountryCity(CountryCity item)
+    {
+        editingItem = new CountryCity
+        {
+            Id = item.Id,
+            Country = item.Country,
+            City = item.City,
+            UsageCount = item.UsageCount,
+            LastUsed = item.LastUsed
+        };
+        isEditing = true;
+        showModal = true;
+    }
+
+    private async Task SaveCountryCity()
+    {
+        if (string.IsNullOrWhiteSpace(editingItem.Country) || string.IsNullOrWhiteSpace(editingItem.City))
+            return;
+
+        if (isEditing)
+        {
+            var existing = countries.FirstOrDefault(c => c.Id == editingItem.Id);
+            if (existing != null)
+            {
+                existing.Country = editingItem.Country.Trim();
+                existing.City = editingItem.City.Trim();
+            }
+        }
+        else
+        {
+            var newItem = new CountryCity
+            {
+                Id = countries.Count > 0 ? countries.Max(c => c.Id) + 1 : 1,
+                Country = editingItem.Country.Trim(),
+                City = editingItem.City.Trim(),
+                UsageCount = 0,
+                LastUsed = null
+            };
+            countries.Add(newItem);
+        }
+
+        HideModal();
+        FilterCountries();
+        
+        await JSRuntime.InvokeVoidAsync("alert", $"Country/City {(isEditing ? "updated" : "added")} successfully!");
+    }
+
+    private async Task DeleteCountryCity(CountryCity item)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"Delete {item.City}, {item.Country}? This action cannot be undone.");
+        
+        if (confirmed)
+        {
+            countries.Remove(item);
+            FilterCountries();
+            await JSRuntime.InvokeVoidAsync("alert", "Country/City deleted successfully!");
+        }
+    }
+
+    private void HideModal()
+    {
+        showModal = false;
+        editingItem = new CountryCity();
+    }
+
+    private void ImportFromCSV()
+    {
+        showImportModal = true;
+    }
+
+    private void HideImportModal()
+    {
+        showImportModal = false;
+        selectedFile = null;
+        importPreview = "";
+    }
+
+    private async Task HandleFileSelection(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        
+        if (selectedFile != null)
+        {
+            try
+            {
+                using var stream = selectedFile.OpenReadStream();
+                using var reader = new StreamReader(stream);
+                
+                var lines = new List<string>();
+                for (int i = 0; i < 5 && !reader.EndOfStream; i++)
+                {
+                    lines.Add(await reader.ReadLineAsync() ?? "");
+                }
+                
+                importPreview = string.Join("\n", lines);
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", $"Error reading file: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task ProcessImport()
+    {
+        if (selectedFile == null) return;
+
+        try
+        {
+            using var stream = selectedFile.OpenReadStream();
+            using var reader = new StreamReader(stream);
+            
+            var importedCount = 0;
+            var line = await reader.ReadLineAsync(); // Skip header
+            
+            while (!reader.EndOfStream)
+            {
+                line = await reader.ReadLineAsync();
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                
+                var parts = line.Split(',');
+                if (parts.Length >= 2)
+                {
+                    var country = parts[0].Trim();
+                    var city = parts[1].Trim();
+                    
+                    if (!string.IsNullOrEmpty(country) && !string.IsNullOrEmpty(city))
+                    {
+                        // Check for duplicates
+                        if (!countries.Any(c => c.Country.Equals(country, StringComparison.OrdinalIgnoreCase) && 
+                                               c.City.Equals(city, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            countries.Add(new CountryCity
+                            {
+                                Id = countries.Count > 0 ? countries.Max(c => c.Id) + 1 : 1,
+                                Country = country,
+                                City = city,
+                                UsageCount = 0,
+                                LastUsed = null
+                            });
+                            importedCount++;
+                        }
+                    }
+                }
+            }
+            
+            HideImportModal();
+            FilterCountries();
+            await JSRuntime.InvokeVoidAsync("alert", $"Successfully imported {importedCount} countries/cities!");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Import failed: {ex.Message}");
+        }
+    }
+
+    private async Task ExportToCSV()
+    {
+        var csv = "Country,City,UsageCount,LastUsed\n";
+        foreach (var item in filteredCountries)
+        {
+            csv += $"{item.Country},{item.City},{item.UsageCount},{item.LastUsed?.ToString("dd/MM/yyyy") ?? ""}\n";
+        }
+        
+        await JSRuntime.InvokeVoidAsync("downloadFile", "countries-cities.csv", "text/csv", csv);
+    }
+
+    private List<CountryCity> GenerateMockCountriesData()
+    {
+        return new List<CountryCity>
+        {
+            new CountryCity { Id = 1, Country = "United States", City = "New York", UsageCount = 15, LastUsed = DateTime.Today.AddDays(-5) },
+            new CountryCity { Id = 2, Country = "United States", City = "Los Angeles", UsageCount = 8, LastUsed = DateTime.Today.AddDays(-12) },
+            new CountryCity { Id = 3, Country = "United Kingdom", City = "London", UsageCount = 22, LastUsed = DateTime.Today.AddDays(-3) },
+            new CountryCity { Id = 4, Country = "France", City = "Paris", UsageCount = 18, LastUsed = DateTime.Today.AddDays(-7) },
+            new CountryCity { Id = 5, Country = "Germany", City = "Berlin", UsageCount = 6, LastUsed = DateTime.Today.AddDays(-20) },
+            new CountryCity { Id = 6, Country = "Japan", City = "Tokyo", UsageCount = 11, LastUsed = DateTime.Today.AddDays(-15) },
+            new CountryCity { Id = 7, Country = "Netherlands", City = "Amsterdam", UsageCount = 9, LastUsed = DateTime.Today.AddDays(-8) },
+            new CountryCity { Id = 8, Country = "Spain", City = "Barcelona", UsageCount = 4, LastUsed = DateTime.Today.AddDays(-30) },
+            new CountryCity { Id = 9, Country = "Italy", City = "Rome", UsageCount = 3, LastUsed = DateTime.Today.AddDays(-45) },
+            new CountryCity { Id = 10, Country = "Canada", City = "Toronto", UsageCount = 7, LastUsed = DateTime.Today.AddDays(-18) }
+        };
+    }
+
+    public class CountryCity
+    {
+        public int Id { get; set; }
+        public string Country { get; set; } = "";
+        public string City { get; set; } = "";
+        public int UsageCount { get; set; }
+        public DateTime? LastUsed { get; set; }
+    }
+}

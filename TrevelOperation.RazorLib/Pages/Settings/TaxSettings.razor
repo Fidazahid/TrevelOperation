@@ -1,0 +1,708 @@
+@page "/settings/tax"
+@using TravelOperation.Core.Models.Entities
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Tax Settings - Travel Expense Management</PageTitle>
+
+<div class="p-6">
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-base-content mb-2">Tax settings</h1>
+        <p class="text-base-content/70">Manage tax caps and shields by fiscal year, country, and subsidiary for compliance calculations</p>
+    </div>
+
+    <!-- Actions Bar -->
+    <div class="bg-base-200 rounded-lg p-4 mb-6">
+        <div class="flex flex-wrap gap-4 items-center justify-between">
+            <div class="flex flex-wrap gap-4 items-center">
+                <!-- Fiscal Year Filter -->
+                <div class="form-control">
+                    <select class="select select-bordered" @bind="selectedFiscalYear" @bind:after="FilterTaxSettings">
+                        <option value="">All fiscal years</option>
+                        @foreach (var year in GetFiscalYears())
+                        {
+                            <option value="@year">@year</option>
+                        }
+                    </select>
+                </div>
+                
+                <!-- Country Filter -->
+                <div class="form-control">
+                    <select class="select select-bordered" @bind="selectedCountry" @bind:after="FilterTaxSettings">
+                        <option value="">All countries</option>
+                        @foreach (var country in GetCountries())
+                        {
+                            <option value="@country">@country</option>
+                        }
+                    </select>
+                </div>
+                
+                <!-- Subsidiary Filter -->
+                <div class="form-control">
+                    <select class="select select-bordered" @bind="selectedSubsidiary" @bind:after="FilterTaxSettings">
+                        <option value="">All subsidiaries</option>
+                        @foreach (var subsidiary in GetSubsidiaries())
+                        {
+                            <option value="@subsidiary">@subsidiary</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            
+            <div class="flex gap-2">
+                <button class="btn btn-secondary" @onclick="ImportTaxData">
+                    📥 Import CSV
+                </button>
+                <button class="btn btn-primary" @onclick="ShowAddModal">
+                    ➕ Add Tax Setting
+                </button>
+                <button class="btn btn-outline" @onclick="ExportTaxData">
+                    📄 Export CSV
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tax Settings Table -->
+    <div class="bg-base-100 rounded-lg shadow-lg overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="table table-zebra w-full">
+                <thead class="bg-base-300">
+                    <tr>
+                        <th class="cursor-pointer" @onclick="() => SortBy(nameof(TaxSetting.FiscalYear))">
+                            Fiscal Year
+                            @if (sortColumn == nameof(TaxSetting.FiscalYear))
+                            {
+                                <span class="ml-2">@(sortAscending ? "↑" : "↓")</span>
+                            }
+                        </th>
+                        <th class="cursor-pointer" @onclick="() => SortBy(nameof(TaxSetting.Country))">
+                            Country
+                            @if (sortColumn == nameof(TaxSetting.Country))
+                            {
+                                <span class="ml-2">@(sortAscending ? "↑" : "↓")</span>
+                            }
+                        </th>
+                        <th class="cursor-pointer" @onclick="() => SortBy(nameof(TaxSetting.Subsidiary))">
+                            Subsidiary
+                            @if (sortColumn == nameof(TaxSetting.Subsidiary))
+                            {
+                                <span class="ml-2">@(sortAscending ? "↑" : "↓")</span>
+                            }
+                        </th>
+                        <th class="text-right">Meals Cap ($)</th>
+                        <th class="text-right">Lodging Cap ($)</th>
+                        <th class="text-right">Tax Shield ($)</th>
+                        <th>Effective From</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (filteredTaxSettings.Any())
+                    {
+                        @foreach (var setting in filteredTaxSettings.Skip((currentPage - 1) * pageSize).Take(pageSize))
+                        {
+                            <tr class="hover">
+                                <td>
+                                    <span class="badge badge-neutral">@setting.FiscalYear</span>
+                                </td>
+                                <td class="font-semibold">@setting.Country</td>
+                                <td>
+                                    <span class="badge badge-outline">@setting.Subsidiary</span>
+                                </td>
+                                <td class="text-right font-mono">
+                                    $@setting.MealsCap.ToString("N2")
+                                    <div class="text-xs text-base-content/60">per day</div>
+                                </td>
+                                <td class="text-right font-mono">
+                                    $@setting.LodgingCap.ToString("N2")
+                                    <div class="text-xs text-base-content/60">per night</div>
+                                </td>
+                                <td class="text-right font-mono">
+                                    @if (setting.TaxShield > 0)
+                                    {
+                                        <span class="text-success">$@setting.TaxShield.ToString("N2")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-base-content/50">None</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (setting.EffectiveFrom.HasValue)
+                                    {
+                                        <span class="text-sm">@setting.EffectiveFrom.Value.ToString("dd/MM/yyyy")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-base-content/50">Not set</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="dropdown dropdown-end">
+                                        <label tabindex="0" class="btn btn-ghost btn-sm">⋮</label>
+                                        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-200 rounded-box w-52">
+                                            <li><a @onclick="@(() => EditTaxSetting(setting))">✏️ Edit</a></li>
+                                            <li><a @onclick="@(() => ViewCalculationExample(setting))">🧮 View Example</a></li>
+                                            <li><a @onclick="@(() => DuplicateTaxSetting(setting))">📋 Duplicate</a></li>
+                                            <li><a @onclick="@(() => DeleteTaxSetting(setting))" class="text-error">🗑️ Delete</a></li>
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="8" class="text-center py-8 text-base-content/60">
+                                @if (string.IsNullOrEmpty(selectedFiscalYear) && string.IsNullOrEmpty(selectedCountry))
+                                {
+                                    <span>No tax settings configured. Click "Add Tax Setting" to get started.</span>
+                                }
+                                else
+                                {
+                                    <span>No tax settings found matching your criteria.</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        @if (filteredTaxSettings.Count() > pageSize)
+        {
+            <div class="flex justify-between items-center p-4 bg-base-200">
+                <div class="text-sm text-base-content/70">
+                    Showing @Math.Min(pageSize, filteredTaxSettings.Count()) of @filteredTaxSettings.Count() settings
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-sm" disabled="@(currentPage == 1)" @onclick="PreviousPage">❮</button>
+                    <span class="btn btn-sm btn-active">@currentPage</span>
+                    <button class="btn btn-sm" disabled="@(currentPage * pageSize >= filteredTaxSettings.Count())" @onclick="NextPage">❯</button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+@if (showModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box max-w-2xl">
+            <h3 class="font-bold text-lg mb-4">@(isEditing ? "Edit" : "Add") Tax Setting</h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Fiscal Year *</span>
+                    </label>
+                    <input type="number" class="input input-bordered" @bind="editingTaxSetting.FiscalYear" 
+                           min="2020" max="2030" placeholder="e.g., 2024" />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Country *</span>
+                    </label>
+                    <input type="text" class="input input-bordered" @bind="editingTaxSetting.Country" 
+                           placeholder="e.g., United States" />
+                </div>
+            </div>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Subsidiary *</span>
+                </label>
+                <select class="select select-bordered" @bind="editingTaxSetting.Subsidiary">
+                    <option value="">Select subsidiary...</option>
+                    <option value="WSC IL">WSC IL</option>
+                    <option value="WSC US">WSC US</option>
+                    <option value="WSC UK">WSC UK</option>
+                    <option value="WSC Germany">WSC Germany</option>
+                    <option value="WSC France">WSC France</option>
+                    <option value="WSC Japan">WSC Japan</option>
+                </select>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Meals Cap ($) *</span>
+                        <span class="label-text-alt">per day</span>
+                    </label>
+                    <input type="number" class="input input-bordered" @bind="editingTaxSetting.MealsCap" 
+                           min="0" step="0.01" placeholder="0.00" />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Lodging Cap ($) *</span>
+                        <span class="label-text-alt">per night</span>
+                    </label>
+                    <input type="number" class="input input-bordered" @bind="editingTaxSetting.LodgingCap" 
+                           min="0" step="0.01" placeholder="0.00" />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Tax Shield ($)</span>
+                        <span class="label-text-alt">optional</span>
+                    </label>
+                    <input type="number" class="input input-bordered" @bind="editingTaxSetting.TaxShield" 
+                           min="0" step="0.01" placeholder="0.00" />
+                </div>
+            </div>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Effective From</span>
+                </label>
+                <input type="date" class="input input-bordered" @bind="editingTaxSetting.EffectiveFrom" />
+            </div>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Notes</span>
+                </label>
+                <textarea class="textarea textarea-bordered" @bind="editingTaxSetting.Notes" 
+                          placeholder="Optional notes about these tax settings"></textarea>
+            </div>
+            
+            <div class="modal-action">
+                <button class="btn btn-ghost" @onclick="HideModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveTaxSetting" 
+                        disabled="@(editingTaxSetting.FiscalYear == 0 || string.IsNullOrWhiteSpace(editingTaxSetting.Country) || string.IsNullOrWhiteSpace(editingTaxSetting.Subsidiary))">
+                    @(isEditing ? "Update" : "Add") Setting
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Calculation Example Modal -->
+@if (showExampleModal && exampleTaxSetting != null)
+{
+    <div class="modal modal-open">
+        <div class="modal-box max-w-3xl">
+            <h3 class="font-bold text-lg mb-4">Tax Calculation Example</h3>
+            
+            <div class="bg-base-200 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-2">Tax Settings</h4>
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div>Fiscal Year: @exampleTaxSetting.FiscalYear</div>
+                    <div>Country: @exampleTaxSetting.Country</div>
+                    <div>Subsidiary: @exampleTaxSetting.Subsidiary</div>
+                    <div>Meals Cap: $@exampleTaxSetting.MealsCap.ToString("N2")/day</div>
+                    <div>Lodging Cap: $@exampleTaxSetting.LodgingCap.ToString("N2")/night</div>
+                    <div>Tax Shield: $@exampleTaxSetting.TaxShield.ToString("N2")</div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Example Trip -->
+                <div class="bg-info bg-opacity-10 p-4 rounded-lg">
+                    <h4 class="font-semibold mb-3 text-info">Example Trip (5 days)</h4>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span>Meals per day:</span>
+                            <span class="font-mono">$@exampleMealsPerDay.ToString("N2")</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Lodging per night:</span>
+                            <span class="font-mono">$@exampleLodgingPerNight.ToString("N2")</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Total meals (5 days):</span>
+                            <span class="font-mono">$@(exampleMealsPerDay * 5).ToString("N2")</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Total lodging (5 nights):</span>
+                            <span class="font-mono">$@(exampleLodgingPerNight * 5).ToString("N2")</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tax Calculation -->
+                <div class="bg-warning bg-opacity-10 p-4 rounded-lg">
+                    <h4 class="font-semibold mb-3 text-warning">Tax Exposure Calculation</h4>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span>Meals exposure/day:</span>
+                            <span class="font-mono @(GetMealsExposure() > 0 ? "text-error" : "text-success")">
+                                $@GetMealsExposure().ToString("N2")
+                            </span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Lodging exposure/night:</span>
+                            <span class="font-mono @(GetLodgingExposure() > 0 ? "text-error" : "text-success")">
+                                $@GetLodgingExposure().ToString("N2")
+                            </span>
+                        </div>
+                        <hr class="my-2">
+                        <div class="flex justify-between">
+                            <span>Total meals exposure:</span>
+                            <span class="font-mono font-bold @(GetMealsExposure() * 5 > 0 ? "text-error" : "text-success")">
+                                $@(GetMealsExposure() * 5).ToString("N2")
+                            </span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Total lodging exposure:</span>
+                            <span class="font-mono font-bold @(GetLodgingExposure() * 5 > 0 ? "text-error" : "text-success")">
+                                $@(GetLodgingExposure() * 5).ToString("N2")
+                            </span>
+                        </div>
+                        <hr class="my-2">
+                        <div class="flex justify-between text-lg">
+                            <span class="font-bold">Total Tax Exposure:</span>
+                            <span class="font-mono font-bold @(GetTotalExposure() > 0 ? "text-error" : "text-success")">
+                                $@GetTotalExposure().ToString("N2")
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-4">
+                <div class="flex gap-4 mb-2">
+                    <label class="label">
+                        <span class="label-text">Adjust example amounts:</span>
+                    </label>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-control">
+                        <input type="number" class="input input-bordered input-sm" 
+                               @bind="exampleMealsPerDay" @bind:after="StateHasChanged" 
+                               step="0.01" placeholder="Meals per day" />
+                    </div>
+                    <div class="form-control">
+                        <input type="number" class="input input-bordered input-sm" 
+                               @bind="exampleLodgingPerNight" @bind:after="StateHasChanged" 
+                               step="0.01" placeholder="Lodging per night" />
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-action">
+                <button class="btn btn-ghost" @onclick="HideExampleModal">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<TaxSetting> taxSettings = new();
+    private IEnumerable<TaxSetting> filteredTaxSettings = new List<TaxSetting>();
+    
+    private string selectedFiscalYear = "";
+    private string selectedCountry = "";
+    private string selectedSubsidiary = "";
+    
+    private string sortColumn = nameof(TaxSetting.FiscalYear);
+    private bool sortAscending = false; // Newest first
+    
+    private int currentPage = 1;
+    private int pageSize = 20;
+    
+    // Modal state
+    private bool showModal = false;
+    private bool isEditing = false;
+    private TaxSetting editingTaxSetting = new();
+    
+    // Example modal state
+    private bool showExampleModal = false;
+    private TaxSetting? exampleTaxSetting;
+    private decimal exampleMealsPerDay = 85.00m;
+    private decimal exampleLodgingPerNight = 250.00m;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTaxSettings();
+    }
+
+    private async Task LoadTaxSettings()
+    {
+        taxSettings = GenerateMockTaxSettings();
+        FilterTaxSettings();
+    }
+
+    private void FilterTaxSettings()
+    {
+        filteredTaxSettings = taxSettings.AsEnumerable();
+
+        if (!string.IsNullOrEmpty(selectedFiscalYear))
+        {
+            if (int.TryParse(selectedFiscalYear, out var year))
+            {
+                filteredTaxSettings = filteredTaxSettings.Where(t => t.FiscalYear == year);
+            }
+        }
+
+        if (!string.IsNullOrEmpty(selectedCountry))
+        {
+            filteredTaxSettings = filteredTaxSettings.Where(t => t.Country == selectedCountry);
+        }
+
+        if (!string.IsNullOrEmpty(selectedSubsidiary))
+        {
+            filteredTaxSettings = filteredTaxSettings.Where(t => t.Subsidiary == selectedSubsidiary);
+        }
+
+        // Apply sorting
+        if (sortColumn == nameof(TaxSetting.FiscalYear))
+        {
+            filteredTaxSettings = sortAscending 
+                ? filteredTaxSettings.OrderBy(t => t.FiscalYear)
+                : filteredTaxSettings.OrderByDescending(t => t.FiscalYear);
+        }
+        else if (sortColumn == nameof(TaxSetting.Country))
+        {
+            filteredTaxSettings = sortAscending 
+                ? filteredTaxSettings.OrderBy(t => t.Country)
+                : filteredTaxSettings.OrderByDescending(t => t.Country);
+        }
+        else if (sortColumn == nameof(TaxSetting.Subsidiary))
+        {
+            filteredTaxSettings = sortAscending 
+                ? filteredTaxSettings.OrderBy(t => t.Subsidiary)
+                : filteredTaxSettings.OrderByDescending(t => t.Subsidiary);
+        }
+
+        currentPage = 1;
+        StateHasChanged();
+    }
+
+    private void SortBy(string columnName)
+    {
+        if (sortColumn == columnName)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = columnName;
+            sortAscending = true;
+        }
+        FilterTaxSettings();
+    }
+
+    private void PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            StateHasChanged();
+        }
+    }
+
+    private void NextPage()
+    {
+        if (currentPage * pageSize < filteredTaxSettings.Count())
+        {
+            currentPage++;
+            StateHasChanged();
+        }
+    }
+
+    private IEnumerable<string> GetFiscalYears()
+    {
+        return taxSettings.Select(t => t.FiscalYear.ToString()).Distinct().OrderDescending();
+    }
+
+    private IEnumerable<string> GetCountries()
+    {
+        return taxSettings.Select(t => t.Country).Distinct().OrderBy(c => c);
+    }
+
+    private IEnumerable<string> GetSubsidiaries()
+    {
+        return taxSettings.Select(t => t.Subsidiary).Distinct().OrderBy(s => s);
+    }
+
+    private void ShowAddModal()
+    {
+        editingTaxSetting = new TaxSetting 
+        { 
+            FiscalYear = DateTime.Now.Year,
+            EffectiveFrom = DateTime.Today 
+        };
+        isEditing = false;
+        showModal = true;
+    }
+
+    private void EditTaxSetting(TaxSetting setting)
+    {
+        editingTaxSetting = new TaxSetting
+        {
+            Id = setting.Id,
+            FiscalYear = setting.FiscalYear,
+            Country = setting.Country,
+            Subsidiary = setting.Subsidiary,
+            MealsCap = setting.MealsCap,
+            LodgingCap = setting.LodgingCap,
+            TaxShield = setting.TaxShield,
+            EffectiveFrom = setting.EffectiveFrom,
+            Notes = setting.Notes
+        };
+        isEditing = true;
+        showModal = true;
+    }
+
+    private async Task SaveTaxSetting()
+    {
+        if (editingTaxSetting.FiscalYear == 0 || string.IsNullOrWhiteSpace(editingTaxSetting.Country) || 
+            string.IsNullOrWhiteSpace(editingTaxSetting.Subsidiary))
+            return;
+
+        if (isEditing)
+        {
+            var existing = taxSettings.FirstOrDefault(t => t.Id == editingTaxSetting.Id);
+            if (existing != null)
+            {
+                existing.FiscalYear = editingTaxSetting.FiscalYear;
+                existing.Country = editingTaxSetting.Country.Trim();
+                existing.Subsidiary = editingTaxSetting.Subsidiary;
+                existing.MealsCap = editingTaxSetting.MealsCap;
+                existing.LodgingCap = editingTaxSetting.LodgingCap;
+                existing.TaxShield = editingTaxSetting.TaxShield;
+                existing.EffectiveFrom = editingTaxSetting.EffectiveFrom;
+                existing.Notes = editingTaxSetting.Notes?.Trim();
+            }
+        }
+        else
+        {
+            var newSetting = new TaxSetting
+            {
+                Id = taxSettings.Count > 0 ? taxSettings.Max(t => t.Id) + 1 : 1,
+                FiscalYear = editingTaxSetting.FiscalYear,
+                Country = editingTaxSetting.Country.Trim(),
+                Subsidiary = editingTaxSetting.Subsidiary,
+                MealsCap = editingTaxSetting.MealsCap,
+                LodgingCap = editingTaxSetting.LodgingCap,
+                TaxShield = editingTaxSetting.TaxShield,
+                EffectiveFrom = editingTaxSetting.EffectiveFrom,
+                Notes = editingTaxSetting.Notes?.Trim()
+            };
+            taxSettings.Add(newSetting);
+        }
+
+        HideModal();
+        FilterTaxSettings();
+        
+        await JSRuntime.InvokeVoidAsync("alert", $"Tax setting {(isEditing ? "updated" : "added")} successfully!");
+    }
+
+    private async Task DeleteTaxSetting(TaxSetting setting)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"Delete tax setting for {setting.Country} ({setting.FiscalYear})? This action cannot be undone.");
+        
+        if (confirmed)
+        {
+            taxSettings.Remove(setting);
+            FilterTaxSettings();
+            await JSRuntime.InvokeVoidAsync("alert", "Tax setting deleted successfully!");
+        }
+    }
+
+    private void DuplicateTaxSetting(TaxSetting setting)
+    {
+        var duplicate = new TaxSetting
+        {
+            Id = taxSettings.Max(t => t.Id) + 1,
+            FiscalYear = setting.FiscalYear + 1, // Next year
+            Country = setting.Country,
+            Subsidiary = setting.Subsidiary,
+            MealsCap = setting.MealsCap,
+            LodgingCap = setting.LodgingCap,
+            TaxShield = setting.TaxShield,
+            EffectiveFrom = DateTime.Today,
+            Notes = setting.Notes
+        };
+        
+        taxSettings.Add(duplicate);
+        FilterTaxSettings();
+    }
+
+    private void ViewCalculationExample(TaxSetting setting)
+    {
+        exampleTaxSetting = setting;
+        exampleMealsPerDay = 85.00m;
+        exampleLodgingPerNight = 250.00m;
+        showExampleModal = true;
+    }
+
+    private decimal GetMealsExposure()
+    {
+        if (exampleTaxSetting == null) return 0;
+        return Math.Max(0, exampleMealsPerDay - exampleTaxSetting.MealsCap);
+    }
+
+    private decimal GetLodgingExposure()
+    {
+        if (exampleTaxSetting == null) return 0;
+        return Math.Max(0, exampleLodgingPerNight - exampleTaxSetting.LodgingCap);
+    }
+
+    private decimal GetTotalExposure()
+    {
+        return (GetMealsExposure() * 5) + (GetLodgingExposure() * 5);
+    }
+
+    private void HideModal()
+    {
+        showModal = false;
+        editingTaxSetting = new TaxSetting();
+    }
+
+    private void HideExampleModal()
+    {
+        showExampleModal = false;
+        exampleTaxSetting = null;
+    }
+
+    private async Task ImportTaxData()
+    {
+        await JSRuntime.InvokeVoidAsync("alert", "CSV import functionality would be implemented here");
+    }
+
+    private async Task ExportTaxData()
+    {
+        var csv = "FiscalYear,Country,Subsidiary,MealsCap,LodgingCap,TaxShield,EffectiveFrom,Notes\n";
+        foreach (var setting in taxSettings.OrderBy(t => t.FiscalYear).ThenBy(t => t.Country))
+        {
+            csv += $"{setting.FiscalYear},\"{setting.Country}\",\"{setting.Subsidiary}\",{setting.MealsCap},{setting.LodgingCap},{setting.TaxShield},{setting.EffectiveFrom?.ToString("yyyy-MM-dd") ?? ""},\"{setting.Notes ?? ""}\"\n";
+        }
+        
+        await JSRuntime.InvokeVoidAsync("downloadFile", "tax-settings.csv", "text/csv", csv);
+    }
+
+    private List<TaxSetting> GenerateMockTaxSettings()
+    {
+        return new List<TaxSetting>
+        {
+            new TaxSetting { Id = 1, FiscalYear = 2024, Country = "United States", Subsidiary = "WSC US", MealsCap = 75.00m, LodgingCap = 200.00m, TaxShield = 0, EffectiveFrom = new DateTime(2024, 1, 1), Notes = "Standard US rates" },
+            new TaxSetting { Id = 2, FiscalYear = 2024, Country = "United Kingdom", Subsidiary = "WSC UK", MealsCap = 60.00m, LodgingCap = 180.00m, TaxShield = 0, EffectiveFrom = new DateTime(2024, 1, 1), Notes = "Standard UK rates" },
+            new TaxSetting { Id = 3, FiscalYear = 2024, Country = "Israel", Subsidiary = "WSC IL", MealsCap = 65.00m, LodgingCap = 150.00m, TaxShield = 1000.00m, EffectiveFrom = new DateTime(2024, 1, 1), Notes = "Israeli tax shield applicable" },
+            new TaxSetting { Id = 4, FiscalYear = 2024, Country = "Germany", Subsidiary = "WSC Germany", MealsCap = 70.00m, LodgingCap = 160.00m, TaxShield = 0, EffectiveFrom = new DateTime(2024, 1, 1), Notes = "German standard rates" },
+            new TaxSetting { Id = 5, FiscalYear = 2024, Country = "France", Subsidiary = "WSC France", MealsCap = 68.00m, LodgingCap = 170.00m, TaxShield = 0, EffectiveFrom = new DateTime(2024, 1, 1), Notes = "French standard rates" },
+            new TaxSetting { Id = 6, FiscalYear = 2023, Country = "United States", Subsidiary = "WSC US", MealsCap = 70.00m, LodgingCap = 190.00m, TaxShield = 0, EffectiveFrom = new DateTime(2023, 1, 1), Notes = "Previous year rates" },
+            new TaxSetting { Id = 7, FiscalYear = 2023, Country = "Israel", Subsidiary = "WSC IL", MealsCap = 60.00m, LodgingCap = 140.00m, TaxShield = 950.00m, EffectiveFrom = new DateTime(2023, 1, 1), Notes = "Previous year rates" }
+        };
+    }
+
+    public class TaxSetting
+    {
+        public int Id { get; set; }
+        public int FiscalYear { get; set; }
+        public string Country { get; set; } = "";
+        public string Subsidiary { get; set; } = "";
+        public decimal MealsCap { get; set; }
+        public decimal LodgingCap { get; set; }
+        public decimal TaxShield { get; set; }
+        public DateTime? EffectiveFrom { get; set; }
+        public string? Notes { get; set; }
+    }
+}

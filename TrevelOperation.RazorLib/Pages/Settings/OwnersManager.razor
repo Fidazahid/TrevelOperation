@@ -1,0 +1,731 @@
+@page "/settings/owners"
+@using TravelOperation.Core.Models.Entities
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Owners - Travel Expense Management</PageTitle>
+
+<div class="p-6">
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-base-content mb-2">Owners</h1>
+        <p class="text-base-content/70">Manage trip owners and their organizational details for assignment and reporting</p>
+    </div>
+
+    <!-- Actions Bar -->
+    <div class="bg-base-200 rounded-lg p-4 mb-6">
+        <div class="flex flex-wrap gap-4 items-center justify-between">
+            <div class="flex flex-wrap gap-4 items-center">
+                <!-- Search -->
+                <div class="form-control">
+                    <input type="text" placeholder="Search owners..." 
+                           class="input input-bordered w-64" @bind="searchTerm" @oninput="FilterOwners" />
+                </div>
+                
+                <!-- Department Filter -->
+                <div class="form-control">
+                    <select class="select select-bordered" @bind="selectedDepartment" @bind:after="FilterOwners">
+                        <option value="">All departments</option>
+                        @foreach (var dept in GetDepartments())
+                        {
+                            <option value="@dept">@dept</option>
+                        }
+                    </select>
+                </div>
+                
+                <!-- Domain Filter -->
+                <div class="form-control">
+                    <select class="select select-bordered" @bind="selectedDomain" @bind:after="FilterOwners">
+                        <option value="">All domains</option>
+                        @foreach (var domain in GetDomains())
+                        {
+                            <option value="@domain">@domain</option>
+                        }
+                    </select>
+                </div>
+                
+                <!-- Status Filter -->
+                <div class="form-control">
+                    <select class="select select-bordered" @bind="selectedStatus" @bind:after="FilterOwners">
+                        <option value="">All statuses</option>
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="flex gap-2">
+                <button class="btn btn-secondary" @onclick="ImportFromHeadcount">
+                    📥 Sync Headcount
+                </button>
+                <button class="btn btn-primary" @onclick="ShowAddModal">
+                    ➕ Add Owner
+                </button>
+                <button class="btn btn-outline" @onclick="ExportOwners">
+                    📄 Export CSV
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Owners Table -->
+    <div class="bg-base-100 rounded-lg shadow-lg overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="table table-zebra w-full">
+                <thead class="bg-base-300">
+                    <tr>
+                        <th class="cursor-pointer" @onclick="() => SortBy(nameof(Owner.Name))">
+                            Name
+                            @if (sortColumn == nameof(Owner.Name))
+                            {
+                                <span class="ml-2">@(sortAscending ? "↑" : "↓")</span>
+                            }
+                        </th>
+                        <th class="cursor-pointer" @onclick="() => SortBy(nameof(Owner.Email))">
+                            Email
+                            @if (sortColumn == nameof(Owner.Email))
+                            {
+                                <span class="ml-2">@(sortAscending ? "↑" : "↓")</span>
+                            }
+                        </th>
+                        <th class="cursor-pointer" @onclick="() => SortBy(nameof(Owner.Department))">
+                            Department
+                            @if (sortColumn == nameof(Owner.Department))
+                            {
+                                <span class="ml-2">@(sortAscending ? "↑" : "↓")</span>
+                            }
+                        </th>
+                        <th>Domain</th>
+                        <th>Cost Center</th>
+                        <th>Trip Count</th>
+                        <th>Last Activity</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (filteredOwners.Any())
+                    {
+                        @foreach (var owner in filteredOwners.Skip((currentPage - 1) * pageSize).Take(pageSize))
+                        {
+                            <tr class="hover">
+                                <td>
+                                    <div class="flex items-center gap-3">
+                                        <div class="avatar placeholder">
+                                            <div class="bg-neutral text-neutral-content rounded-full w-10">
+                                                <span class="text-sm">@GetInitials(owner.Name)</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div class="font-bold">@owner.Name</div>
+                                            @if (!string.IsNullOrEmpty(owner.Title))
+                                            {
+                                                <div class="text-sm opacity-50">@owner.Title</div>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <a href="mailto:@owner.Email" class="link link-primary">@owner.Email</a>
+                                </td>
+                                <td>
+                                    <span class="badge badge-outline">@owner.Department</span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-neutral">@owner.Domain</span>
+                                </td>
+                                <td>
+                                    <span class="font-mono text-sm">@owner.CostCenter</span>
+                                </td>
+                                <td>
+                                    <div class="text-center">
+                                        <span class="badge badge-info">@owner.TripCount</span>
+                                        <div class="text-xs text-base-content/60">trips</div>
+                                    </div>
+                                </td>
+                                <td>
+                                    @if (owner.LastActivity.HasValue)
+                                    {
+                                        <span class="text-sm">@owner.LastActivity.Value.ToString("dd/MM/yyyy")</span>
+                                        <div class="text-xs text-base-content/60">
+                                            @GetRelativeTime(owner.LastActivity.Value)
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-base-content/50">No activity</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (owner.IsActive)
+                                    {
+                                        <span class="badge badge-success">Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-error">Inactive</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="dropdown dropdown-end">
+                                        <label tabindex="0" class="btn btn-ghost btn-sm">⋮</label>
+                                        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-200 rounded-box w-48">
+                                            <li><a @onclick="@(() => EditOwner(owner))">✏️ Edit</a></li>
+                                            <li><a @onclick="@(() => ViewTrips(owner))">🧳 View Trips</a></li>
+                                            <li><a @onclick="@(() => ToggleOwnerStatus(owner))">
+                                                @(owner.IsActive ? "⏸️ Deactivate" : "▶️ Activate")
+                                            </a></li>
+                                            <li><a @onclick="@(() => SendEmail(owner))">📧 Send Email</a></li>
+                                            <li><a @onclick="@(() => DeleteOwner(owner))" class="text-error">🗑️ Delete</a></li>
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="9" class="text-center py-8 text-base-content/60">
+                                @if (string.IsNullOrEmpty(searchTerm) && string.IsNullOrEmpty(selectedDepartment))
+                                {
+                                    <span>No owners configured. Click "Add Owner" or "Sync Headcount" to get started.</span>
+                                }
+                                else
+                                {
+                                    <span>No owners found matching your criteria.</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        @if (filteredOwners.Count() > pageSize)
+        {
+            <div class="flex justify-between items-center p-4 bg-base-200">
+                <div class="text-sm text-base-content/70">
+                    Showing @Math.Min(pageSize, filteredOwners.Count()) of @filteredOwners.Count() owners
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-sm" disabled="@(currentPage == 1)" @onclick="PreviousPage">❮</button>
+                    <span class="btn btn-sm btn-active">@currentPage</span>
+                    <button class="btn btn-sm" disabled="@(currentPage * pageSize >= filteredOwners.Count())" @onclick="NextPage">❯</button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+@if (showModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box max-w-2xl">
+            <h3 class="font-bold text-lg mb-4">@(isEditing ? "Edit" : "Add") Owner</h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Full Name *</span>
+                    </label>
+                    <input type="text" class="input input-bordered" @bind="editingOwner.Name" 
+                           placeholder="John Doe" />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Email *</span>
+                    </label>
+                    <input type="email" class="input input-bordered" @bind="editingOwner.Email" 
+                           placeholder="john.doe@company.com" />
+                </div>
+            </div>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Job Title</span>
+                </label>
+                <input type="text" class="input input-bordered" @bind="editingOwner.Title" 
+                       placeholder="Senior Software Engineer" />
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Department *</span>
+                    </label>
+                    <select class="select select-bordered" @bind="editingOwner.Department">
+                        <option value="">Select department...</option>
+                        <option value="Engineering">Engineering</option>
+                        <option value="Sales">Sales</option>
+                        <option value="Marketing">Marketing</option>
+                        <option value="Product">Product</option>
+                        <option value="Operations">Operations</option>
+                        <option value="Finance">Finance</option>
+                        <option value="HR">HR</option>
+                        <option value="Customer Success">Customer Success</option>
+                        <option value="Business Development">Business Development</option>
+                        <option value="Legal">Legal</option>
+                    </select>
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Domain *</span>
+                    </label>
+                    <select class="select select-bordered" @bind="editingOwner.Domain">
+                        <option value="">Select domain...</option>
+                        <option value="R&D">R&D</option>
+                        <option value="Go-to-Market">Go-to-Market</option>
+                        <option value="Operations">Operations</option>
+                        <option value="Corporate">Corporate</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Cost Center</span>
+                    </label>
+                    <input type="text" class="input input-bordered" @bind="editingOwner.CostCenter" 
+                           placeholder="CC-ENG-001" />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Manager Email</span>
+                    </label>
+                    <input type="email" class="input input-bordered" @bind="editingOwner.ManagerEmail" 
+                           placeholder="manager@company.com" />
+                </div>
+            </div>
+            
+            <div class="form-control mb-4">
+                <label class="cursor-pointer label">
+                    <input type="checkbox" class="checkbox" @bind="editingOwner.IsActive" />
+                    <span class="label-text ml-2">Active owner (can be assigned to trips)</span>
+                </label>
+            </div>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Notes</span>
+                </label>
+                <textarea class="textarea textarea-bordered" @bind="editingOwner.Notes" 
+                          placeholder="Optional notes about this owner"></textarea>
+            </div>
+            
+            <div class="modal-action">
+                <button class="btn btn-ghost" @onclick="HideModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveOwner" 
+                        disabled="@(string.IsNullOrWhiteSpace(editingOwner.Name) || string.IsNullOrWhiteSpace(editingOwner.Email) || string.IsNullOrWhiteSpace(editingOwner.Department) || string.IsNullOrWhiteSpace(editingOwner.Domain))">
+                    @(isEditing ? "Update" : "Add") Owner
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Trips Modal -->
+@if (showTripsModal && selectedOwner != null)
+{
+    <div class="modal modal-open">
+        <div class="modal-box max-w-4xl">
+            <h3 class="font-bold text-lg mb-4">Trips for @selectedOwner.Name</h3>
+            
+            <div class="overflow-x-auto">
+                <table class="table table-zebra w-full">
+                    <thead>
+                        <tr>
+                            <th>Trip Name</th>
+                            <th>Dates</th>
+                            <th>Destination</th>
+                            <th>Status</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var trip in GetOwnerTrips(selectedOwner))
+                        {
+                            <tr>
+                                <td>@trip.Name</td>
+                                <td>@trip.StartDate.ToString("dd/MM/yyyy") - @trip.EndDate.ToString("dd/MM/yyyy")</td>
+                                <td>@trip.Destination</td>
+                                <td><span class="badge @GetTripStatusClass(trip.Status)">@trip.Status</span></td>
+                                <td class="font-mono">$@trip.Amount.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="modal-action">
+                <button class="btn btn-ghost" @onclick="HideTripsModal">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Owner> owners = new();
+    private IEnumerable<Owner> filteredOwners = new List<Owner>();
+    
+    private string searchTerm = "";
+    private string selectedDepartment = "";
+    private string selectedDomain = "";
+    private string selectedStatus = "";
+    
+    private string sortColumn = nameof(Owner.Name);
+    private bool sortAscending = true;
+    
+    private int currentPage = 1;
+    private int pageSize = 20;
+    
+    // Modal state
+    private bool showModal = false;
+    private bool isEditing = false;
+    private Owner editingOwner = new();
+    
+    // Trips modal state
+    private bool showTripsModal = false;
+    private Owner? selectedOwner;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOwners();
+    }
+
+    private async Task LoadOwners()
+    {
+        owners = GenerateMockOwners();
+        FilterOwners();
+    }
+
+    private void FilterOwners()
+    {
+        filteredOwners = owners.AsEnumerable();
+
+        if (!string.IsNullOrEmpty(searchTerm))
+        {
+            filteredOwners = filteredOwners.Where(o => 
+                o.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                o.Email.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                (o.Title?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+
+        if (!string.IsNullOrEmpty(selectedDepartment))
+        {
+            filteredOwners = filteredOwners.Where(o => o.Department == selectedDepartment);
+        }
+
+        if (!string.IsNullOrEmpty(selectedDomain))
+        {
+            filteredOwners = filteredOwners.Where(o => o.Domain == selectedDomain);
+        }
+
+        if (!string.IsNullOrEmpty(selectedStatus))
+        {
+            var isActive = bool.Parse(selectedStatus);
+            filteredOwners = filteredOwners.Where(o => o.IsActive == isActive);
+        }
+
+        // Apply sorting
+        if (sortColumn == nameof(Owner.Name))
+        {
+            filteredOwners = sortAscending 
+                ? filteredOwners.OrderBy(o => o.Name)
+                : filteredOwners.OrderByDescending(o => o.Name);
+        }
+        else if (sortColumn == nameof(Owner.Email))
+        {
+            filteredOwners = sortAscending 
+                ? filteredOwners.OrderBy(o => o.Email)
+                : filteredOwners.OrderByDescending(o => o.Email);
+        }
+        else if (sortColumn == nameof(Owner.Department))
+        {
+            filteredOwners = sortAscending 
+                ? filteredOwners.OrderBy(o => o.Department)
+                : filteredOwners.OrderByDescending(o => o.Department);
+        }
+
+        currentPage = 1;
+        StateHasChanged();
+    }
+
+    private void SortBy(string columnName)
+    {
+        if (sortColumn == columnName)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = columnName;
+            sortAscending = true;
+        }
+        FilterOwners();
+    }
+
+    private void PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            StateHasChanged();
+        }
+    }
+
+    private void NextPage()
+    {
+        if (currentPage * pageSize < filteredOwners.Count())
+        {
+            currentPage++;
+            StateHasChanged();
+        }
+    }
+
+    private IEnumerable<string> GetDepartments()
+    {
+        return owners.Select(o => o.Department).Distinct().OrderBy(d => d);
+    }
+
+    private IEnumerable<string> GetDomains()
+    {
+        return owners.Select(o => o.Domain).Distinct().OrderBy(d => d);
+    }
+
+    private string GetInitials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+        {
+            return $"{parts[0][0]}{parts[^1][0]}".ToUpper();
+        }
+        return parts.Length > 0 ? parts[0][0].ToString().ToUpper() : "?";
+    }
+
+    private string GetRelativeTime(DateTime date)
+    {
+        var diff = DateTime.Today - date.Date;
+        return diff.Days switch
+        {
+            0 => "Today",
+            1 => "Yesterday",
+            < 7 => $"{diff.Days} days ago",
+            < 30 => $"{diff.Days / 7} weeks ago",
+            < 365 => $"{diff.Days / 30} months ago",
+            _ => $"{diff.Days / 365} years ago"
+        };
+    }
+
+    private void ShowAddModal()
+    {
+        editingOwner = new Owner { IsActive = true };
+        isEditing = false;
+        showModal = true;
+    }
+
+    private void EditOwner(Owner owner)
+    {
+        editingOwner = new Owner
+        {
+            Id = owner.Id,
+            Name = owner.Name,
+            Email = owner.Email,
+            Title = owner.Title,
+            Department = owner.Department,
+            Domain = owner.Domain,
+            CostCenter = owner.CostCenter,
+            ManagerEmail = owner.ManagerEmail,
+            IsActive = owner.IsActive,
+            Notes = owner.Notes,
+            TripCount = owner.TripCount,
+            LastActivity = owner.LastActivity
+        };
+        isEditing = true;
+        showModal = true;
+    }
+
+    private async Task SaveOwner()
+    {
+        if (string.IsNullOrWhiteSpace(editingOwner.Name) || string.IsNullOrWhiteSpace(editingOwner.Email) || 
+            string.IsNullOrWhiteSpace(editingOwner.Department) || string.IsNullOrWhiteSpace(editingOwner.Domain))
+            return;
+
+        if (isEditing)
+        {
+            var existing = owners.FirstOrDefault(o => o.Id == editingOwner.Id);
+            if (existing != null)
+            {
+                existing.Name = editingOwner.Name.Trim();
+                existing.Email = editingOwner.Email.Trim().ToLower();
+                existing.Title = editingOwner.Title?.Trim();
+                existing.Department = editingOwner.Department;
+                existing.Domain = editingOwner.Domain;
+                existing.CostCenter = editingOwner.CostCenter?.Trim();
+                existing.ManagerEmail = editingOwner.ManagerEmail?.Trim().ToLower();
+                existing.IsActive = editingOwner.IsActive;
+                existing.Notes = editingOwner.Notes?.Trim();
+            }
+        }
+        else
+        {
+            var newOwner = new Owner
+            {
+                Id = owners.Count > 0 ? owners.Max(o => o.Id) + 1 : 1,
+                Name = editingOwner.Name.Trim(),
+                Email = editingOwner.Email.Trim().ToLower(),
+                Title = editingOwner.Title?.Trim(),
+                Department = editingOwner.Department,
+                Domain = editingOwner.Domain,
+                CostCenter = editingOwner.CostCenter?.Trim(),
+                ManagerEmail = editingOwner.ManagerEmail?.Trim().ToLower(),
+                IsActive = editingOwner.IsActive,
+                Notes = editingOwner.Notes?.Trim(),
+                TripCount = 0,
+                LastActivity = null
+            };
+            owners.Add(newOwner);
+        }
+
+        HideModal();
+        FilterOwners();
+        
+        await JSRuntime.InvokeVoidAsync("alert", $"Owner {(isEditing ? "updated" : "added")} successfully!");
+    }
+
+    private async Task DeleteOwner(Owner owner)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"Delete owner '{owner.Name}'? This action cannot be undone and may affect trip assignments.");
+        
+        if (confirmed)
+        {
+            owners.Remove(owner);
+            FilterOwners();
+            await JSRuntime.InvokeVoidAsync("alert", "Owner deleted successfully!");
+        }
+    }
+
+    private void ToggleOwnerStatus(Owner owner)
+    {
+        owner.IsActive = !owner.IsActive;
+        StateHasChanged();
+    }
+
+    private void ViewTrips(Owner owner)
+    {
+        selectedOwner = owner;
+        showTripsModal = true;
+    }
+
+    private async Task SendEmail(Owner owner)
+    {
+        var emailUrl = $"mailto:{owner.Email}?subject=Travel%20Expense%20Management";
+        await JSRuntime.InvokeVoidAsync("open", emailUrl, "_blank");
+    }
+
+    private void HideModal()
+    {
+        showModal = false;
+        editingOwner = new Owner();
+    }
+
+    private void HideTripsModal()
+    {
+        showTripsModal = false;
+        selectedOwner = null;
+    }
+
+    private async Task ImportFromHeadcount()
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+            "Sync with headcount data? This will add new employees and update existing ones.");
+        
+        if (confirmed)
+        {
+            // Simulate import from headcount
+            var addedCount = 3; // Mock data
+            await JSRuntime.InvokeVoidAsync("alert", $"Synced {addedCount} owners from headcount data!");
+            await LoadOwners();
+        }
+    }
+
+    private async Task ExportOwners()
+    {
+        var csv = "Name,Email,Title,Department,Domain,CostCenter,ManagerEmail,IsActive,TripCount,LastActivity,Notes\n";
+        foreach (var owner in owners.OrderBy(o => o.Name))
+        {
+            csv += $"\"{owner.Name}\",\"{owner.Email}\",\"{owner.Title ?? ""}\",\"{owner.Department}\",\"{owner.Domain}\",\"{owner.CostCenter ?? ""}\",\"{owner.ManagerEmail ?? ""}\",{owner.IsActive},{owner.TripCount},{owner.LastActivity?.ToString("yyyy-MM-dd") ?? ""},\"{owner.Notes ?? ""}\"\n";
+        }
+        
+        await JSRuntime.InvokeVoidAsync("downloadFile", "owners.csv", "text/csv", csv);
+    }
+
+    private List<OwnerTrip> GetOwnerTrips(Owner owner)
+    {
+        // Mock trip data for the selected owner
+        return new List<OwnerTrip>
+        {
+            new OwnerTrip { Name = "Business Trip to New York", StartDate = DateTime.Today.AddDays(-30), EndDate = DateTime.Today.AddDays(-25), Destination = "New York, USA", Status = "Completed", Amount = 2450.00m },
+            new OwnerTrip { Name = "Client Meeting in London", StartDate = DateTime.Today.AddDays(-15), EndDate = DateTime.Today.AddDays(-12), Destination = "London, UK", Status = "Completed", Amount = 1850.00m },
+            new OwnerTrip { Name = "Conference in Berlin", StartDate = DateTime.Today.AddDays(10), EndDate = DateTime.Today.AddDays(15), Destination = "Berlin, Germany", Status = "Upcoming", Amount = 0m }
+        };
+    }
+
+    private string GetTripStatusClass(string status)
+    {
+        return status switch
+        {
+            "Completed" => "badge-success",
+            "Upcoming" => "badge-info",
+            "Ongoing" => "badge-warning",
+            "Canceled" => "badge-error",
+            _ => "badge-neutral"
+        };
+    }
+
+    private List<Owner> GenerateMockOwners()
+    {
+        return new List<Owner>
+        {
+            new Owner { Id = 1, Name = "Maayan Chesler", Email = "maayan.chesler@company.com", Title = "Travel Manager", Department = "Operations", Domain = "Operations", CostCenter = "CC-OPS-001", IsActive = true, TripCount = 45, LastActivity = DateTime.Today.AddDays(-2) },
+            new Owner { Id = 2, Name = "Martina Poplinsk", Email = "martina.poplinsk@company.com", Title = "Finance Manager", Department = "Finance", Domain = "Corporate", CostCenter = "CC-FIN-001", IsActive = true, TripCount = 28, LastActivity = DateTime.Today.AddDays(-5) },
+            new Owner { Id = 3, Name = "John Smith", Email = "john.smith@company.com", Title = "Senior Software Engineer", Department = "Engineering", Domain = "R&D", CostCenter = "CC-ENG-001", IsActive = true, TripCount = 12, LastActivity = DateTime.Today.AddDays(-10) },
+            new Owner { Id = 4, Name = "Sarah Johnson", Email = "sarah.johnson@company.com", Title = "Sales Director", Department = "Sales", Domain = "Go-to-Market", CostCenter = "CC-SAL-001", IsActive = true, TripCount = 32, LastActivity = DateTime.Today.AddDays(-1) },
+            new Owner { Id = 5, Name = "Michael Brown", Email = "michael.brown@company.com", Title = "Product Manager", Department = "Product", Domain = "R&D", CostCenter = "CC-PRD-001", IsActive = true, TripCount = 18, LastActivity = DateTime.Today.AddDays(-7) },
+            new Owner { Id = 6, Name = "Emily Davis", Email = "emily.davis@company.com", Title = "Marketing Manager", Department = "Marketing", Domain = "Go-to-Market", CostCenter = "CC-MKT-001", IsActive = true, TripCount = 22, LastActivity = DateTime.Today.AddDays(-4) },
+            new Owner { Id = 7, Name = "David Wilson", Email = "david.wilson@company.com", Title = "Customer Success Manager", Department = "Customer Success", Domain = "Go-to-Market", CostCenter = "CC-CS-001", IsActive = false, TripCount = 8, LastActivity = DateTime.Today.AddDays(-45) },
+            new Owner { Id = 8, Name = "Lisa Anderson", Email = "lisa.anderson@company.com", Title = "HR Director", Department = "HR", Domain = "Corporate", CostCenter = "CC-HR-001", IsActive = true, TripCount = 15, LastActivity = DateTime.Today.AddDays(-8) }
+        };
+    }
+
+    public class Owner
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string? Title { get; set; }
+        public string Department { get; set; } = "";
+        public string Domain { get; set; } = "";
+        public string? CostCenter { get; set; }
+        public string? ManagerEmail { get; set; }
+        public bool IsActive { get; set; }
+        public string? Notes { get; set; }
+        public int TripCount { get; set; }
+        public DateTime? LastActivity { get; set; }
+    }
+
+    public class OwnerTrip
+    {
+        public string Name { get; set; } = "";
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
+        public string Destination { get; set; } = "";
+        public string Status { get; set; } = "";
+        public decimal Amount { get; set; }
+    }
+}

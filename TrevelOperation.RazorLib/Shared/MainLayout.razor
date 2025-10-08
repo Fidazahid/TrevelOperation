@@ -2,14 +2,14 @@
 @inherits LayoutComponentBase
 
 <ThemeProvider DefaultTheme="light" OnThemeChanged="HandleThemeChange">
-    <div class="drawer lg:drawer-open">
+    <div class="drawer lg:drawer-open min-h-screen bg-base-100">
         <input id="sidebar-drawer" type="checkbox" class="drawer-toggle" />
-        <div class="drawer-content flex flex-col h-screen bg-base-100 text-base-content">
-            <header class="sticky top-0 z-[50] print:hidden">
+        <div class="drawer-content flex flex-col min-h-screen bg-base-100 text-base-content">
+            <header class="sticky top-0 z-[50] print:hidden bg-base-100">
                 <Header />
             </header>
 
-            <main class="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-8">
+            <main class="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-8 bg-base-100">
                 @Body
             </main>
 

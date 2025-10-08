@@ -1,0 +1,673 @@
+@page "/settings/rules"
+@using TravelOperation.Core.Models.Entities
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Quick Rules - Travel Expense Management</PageTitle>
+
+<div class="p-6">
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-base-content mb-2">Quick rules</h1>
+        <p class="text-base-content/70">Manage automatic categorization rules for imported transactions based on policy fields</p>
+    </div>
+
+    <!-- Actions Bar -->
+    <div class="bg-base-200 rounded-lg p-4 mb-6">
+        <div class="flex flex-wrap gap-4 items-center justify-between">
+            <div class="flex flex-wrap gap-4 items-center">
+                <!-- Search -->
+                <div class="form-control">
+                    <input type="text" placeholder="Search rules..." 
+                           class="input input-bordered w-64" @bind="searchTerm" @oninput="FilterRules" />
+                </div>
+                
+                <!-- Category Filter -->
+                <div class="form-control">
+                    <select class="select select-bordered" @bind="selectedCategoryFilter" @bind:after="FilterRules">
+                        <option value="">All categories</option>
+                        @foreach (var category in categories)
+                        {
+                            <option value="@category">@category</option>
+                        }
+                    </select>
+                </div>
+                
+                <!-- Status Filter -->
+                <div class="form-control">
+                    <select class="select select-bordered" @bind="selectedStatusFilter" @bind:after="FilterRules">
+                        <option value="">All statuses</option>
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="flex gap-2">
+                <button class="btn btn-secondary" @onclick="ImportDefaultRules">
+                    📥 Load Defaults
+                </button>
+                <button class="btn btn-primary" @onclick="ShowAddModal">
+                    ➕ Add Rule
+                </button>
+                <button class="btn btn-outline" @onclick="ExportRules">
+                    📄 Export Rules
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rules Table -->
+    <div class="bg-base-100 rounded-lg shadow-lg overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="table table-zebra w-full">
+                <thead class="bg-base-300">
+                    <tr>
+                        <th class="cursor-pointer" @onclick="() => SortBy(nameof(QuickRule.Priority))">
+                            Priority
+                            @if (sortColumn == nameof(QuickRule.Priority))
+                            {
+                                <span class="ml-2">@(sortAscending ? "↑" : "↓")</span>
+                            }
+                        </th>
+                        <th class="cursor-pointer" @onclick="() => SortBy(nameof(QuickRule.PolicyPattern))">
+                            Policy Pattern
+                            @if (sortColumn == nameof(QuickRule.PolicyPattern))
+                            {
+                                <span class="ml-2">@(sortAscending ? "↑" : "↓")</span>
+                            }
+                        </th>
+                        <th class="cursor-pointer" @onclick="() => SortBy(nameof(QuickRule.TargetCategory))">
+                            Target Category
+                            @if (sortColumn == nameof(QuickRule.TargetCategory))
+                            {
+                                <span class="ml-2">@(sortAscending ? "↑" : "↓")</span>
+                            }
+                        </th>
+                        <th>Match Type</th>
+                        <th>Status</th>
+                        <th>Usage Count</th>
+                        <th>Last Used</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (filteredRules.Any())
+                    {
+                        @foreach (var rule in filteredRules.Skip((currentPage - 1) * pageSize).Take(pageSize))
+                        {
+                            <tr class="hover">
+                                <td>
+                                    <span class="badge badge-neutral">@rule.Priority</span>
+                                </td>
+                                <td>
+                                    <div class="font-mono text-sm bg-base-200 px-2 py-1 rounded">
+                                        @rule.PolicyPattern
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge @GetCategoryBadgeClass(rule.TargetCategory)">
+                                        @rule.TargetCategory
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-outline">
+                                        @(rule.IsExactMatch ? "Exact" : "Contains")
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (rule.IsActive)
+                                    {
+                                        <span class="badge badge-success">Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-error">Inactive</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="text-sm">@rule.UsageCount matches</span>
+                                </td>
+                                <td>
+                                    @if (rule.LastUsed.HasValue)
+                                    {
+                                        <span class="text-sm">@rule.LastUsed.Value.ToString("dd/MM/yyyy")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-base-content/50">Never used</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="dropdown dropdown-end">
+                                        <label tabindex="0" class="btn btn-ghost btn-sm">⋮</label>
+                                        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-200 rounded-box w-52">
+                                            <li><a @onclick="@(() => EditRule(rule))">✏️ Edit</a></li>
+                                            <li><a @onclick="@(() => TestRule(rule))">🧪 Test Rule</a></li>
+                                            <li><a @onclick="@(() => ToggleRuleStatus(rule))">
+                                                @(rule.IsActive ? "⏸️ Deactivate" : "▶️ Activate")
+                                            </a></li>
+                                            <li><a @onclick="@(() => DuplicateRule(rule))">📋 Duplicate</a></li>
+                                            <li><a @onclick="@(() => DeleteRule(rule))" class="text-error">🗑️ Delete</a></li>
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="8" class="text-center py-8 text-base-content/60">
+                                @if (string.IsNullOrEmpty(searchTerm) && string.IsNullOrEmpty(selectedCategoryFilter))
+                                {
+                                    <span>No categorization rules configured. Click "Add Rule" or "Load Defaults" to get started.</span>
+                                }
+                                else
+                                {
+                                    <span>No rules found matching your criteria.</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        @if (filteredRules.Count() > pageSize)
+        {
+            <div class="flex justify-between items-center p-4 bg-base-200">
+                <div class="text-sm text-base-content/70">
+                    Showing @Math.Min(pageSize, filteredRules.Count()) of @filteredRules.Count() rules
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-sm" disabled="@(currentPage == 1)" @onclick="PreviousPage">❮</button>
+                    <span class="btn btn-sm btn-active">@currentPage</span>
+                    <button class="btn btn-sm" disabled="@(currentPage * pageSize >= filteredRules.Count())" @onclick="NextPage">❯</button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+@if (showModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box max-w-2xl">
+            <h3 class="font-bold text-lg mb-4">@(isEditing ? "Edit" : "Add") Quick Rule</h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Priority *</span>
+                        <span class="label-text-alt">Lower numbers = higher priority</span>
+                    </label>
+                    <input type="number" class="input input-bordered" @bind="editingRule.Priority" min="1" max="999" />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Target Category *</span>
+                    </label>
+                    <select class="select select-bordered" @bind="editingRule.TargetCategory">
+                        <option value="">Select category...</option>
+                        @foreach (var category in categories)
+                        {
+                            <option value="@category">@category</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Policy Pattern *</span>
+                    <span class="label-text-alt">Text to match in the policy field</span>
+                </label>
+                <input type="text" class="input input-bordered" @bind="editingRule.PolicyPattern" 
+                       placeholder="e.g., tripactions_fees, Airfare, entertaining clients" />
+            </div>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Description</span>
+                </label>
+                <textarea class="textarea textarea-bordered" @bind="editingRule.Description" 
+                          placeholder="Optional description of when this rule applies"></textarea>
+            </div>
+            
+            <div class="flex flex-wrap gap-4 mb-4">
+                <div class="form-control">
+                    <label class="cursor-pointer label">
+                        <input type="checkbox" class="checkbox" @bind="editingRule.IsExactMatch" />
+                        <span class="label-text ml-2">Exact match (case-insensitive)</span>
+                    </label>
+                </div>
+                
+                <div class="form-control">
+                    <label class="cursor-pointer label">
+                        <input type="checkbox" class="checkbox" @bind="editingRule.IsActive" />
+                        <span class="label-text ml-2">Active</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="modal-action">
+                <button class="btn btn-ghost" @onclick="HideModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveRule" 
+                        disabled="@(string.IsNullOrWhiteSpace(editingRule.PolicyPattern) || string.IsNullOrWhiteSpace(editingRule.TargetCategory))">
+                    @(isEditing ? "Update" : "Add") Rule
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Test Rule Modal -->
+@if (showTestModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">Test Rule</h3>
+            
+            <div class="bg-base-200 p-4 rounded-lg mb-4">
+                <p class="font-semibold mb-2">Rule: @testingRule?.PolicyPattern → @testingRule?.TargetCategory</p>
+                <p class="text-sm text-base-content/70">
+                    Match Type: @(testingRule?.IsExactMatch == true ? "Exact" : "Contains")
+                </p>
+            </div>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Test Policy Value</span>
+                </label>
+                <input type="text" class="input input-bordered" @bind="testPolicyValue" 
+                       placeholder="Enter a policy value to test..." @oninput="TestRuleMatch" />
+            </div>
+            
+            @if (!string.IsNullOrEmpty(testPolicyValue))
+            {
+                <div class="alert @(testMatches ? "alert-success" : "alert-warning")">
+                    <span>@(testMatches ? "✅ Match!" : "❌ No match")</span>
+                    @if (testMatches)
+                    {
+                        <span>This policy would be categorized as: @testingRule?.TargetCategory</span>
+                    }
+                </div>
+            }
+            
+            <div class="modal-action">
+                <button class="btn btn-ghost" @onclick="HideTestModal">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<QuickRule> rules = new();
+    private IEnumerable<QuickRule> filteredRules = new List<QuickRule>();
+    
+    private readonly List<string> categories = new()
+    {
+        "✈ Airfare", "🏨 Lodging", "🚕 Transportation", "📱 Communication",
+        "🍸 Client entertainment", "🍽 Meals", "❔ Other", "❓ Non-travel"
+    };
+    
+    private string searchTerm = "";
+    private string selectedCategoryFilter = "";
+    private string selectedStatusFilter = "";
+    
+    private string sortColumn = nameof(QuickRule.Priority);
+    private bool sortAscending = true;
+    
+    private int currentPage = 1;
+    private int pageSize = 20;
+    
+    // Modal state
+    private bool showModal = false;
+    private bool isEditing = false;
+    private QuickRule editingRule = new();
+    
+    // Test modal state
+    private bool showTestModal = false;
+    private QuickRule? testingRule;
+    private string testPolicyValue = "";
+    private bool testMatches = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRules();
+    }
+
+    private async Task LoadRules()
+    {
+        rules = GenerateDefaultRules();
+        FilterRules();
+    }
+
+    private void FilterRules()
+    {
+        filteredRules = rules.AsEnumerable();
+
+        if (!string.IsNullOrEmpty(searchTerm))
+        {
+            filteredRules = filteredRules.Where(r => 
+                r.PolicyPattern.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                r.TargetCategory.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                (r.Description?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+
+        if (!string.IsNullOrEmpty(selectedCategoryFilter))
+        {
+            filteredRules = filteredRules.Where(r => r.TargetCategory == selectedCategoryFilter);
+        }
+
+        if (!string.IsNullOrEmpty(selectedStatusFilter))
+        {
+            var isActive = bool.Parse(selectedStatusFilter);
+            filteredRules = filteredRules.Where(r => r.IsActive == isActive);
+        }
+
+        // Apply sorting
+        if (sortColumn == nameof(QuickRule.Priority))
+        {
+            filteredRules = sortAscending 
+                ? filteredRules.OrderBy(r => r.Priority)
+                : filteredRules.OrderByDescending(r => r.Priority);
+        }
+        else if (sortColumn == nameof(QuickRule.PolicyPattern))
+        {
+            filteredRules = sortAscending 
+                ? filteredRules.OrderBy(r => r.PolicyPattern)
+                : filteredRules.OrderByDescending(r => r.PolicyPattern);
+        }
+        else if (sortColumn == nameof(QuickRule.TargetCategory))
+        {
+            filteredRules = sortAscending 
+                ? filteredRules.OrderBy(r => r.TargetCategory)
+                : filteredRules.OrderByDescending(r => r.TargetCategory);
+        }
+
+        currentPage = 1;
+        StateHasChanged();
+    }
+
+    private void SortBy(string columnName)
+    {
+        if (sortColumn == columnName)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = columnName;
+            sortAscending = true;
+        }
+        FilterRules();
+    }
+
+    private void PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            StateHasChanged();
+        }
+    }
+
+    private void NextPage()
+    {
+        if (currentPage * pageSize < filteredRules.Count())
+        {
+            currentPage++;
+            StateHasChanged();
+        }
+    }
+
+    private string GetCategoryBadgeClass(string category)
+    {
+        return category switch
+        {
+            "✈ Airfare" => "badge-primary",
+            "🏨 Lodging" => "badge-secondary",
+            "🚕 Transportation" => "badge-accent",
+            "🍽 Meals" => "badge-info",
+            "🍸 Client entertainment" => "badge-warning",
+            "📱 Communication" => "badge-success",
+            _ => "badge-neutral"
+        };
+    }
+
+    private void ShowAddModal()
+    {
+        editingRule = new QuickRule { Priority = GetNextPriority(), IsActive = true };
+        isEditing = false;
+        showModal = true;
+    }
+
+    private void EditRule(QuickRule rule)
+    {
+        editingRule = new QuickRule
+        {
+            Id = rule.Id,
+            Priority = rule.Priority,
+            PolicyPattern = rule.PolicyPattern,
+            TargetCategory = rule.TargetCategory,
+            Description = rule.Description,
+            IsExactMatch = rule.IsExactMatch,
+            IsActive = rule.IsActive,
+            UsageCount = rule.UsageCount,
+            LastUsed = rule.LastUsed,
+            CreatedAt = rule.CreatedAt,
+            ModifiedAt = rule.ModifiedAt
+        };
+        isEditing = true;
+        showModal = true;
+    }
+
+    private async Task SaveRule()
+    {
+        if (string.IsNullOrWhiteSpace(editingRule.PolicyPattern) || string.IsNullOrWhiteSpace(editingRule.TargetCategory))
+            return;
+
+        if (isEditing)
+        {
+            var existing = rules.FirstOrDefault(r => r.Id == editingRule.Id);
+            if (existing != null)
+            {
+                existing.Priority = editingRule.Priority;
+                existing.PolicyPattern = editingRule.PolicyPattern.Trim();
+                existing.TargetCategory = editingRule.TargetCategory;
+                existing.Description = editingRule.Description?.Trim();
+                existing.IsExactMatch = editingRule.IsExactMatch;
+                existing.IsActive = editingRule.IsActive;
+                existing.ModifiedAt = DateTime.Now;
+            }
+        }
+        else
+        {
+            var newRule = new QuickRule
+            {
+                Id = rules.Count > 0 ? rules.Max(r => r.Id) + 1 : 1,
+                Priority = editingRule.Priority,
+                PolicyPattern = editingRule.PolicyPattern.Trim(),
+                TargetCategory = editingRule.TargetCategory,
+                Description = editingRule.Description?.Trim(),
+                IsExactMatch = editingRule.IsExactMatch,
+                IsActive = editingRule.IsActive,
+                UsageCount = 0,
+                LastUsed = null,
+                CreatedAt = DateTime.Now,
+                ModifiedAt = DateTime.Now
+            };
+            rules.Add(newRule);
+        }
+
+        HideModal();
+        FilterRules();
+        
+        await JSRuntime.InvokeVoidAsync("alert", $"Rule {(isEditing ? "updated" : "added")} successfully!");
+    }
+
+    private async Task DeleteRule(QuickRule rule)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"Delete rule '{rule.PolicyPattern} → {rule.TargetCategory}'? This action cannot be undone.");
+        
+        if (confirmed)
+        {
+            rules.Remove(rule);
+            FilterRules();
+            await JSRuntime.InvokeVoidAsync("alert", "Rule deleted successfully!");
+        }
+    }
+
+    private void ToggleRuleStatus(QuickRule rule)
+    {
+        rule.IsActive = !rule.IsActive;
+        rule.ModifiedAt = DateTime.Now;
+        StateHasChanged();
+    }
+
+    private void DuplicateRule(QuickRule rule)
+    {
+        var duplicate = new QuickRule
+        {
+            Id = rules.Max(r => r.Id) + 1,
+            Priority = GetNextPriority(),
+            PolicyPattern = rule.PolicyPattern + " (copy)",
+            TargetCategory = rule.TargetCategory,
+            Description = rule.Description,
+            IsExactMatch = rule.IsExactMatch,
+            IsActive = false, // Start as inactive
+            UsageCount = 0,
+            LastUsed = null,
+            CreatedAt = DateTime.Now,
+            ModifiedAt = DateTime.Now
+        };
+        
+        rules.Add(duplicate);
+        FilterRules();
+    }
+
+    private void TestRule(QuickRule rule)
+    {
+        testingRule = rule;
+        testPolicyValue = "";
+        testMatches = false;
+        showTestModal = true;
+    }
+
+    private void TestRuleMatch()
+    {
+        if (testingRule == null || string.IsNullOrEmpty(testPolicyValue))
+        {
+            testMatches = false;
+            return;
+        }
+
+        if (testingRule.IsExactMatch)
+        {
+            testMatches = string.Equals(testPolicyValue, testingRule.PolicyPattern, StringComparison.OrdinalIgnoreCase);
+        }
+        else
+        {
+            testMatches = testPolicyValue.Contains(testingRule.PolicyPattern, StringComparison.OrdinalIgnoreCase);
+        }
+
+        StateHasChanged();
+    }
+
+    private void HideModal()
+    {
+        showModal = false;
+        editingRule = new QuickRule();
+    }
+
+    private void HideTestModal()
+    {
+        showTestModal = false;
+        testingRule = null;
+        testPolicyValue = "";
+        testMatches = false;
+    }
+
+    private int GetNextPriority()
+    {
+        return rules.Count > 0 ? rules.Max(r => r.Priority) + 10 : 10;
+    }
+
+    private async Task ImportDefaultRules()
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+            "Load default categorization rules? This will add standard rules but won't replace existing ones.");
+        
+        if (confirmed)
+        {
+            var defaultRules = GenerateDefaultRules();
+            var addedCount = 0;
+            
+            foreach (var defaultRule in defaultRules)
+            {
+                if (!rules.Any(r => r.PolicyPattern.Equals(defaultRule.PolicyPattern, StringComparison.OrdinalIgnoreCase)))
+                {
+                    defaultRule.Id = rules.Count > 0 ? rules.Max(r => r.Id) + 1 : 1;
+                    rules.Add(defaultRule);
+                    addedCount++;
+                }
+            }
+            
+            FilterRules();
+            await JSRuntime.InvokeVoidAsync("alert", $"Added {addedCount} default rules!");
+        }
+    }
+
+    private async Task ExportRules()
+    {
+        var csv = "Priority,PolicyPattern,TargetCategory,IsExactMatch,IsActive,Description\n";
+        foreach (var rule in rules.OrderBy(r => r.Priority))
+        {
+            csv += $"{rule.Priority},\"{rule.PolicyPattern}\",\"{rule.TargetCategory}\",{rule.IsExactMatch},{rule.IsActive},\"{rule.Description ?? ""}\"\n";
+        }
+        
+        await JSRuntime.InvokeVoidAsync("downloadFile", "quick-rules.csv", "text/csv", csv);
+    }
+
+    private List<QuickRule> GenerateDefaultRules()
+    {
+        return new List<QuickRule>
+        {
+            new QuickRule { Id = 1, Priority = 10, PolicyPattern = "tripactions_fees", TargetCategory = "❔ Other", IsExactMatch = true, IsActive = true, Description = "Platform fees", CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now },
+            new QuickRule { Id = 2, Priority = 20, PolicyPattern = "Airalo", TargetCategory = "📱 Communication", IsExactMatch = true, IsActive = true, Description = "eSIM services", CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now },
+            new QuickRule { Id = 3, Priority = 30, PolicyPattern = "public transport, tolls & parking", TargetCategory = "🚕 Transportation", IsExactMatch = true, IsActive = true, Description = "Local transportation", CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now },
+            new QuickRule { Id = 4, Priority = 40, PolicyPattern = "Taxi & rideshare", TargetCategory = "🚕 Transportation", IsExactMatch = true, IsActive = true, Description = "Taxi and rideshare services", CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now },
+            new QuickRule { Id = 5, Priority = 50, PolicyPattern = "Rental cars", TargetCategory = "🚕 Transportation", IsExactMatch = true, IsActive = true, Description = "Car rental services", CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now },
+            new QuickRule { Id = 6, Priority = 60, PolicyPattern = "Train travel", TargetCategory = "🚕 Transportation", IsExactMatch = true, IsActive = true, Description = "Train tickets", CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now },
+            new QuickRule { Id = 7, Priority = 70, PolicyPattern = "Fuel", TargetCategory = "🚕 Transportation", IsExactMatch = true, IsActive = true, Description = "Fuel expenses", CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now },
+            new QuickRule { Id = 8, Priority = 80, PolicyPattern = "entertaining clients", TargetCategory = "🍸 Client entertainment", IsExactMatch = true, IsActive = true, Description = "Client entertainment expenses", CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now },
+            new QuickRule { Id = 9, Priority = 90, PolicyPattern = "team events & meals", TargetCategory = "🍽 Meals", IsExactMatch = true, IsActive = true, Description = "Team meals and events", CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now },
+            new QuickRule { Id = 10, Priority = 100, PolicyPattern = "Meals for myself", TargetCategory = "🍽 Meals", IsExactMatch = true, IsActive = true, Description = "Individual meal expenses", CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now },
+            new QuickRule { Id = 11, Priority = 110, PolicyPattern = "Airfare", TargetCategory = "✈ Airfare", IsExactMatch = true, IsActive = true, Description = "Flight tickets", CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now },
+            new QuickRule { Id = 12, Priority = 120, PolicyPattern = "Internet access", TargetCategory = "📱 Communication", IsExactMatch = true, IsActive = true, Description = "Internet and WiFi services", CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now },
+            new QuickRule { Id = 13, Priority = 130, PolicyPattern = "telecommunication_services", TargetCategory = "📱 Communication", IsExactMatch = true, IsActive = true, Description = "Phone and communication services", CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now },
+            new QuickRule { Id = 14, Priority = 140, PolicyPattern = "Lodging", TargetCategory = "🏨 Lodging", IsExactMatch = true, IsActive = true, Description = "Hotel and accommodation", CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now },
+            new QuickRule { Id = 15, Priority = 150, PolicyPattern = "Software", TargetCategory = "❔ Other", IsExactMatch = true, IsActive = true, Description = "Software purchases", CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now },
+            new QuickRule { Id = 16, Priority = 160, PolicyPattern = "Conference attendance", TargetCategory = "❔ Other", IsExactMatch = true, IsActive = true, Description = "Conference and event fees", CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now }
+        };
+    }
+
+    public class QuickRule
+    {
+        public int Id { get; set; }
+        public int Priority { get; set; }
+        public string PolicyPattern { get; set; } = "";
+        public string TargetCategory { get; set; } = "";
+        public string? Description { get; set; }
+        public bool IsExactMatch { get; set; }
+        public bool IsActive { get; set; }
+        public int UsageCount { get; set; }
+        public DateTime? LastUsed { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime ModifiedAt { get; set; }
+    }
+}

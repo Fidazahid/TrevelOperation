@@ -2,39 +2,104 @@
 @tailwind components;
 @tailwind utilities;
 
-@plugin "daisyui/theme" {
-    name: "light";
-    default: true;
-    prefersdark: true;
-    color-scheme: "dark";
-    --color-base-100: oklch(100% 0 0);
-    --color-base-200: oklch(98% 0 0);
-    --color-base-300: oklch(95% 0 0);
-    --color-base-content: oklch(21% 0.006 285.885);
-    --color-primary: oklch(43% 0.232 292.759);
-    --color-primary-content: oklch(93% 0.034 272.788);
-    --color-secondary: oklch(65% 0.241 354.308);
-    --color-secondary-content: oklch(94% 0.028 342.258);
-    --color-accent: oklch(77% 0.152 181.912);
-    --color-accent-content: oklch(38% 0.063 188.416);
-    --color-neutral: oklch(43% 0.232 292.759);
-    --color-neutral-content: oklch(98% 0.003 247.858);
-    --color-info: oklch(74% 0.16 232.661);
-    --color-info-content: oklch(29% 0.066 243.157);
-    --color-success: oklch(76% 0.177 163.223);
-    --color-success-content: oklch(37% 0.077 168.94);
-    --color-warning: oklch(82% 0.189 84.429);
-    --color-warning-content: oklch(41% 0.112 45.904);
-    --color-error: oklch(71% 0.194 13.428);
-    --color-error-content: oklch(27% 0.105 12.094);
-    --radius-selector: 0.5rem;
-    --radius-field: 0.25rem;
-    --radius-box: 0.5rem;
-    --size-selector: 0.25rem;
-    --size-field: 0.21875rem;
-    --border: 1px;
-    --depth: 1;
-    --noise: 0;
+/* Ensure proper background colors and prevent black scrolling areas */
+:root {
+    --color-base-100: oklch(100% 0 0); /* White background */
+    --color-base-200: oklch(98% 0 0);  /* Light gray */
+    --color-base-300: oklch(95% 0 0);  /* Slightly darker gray */
+    --color-base-content: oklch(21% 0.006 285.885); /* Dark text */
+}
+
+body, html {
+    background-color: oklch(100% 0 0) !important; /* Force white background */
+    color: oklch(21% 0.006 285.885) !important;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+}
+
+/* Fix all main containers */
+.drawer-content, 
+main, 
+.main-content,
+#app,
+body > div {
+    background-color: oklch(100% 0 0) !important;
+}
+
+/* Ensure light theme is properly applied */
+[data-theme="light"] {
+    --b1: oklch(100% 0 0);
+    --b2: oklch(98% 0 0);
+    --b3: oklch(95% 0 0);
+    --bc: oklch(21% 0.006 285.885);
+}
+
+/* Fix scrolling background issues */
+.drawer-content {
+    background-color: oklch(100% 0 0) !important;
+}
+
+main {
+    background-color: oklch(100% 0 0) !important;
+}
+
+/* Force all containers to have proper background */
+.container, 
+.page, 
+.content, 
+.main-wrapper {
+    background-color: oklch(100% 0 0) !important;
+}
+
+/* Navigation fixes */
+.menu li > a {
+    transition: all 0.2s ease-in-out;
+}
+
+.menu li > a:not(.active):hover {
+    background-color: oklch(95% 0 0);
+}
+
+/* Ensure NavLink active state works properly */
+.menu li > a.active {
+    background-color: oklch(43% 0.232 292.759) !important;
+    color: oklch(93% 0.034 272.788) !important;
+    font-weight: 600;
+}
+
+/* Force refresh of active states */
+.menu li > a[href="/"].active {
+    background-color: oklch(43% 0.232 292.759) !important;
+    color: oklch(93% 0.034 272.788) !important;
+}
+
+/* Fix any potential CSS conflicts */
+.drawer-side .menu li > * {
+    border-radius: 0.5rem;
+}
+
+/* Override any dark theme artifacts */
+* {
+    scrollbar-color: oklch(95% 0 0) oklch(100% 0 0);
+}
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: oklch(100% 0 0);
+}
+
+::-webkit-scrollbar-thumb {
+    background: oklch(95% 0 0);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: oklch(90% 0 0);
 }
 
 
