@@ -1,33 +1,189 @@
 ﻿@using TrevelOperation.RazorLib.Theme
+@using TravelOperation.Core.Services
+@using TrevelOperation.RazorLib.Pages
+@inject IAuthenticationService AuthService
+@inject NavigationManager Navigation
 @inherits LayoutComponentBase
+@implements IDisposable
 
-<ThemeProvider DefaultTheme="light" OnThemeChanged="HandleThemeChange">
-    <div class="drawer lg:drawer-open min-h-screen bg-base-100">
-        <input id="sidebar-drawer" type="checkbox" class="drawer-toggle" />
-        <div class="drawer-content flex flex-col min-h-screen bg-base-100 text-base-content">
-            <header class="sticky top-0 z-[50] print:hidden bg-base-100">
-                <Header />
-            </header>
-
-            <main class="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-8 bg-base-100">
-                @Body
-            </main>
-
-            <Footer></Footer>
+@if (isCheckingAuth)
+{
+    <!-- Loading screen while checking authentication -->
+    <div class="loading-screen">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <h2>Loading NORAS Money Matrix...</h2>
         </div>
-        <aside class="drawer-side z-[60] print:hidden lg:shadow-xl">
-            <label for="sidebar-drawer" class="drawer-overlay"></label>
-            <NavMenu />
-        </aside>
     </div>
-</ThemeProvider>
+}
+else if (!isAuthenticated)
+{
+    <!-- Show login page if not authenticated -->
+    <Login />
+}
+else
+{
+    <!-- Show main application if authenticated -->
+    <ThemeProvider DefaultTheme="light" OnThemeChanged="HandleThemeChange">
+        <div class="drawer lg:drawer-open min-h-screen bg-base-100">
+            <input id="sidebar-drawer" type="checkbox" class="drawer-toggle" />
+            <div class="drawer-content flex flex-col min-h-screen bg-base-100 text-base-content">
+                <header class="sticky top-0 z-[50] print:hidden bg-base-100">
+                    <Header />
+                </header>
+
+                <main class="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-8 bg-base-100">
+                    @Body
+                </main>
+
+                <Footer></Footer>
+            </div>
+            <aside class="drawer-side z-[60] print:hidden lg:shadow-xl">
+                <label for="sidebar-drawer" class="drawer-overlay"></label>
+                <NavMenu />
+            </aside>
+        </div>
+    </ThemeProvider>
+}
+
+<style>
+    .loading-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #1e40af 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    }
+
+    .loading-content {
+        text-align: center;
+        color: white;
+    }
+
+    .loading-content h2 {
+        margin-top: 1rem;
+        font-size: 1.5rem;
+        font-weight: 600;
+    }
+
+    .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-top: 4px solid white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto;
+    }
+
+    @@keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
 
 @code {
     private string _currentTheme = "light";
+    private bool isAuthenticated = false;
+    private bool isCheckingAuth = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Subscribe to authentication state changes
+        AuthService.AuthenticationStateChanged += OnAuthenticationStateChanged;
+        
+        // Check initial authentication state
+        await CheckAuthenticationState();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // On first render, ensure we're on the right page based on auth state
+            Console.WriteLine($"MainLayout: First render - Current URI: {Navigation.Uri}");
+            var currentUri = Navigation.ToBaseRelativePath(Navigation.Uri);
+            
+            if (!isCheckingAuth)
+            {
+                if (!isAuthenticated && currentUri != "login")
+                {
+                    Console.WriteLine("MainLayout: First render - Redirecting to login");
+                    Navigation.NavigateTo("/login");
+                }
+                else if (isAuthenticated && currentUri == "login")
+                {
+                    Console.WriteLine("MainLayout: First render - Redirecting to dashboard");
+                    Navigation.NavigateTo("/dashboard");
+                }
+            }
+        }
+    }
+
+    private async Task CheckAuthenticationState()
+    {
+        try
+        {
+            Console.WriteLine("MainLayout: Starting authentication check");
+            isCheckingAuth = true;
+            StateHasChanged();
+            
+            // Add a small delay to show loading screen
+            await Task.Delay(500);
+            
+            isAuthenticated = await AuthService.IsAuthenticatedAsync();
+            Console.WriteLine($"MainLayout: Authentication result = {isAuthenticated}");
+            
+            // If on login page but authenticated, redirect to dashboard
+            if (isAuthenticated && Navigation.Uri.EndsWith("/login"))
+            {
+                Console.WriteLine("MainLayout: Redirecting authenticated user from login to dashboard");
+                Navigation.NavigateTo("/dashboard");
+            }
+            else if (!isAuthenticated && !Navigation.Uri.EndsWith("/login"))
+            {
+                Console.WriteLine("MainLayout: Redirecting unauthenticated user to login");
+                Navigation.NavigateTo("/login");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Authentication check error: {ex.Message}");
+            isAuthenticated = false;
+        }
+        finally
+        {
+            isCheckingAuth = false;
+            Console.WriteLine($"MainLayout: Final authentication state = {isAuthenticated}");
+            StateHasChanged();
+        }
+    }
+
+    private void OnAuthenticationStateChanged(bool authenticated)
+    {
+        isAuthenticated = authenticated;
+        StateHasChanged();
+        
+        if (!authenticated)
+        {
+            // Redirect to login when logged out
+            Navigation.NavigateTo("/login", forceLoad: true);
+        }
+    }
 
     private void HandleThemeChange(string theme)
     {
         _currentTheme = theme;
         StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        AuthService.AuthenticationStateChanged -= OnAuthenticationStateChanged;
     }
 }

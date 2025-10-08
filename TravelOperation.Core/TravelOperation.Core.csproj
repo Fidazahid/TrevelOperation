@@ -13,6 +13,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.JSInterop" />
     <PackageReference Include="ClosedXML" />
     <PackageReference Include="itext7" />
   </ItemGroup>

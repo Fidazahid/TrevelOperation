@@ -1,0 +1,467 @@
+@page "/login"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Components.Forms
+@using TravelOperation.Core.Services
+@inject IAuthenticationService AuthService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+
+<div class="login-container">
+    <div class="login-card">
+        <!-- Logo and Title -->
+        <div class="logo-section">
+            <h1 class="logo-title">NORAS</h1>
+            <p class="logo-subtitle">MONEY MATRIX</p>
+        </div>
+
+        <!-- Login Form -->
+        <EditForm Model="loginModel" OnValidSubmit="HandleLogin" class="login-form">
+            <DataAnnotationsValidator />
+
+            <!-- Email Field -->
+            <div class="form-group">
+                <label for="email" class="form-label">Email Address</label>
+                <div class="input-wrapper">
+                    <span class="input-icon">📧</span>
+                    <InputText @bind-value="loginModel.Email" 
+                               class="form-input" 
+                               id="email" 
+                               placeholder="Try: admin@noras.com, sales.manager@wsc.com, or john.doe@wsc.com" 
+                               autocomplete="email" />
+                </div>
+                <ValidationMessage For="@(() => loginModel.Email)" class="validation-error" />
+            </div>
+
+            <!-- Password Field -->
+            <div class="form-group">
+                <label for="password" class="form-label">Password</label>
+                <div class="input-wrapper">
+                    <span class="input-icon">🔒</span>
+                    <input type="@(showPassword ? "text" : "password")" 
+                           @bind="loginModel.Password" 
+                           class="form-input" 
+                           id="password" 
+                           placeholder="••••••••" 
+                           autocomplete="current-password" />
+                    <button type="button" 
+                            class="password-toggle" 
+                            @onclick="TogglePasswordVisibility">
+                        @if (showPassword)
+                        {
+                            <span>🙈</span>
+                        }
+                        else
+                        {
+                            <span>👁️</span>
+                        }
+                    </button>
+                </div>
+                <ValidationMessage For="@(() => loginModel.Password)" class="validation-error" />
+            </div>
+
+            <!-- Error Message -->
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="error-banner">
+                    ⚠️ @errorMessage
+                </div>
+            }
+
+            <!-- Sign In Button -->
+            <button type="submit" class="signin-button" disabled="@isLoading">
+                @if (isLoading)
+                {
+                    <span class="loading-spinner"></span>
+                    <span>Signing In...</span>
+                }
+                else
+                {
+                    <span>Sign In</span>
+                }
+            </button>
+
+            <!-- Forgot Password Link -->
+            <div class="forgot-password">
+                <a href="#" @onclick="HandleForgotPassword" @onclick:preventDefault="true">
+                    Forgot password?
+                </a>
+            </div>
+
+            <!-- Test Credentials Hint -->
+            <div class="test-credentials">
+                <div class="test-title">Quick Test Logins:</div>
+                <div class="test-item">
+                    <strong>Finance:</strong> admin@noras.com / admin123
+                    <button type="button" class="auto-fill-btn" @onclick='() => AutoFillCredentials("admin@noras.com", "admin123")'>
+                        Auto-Fill
+                    </button>
+                </div>
+                <div class="test-item">
+                    <strong>Owner:</strong> sales.manager@wsc.com / manager123
+                    <button type="button" class="auto-fill-btn" @onclick='() => AutoFillCredentials("sales.manager@wsc.com", "manager123")'>
+                        Auto-Fill
+                    </button>
+                </div>
+                <div class="test-item">
+                    <strong>Employee:</strong> john.doe@wsc.com / emp123
+                    <button type="button" class="auto-fill-btn" @onclick='() => AutoFillCredentials("john.doe@wsc.com", "emp123")'>
+                        Auto-Fill
+                    </button>
+                </div>
+            </div>
+        </EditForm>
+
+        <!-- Footer -->
+        <div class="login-footer">
+            © 2025 NORAS Money Matrix. All rights reserved.
+        </div>
+    </div>
+</div>
+
+<style>
+    .login-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #1e40af 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        z-index: 9999;
+    }
+
+    .login-card {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 20px;
+        padding: 3rem;
+        width: 100%;
+        max-width: 420px;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+        text-align: center;
+    }
+
+    .logo-section {
+        margin-bottom: 2.5rem;
+    }
+
+    .logo-title {
+        font-size: 3rem;
+        font-weight: 700;
+        color: white;
+        margin: 0;
+        letter-spacing: 0.1em;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .logo-subtitle {
+        font-size: 1rem;
+        color: rgba(255, 255, 255, 0.8);
+        margin: 0.5rem 0 0 0;
+        font-weight: 300;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+    }
+
+    .login-form {
+        text-align: left;
+    }
+
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-label {
+        display: block;
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 0.875rem;
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+    }
+
+    .input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .input-icon {
+        position: absolute;
+        left: 1rem;
+        font-size: 1.1rem;
+        z-index: 1;
+        opacity: 0.7;
+    }
+
+    .form-input {
+        width: 100%;
+        padding: 0.875rem 1rem 0.875rem 3rem;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+        color: white;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+    }
+
+    .form-input:focus {
+        outline: none;
+        border-color: rgba(255, 255, 255, 0.4);
+        background: rgba(255, 255, 255, 0.15);
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+    }
+
+    .form-input::placeholder {
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .password-toggle {
+        position: absolute;
+        right: 1rem;
+        background: none;
+        border: none;
+        color: rgba(255, 255, 255, 0.7);
+        cursor: pointer;
+        font-size: 1.1rem;
+        padding: 0;
+        z-index: 1;
+        transition: color 0.3s ease;
+    }
+
+    .password-toggle:hover {
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    .validation-error {
+        color: #fca5a5;
+        font-size: 0.75rem;
+        margin-top: 0.25rem;
+        display: block;
+    }
+
+    .error-banner {
+        background: rgba(239, 68, 68, 0.2);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #fca5a5;
+        padding: 0.75rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        font-size: 0.875rem;
+        text-align: center;
+    }
+
+    .signin-button {
+        width: 100%;
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        color: white;
+        border: none;
+        padding: 1rem;
+        border-radius: 10px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+    }
+
+    .signin-button:hover:not(:disabled) {
+        background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+    }
+
+    .signin-button:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .loading-spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top: 2px solid white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .forgot-password {
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .forgot-password a {
+        color: rgba(255, 255, 255, 0.8);
+        text-decoration: none;
+        font-size: 0.875rem;
+        transition: color 0.3s ease;
+    }
+
+    .forgot-password a:hover {
+        color: white;
+        text-decoration: underline;
+    }
+
+    .test-credentials {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        font-size: 0.75rem;
+    }
+
+    .test-title {
+        color: rgba(255, 255, 255, 0.9);
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        text-align: center;
+    }
+
+    .test-item {
+        color: rgba(255, 255, 255, 0.7);
+        margin-bottom: 0.25rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .test-item strong {
+        color: rgba(255, 255, 255, 0.9);
+        min-width: 60px;
+    }
+
+    .auto-fill-btn {
+        background: rgba(59, 130, 246, 0.3);
+        border: 1px solid rgba(59, 130, 246, 0.5);
+        color: rgba(255, 255, 255, 0.9);
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-left: 0.5rem;
+    }
+
+    .auto-fill-btn:hover {
+        background: rgba(59, 130, 246, 0.5);
+        color: white;
+    }
+
+    .login-footer {
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 0.75rem;
+        text-align: center;
+        margin-top: 1rem;
+    }
+
+    /* Mobile responsiveness */
+    @@media (max-width: 480px) {
+        .login-card {
+            margin: 1rem;
+            padding: 2rem;
+        }
+
+        .logo-title {
+            font-size: 2.5rem;
+        }
+    }
+</style>
+
+@code {
+    private LoginModel loginModel = new();
+    private bool showPassword = false;
+    private bool isLoading = false;
+    private string errorMessage = string.Empty;
+
+    public class LoginModel
+    {
+        [Required(ErrorMessage = "Email is required")]
+        [EmailAddress(ErrorMessage = "Please enter a valid email address")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Password is required")]
+        [MinLength(6, ErrorMessage = "Password must be at least 6 characters")]
+        public string Password { get; set; } = string.Empty;
+    }
+
+    private void TogglePasswordVisibility()
+    {
+        showPassword = !showPassword;
+    }
+
+    private async Task HandleLogin()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = string.Empty;
+            StateHasChanged();
+
+            // Use authentication service for login
+            if (await AuthService.LoginAsync(loginModel.Email, loginModel.Password))
+            {
+                // Successful login - redirect to main application
+                Navigation.NavigateTo("/dashboard");
+            }
+            else
+            {
+                errorMessage = "Invalid email or password. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "An error occurred during login. Please try again.";
+            Console.WriteLine($"Login error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleForgotPassword()
+    {
+        await JSRuntime.InvokeVoidAsync("alert", "Please contact your system administrator to reset your password.");
+    }
+
+    private void AutoFillCredentials(string email, string password)
+    {
+        loginModel.Email = email;
+        loginModel.Password = password;
+        StateHasChanged();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Check if user is already logged in
+        try
+        {
+            if (await AuthService.IsAuthenticatedAsync())
+            {
+                // User already logged in, redirect to main app
+                Navigation.NavigateTo("/dashboard");
+            }
+        }
+        catch
+        {
+            // Stay on login page
+        }
+    }
+}

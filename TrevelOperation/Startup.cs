@@ -39,6 +39,8 @@ public static class Startup
                    .AddInterceptors(serviceProvider.GetRequiredService<AuditInterceptor>()));
             
         services.AddScoped<IAuditService, AuditService>();
+        services.AddScoped<IAuthenticationService, AuthenticationService>();
+        services.AddScoped<IUserManagementService, UserManagementService>();
         services.AddScoped<ITransactionService, TransactionService>();
         services.AddScoped<ITripService, TripService>();
         services.AddScoped<ILookupService, LookupService>();

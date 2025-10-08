@@ -1,5 +1,7 @@
 ﻿@inject NavigationManager NavigationManager
+@inject IAuthenticationService AuthService
 @using Microsoft.AspNetCore.Components.Routing
+@using TravelOperation.Core.Services
 @implements IDisposable
 
 <div class="w-72 text-white shadow-lg flex flex-col"
@@ -67,48 +69,76 @@
         NavigationManager.LocationChanged += OnLocationChanged;
         currentLocation = NavigationManager.Uri;
         
-        // Load menu items based on user role
-        menuItems = await GetMenuItemsForCurrentUserAsync();
+        // Load menu items based on authenticated user role
+        await LoadMenuItems();
+    }
+
+    private async Task LoadMenuItems()
+    {
+        try
+        {
+            // Check if user is authenticated first
+            var isAuthenticated = await AuthService.IsAuthenticatedAsync();
+            if (isAuthenticated)
+            {
+                menuItems = await GetMenuItemsForCurrentUserAsync();
+            }
+            else
+            {
+                menuItems = new List<NavMenuItem>();
+            }
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading menu items: {ex.Message}");
+            menuItems = new List<NavMenuItem>();
+        }
     }
 
     private async Task<IEnumerable<NavMenuItem>> GetMenuItemsForCurrentUserAsync()
     {
-        // For now, assume admin user until authentication is implemented
-        var userRole = "admin";
+        // Get current user role from authentication service
+        var userRole = await AuthService.GetCurrentUserRoleAsync();
+        var userEmail = await AuthService.GetCurrentUserEmailAsync();
+        
+        if (string.IsNullOrEmpty(userRole))
+        {
+            return new List<NavMenuItem>();
+        }
 
         var items = new List<NavMenuItem>();
 
         // Dashboard (all users)
-        items.Add(new NavMenuItem { Icon = "🏠", Label = "Dashboard", Href = "/" });
+        items.Add(new NavMenuItem { Icon = "🏠", Label = "Dashboard", Href = "/dashboard" });
 
-        // Reports Section - Employee and up
-        if (userRole is "employee" or "manager" or "finance" or "admin")
+        // Reports Section - Based on user roles:
+        // Employee: See only personal data
+        // Owner: See only department data  
+        // Finance: See all data
+        items.Add(new NavMenuItem { IsSection = true, Label = "REPORTS" });
+        items.Add(new NavMenuItem { Icon = "💳", Label = "Transactions", Href = "/transactions" });
+        items.Add(new NavMenuItem { Icon = "✈️", Label = "Trips", Href = "/trips" });
+        
+        // Travel Spend report - Only Finance and Owners
+        if (userRole is "Finance" or "Owner")
         {
-            items.Add(new NavMenuItem { IsSection = true, Label = "REPORTS" });
-            items.Add(new NavMenuItem { Icon = "💳", Label = "Transactions", Href = "/transactions" });
-            items.Add(new NavMenuItem { Icon = "✈️", Label = "Trips", Href = "/trips" });
-            
-            if (userRole is "manager" or "finance" or "admin")
-            {
-                items.Add(new NavMenuItem { Icon = "📊", Label = "Travel Spend", Href = "/reports/travel-spend" });
-            }
+            items.Add(new NavMenuItem { Icon = "📊", Label = "Travel Spend", Href = "/reports/travel-spend" });
         }
 
-        // Trip Management - Employee and up
-        if (userRole is "employee" or "manager" or "finance" or "admin")
+        // Trip Management - All authenticated users
+        items.Add(new NavMenuItem { IsSection = true, Label = "TRIP MANAGEMENT" });
+        items.Add(new NavMenuItem { Icon = "➕", Label = "Create Manual Trip", Href = "/trips/create" });
+        items.Add(new NavMenuItem { Icon = "🔍", Label = "Trip Suggestions", Href = "/trips/suggestions" });
+        
+        // Trip Validation - Only Finance and Owners (for their departments)
+        if (userRole is "Finance" or "Owner")
         {
-            items.Add(new NavMenuItem { IsSection = true, Label = "TRIP MANAGEMENT" });
-            items.Add(new NavMenuItem { Icon = "➕", Label = "Create Manual Trip", Href = "/trips/create" });
-            items.Add(new NavMenuItem { Icon = "🔍", Label = "Trip Suggestions", Href = "/trips/suggestions" });
-            
-            if (userRole is "manager" or "finance" or "admin")
-            {
-                items.Add(new NavMenuItem { Icon = "✅", Label = "Trip Validation", Href = "/trips/validation" });
-            }
+            items.Add(new NavMenuItem { Icon = "✅", Label = "Trip Validation", Href = "/trips/validation" });
         }
 
-        // Data Integrity - Finance and Admin only
-        if (userRole is "finance" or "admin")
+        // Data Integrity - Finance only (full access to all controls)
+        if (userRole == "Finance")
         {
             items.Add(new NavMenuItem { IsSection = true, Label = "DATA INTEGRITY" });
             items.Add(new NavMenuItem { Icon = "🛡️", Label = "Controls", Href = "/data-integrity/controls" });
@@ -116,27 +146,21 @@
             items.Add(new NavMenuItem { Icon = "✂️", Label = "Split Engine", Href = "/data-integrity/split" });
         }
 
-        // Settings - Finance and Admin only
-        if (userRole is "finance" or "admin")
+        // Settings - Finance only (full system configuration)
+        if (userRole == "Finance")
         {
+            items.Add(new NavMenuItem { IsSection = true, Label = "ADMINISTRATION" });
+            items.Add(new NavMenuItem { Icon = "👥", Label = "User Management", Href = "/admin/users" });
+            
             items.Add(new NavMenuItem { IsSection = true, Label = "SETTINGS" });
             items.Add(new NavMenuItem { Icon = "📋", Label = "Lists", Href = "/settings/lists" });
             items.Add(new NavMenuItem { Icon = "🌍", Label = "Countries & Cities", Href = "/settings/countries-cities" });
             items.Add(new NavMenuItem { Icon = "👥", Label = "Owners", Href = "/settings/owners" });
             items.Add(new NavMenuItem { Icon = "💰", Label = "Tax Settings", Href = "/settings/tax" });
             items.Add(new NavMenuItem { Icon = "📈", Label = "Headcount", Href = "/settings/headcount" });
-            
-            if (userRole == "admin")
-            {
-                items.Add(new NavMenuItem { Icon = "⚙️", Label = "System Settings", Href = "/settings/system" });
-                items.Add(new NavMenuItem { Icon = "📜", Label = "Audit Log", Href = "/settings/audit" });
-            }
+            items.Add(new NavMenuItem { Icon = "⚙️", Label = "System Settings", Href = "/settings/system" });
+            items.Add(new NavMenuItem { Icon = "📜", Label = "Audit Log", Href = "/settings/audit" });
         }
-
-        // User Account (all users)
-        items.Add(new NavMenuItem { IsSection = true, Label = "ACCOUNT" });
-        items.Add(new NavMenuItem { Icon = "👤", Label = "Profile", Href = "/profile" });
-        items.Add(new NavMenuItem { Icon = "🚪", Label = "Logout", Href = "/logout" });
 
         return items;
     }

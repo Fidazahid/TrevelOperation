@@ -1,0 +1,762 @@
+@page "/admin/users"
+@using TravelOperation.Core.Services
+@using TravelOperation.Core.Models
+@using Microsoft.AspNetCore.Components.Forms
+@using System.ComponentModel.DataAnnotations
+@inject IUserManagementService UserService
+@inject IAuthenticationService AuthService
+@inject IJSRuntime JSRuntime
+
+<div class="admin-container">
+    <div class="admin-header">
+        <h1 class="admin-title">👥 User Management</h1>
+        <p class="admin-subtitle">Manage system users, roles, and departments</p>
+    </div>
+
+    @if (errorMessage != null)
+    {
+        <div class="alert alert-error">
+            ⚠️ @errorMessage
+        </div>
+    }
+
+    @if (successMessage != null)
+    {
+        <div class="alert alert-success">
+            ✅ @successMessage
+        </div>
+    }
+
+    <!-- Add User Button -->
+    <div class="action-bar">
+        <button class="btn btn-primary" @onclick="ShowAddUserModal">
+            ➕ Add New User
+        </button>
+        <div class="stats">
+            <span class="stat-item">👥 @users.Count Total Users</span>
+            <span class="stat-item">💼 @users.Count(u => u.Role == "Finance") Finance</span>
+            <span class="stat-item">🏢 @users.Count(u => u.Role == "Owner") Owners</span>
+            <span class="stat-item">👤 @users.Count(u => u.Role == "Employee") Employees</span>
+        </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="table-container">
+        <table class="users-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Department</th>
+                    <th>Created Date</th>
+                    <th>Last Login</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in users)
+                {
+                    <tr class="user-row @(GetRoleClass(user.Role))">
+                        <td class="user-name">
+                            <div class="name-info">
+                                <span class="full-name">@user.FirstName @user.LastName</span>
+                                <span class="role-badge @GetRoleClass(user.Role)">@GetRoleDisplay(user.Role)</span>
+                            </div>
+                        </td>
+                        <td class="user-email">@user.Email</td>
+                        <td class="user-role">
+                            <span class="role-indicator @GetRoleClass(user.Role)">
+                                @GetRoleIcon(user.Role) @user.Role
+                            </span>
+                        </td>
+                        <td class="user-department">@user.Department</td>
+                        <td class="user-created">@user.CreatedDate.ToString("dd/MM/yyyy")</td>
+                        <td class="user-login">
+                            @if (user.LastLoginDate.HasValue)
+                            {
+                                @user.LastLoginDate.Value.ToString("dd/MM/yyyy HH:mm")
+                            }
+                            else
+                            {
+                                <span class="text-muted">Never</span>
+                            }
+                        </td>
+                        <td class="user-actions">
+                            <button class="btn btn-sm btn-secondary" @onclick="() => EditUser(user)">
+                                ✏️ Edit
+                            </button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteUser(user)" 
+                                    disabled="@(user.Email == currentUserEmail)">
+                                🗑️ Delete
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Add/Edit User Modal -->
+    @if (showUserModal)
+    {
+        <div class="modal-overlay" @onclick="CloseModal">
+            <div class="modal-content" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h3>@(editingUser?.Email != null ? "Edit User" : "Add New User")</h3>
+                    <button class="btn-close" @onclick="CloseModal">✕</button>
+                </div>
+                
+                <EditForm Model="userForm" OnValidSubmit="SaveUser" class="user-form">
+                    <DataAnnotationsValidator />
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="firstName">First Name *</label>
+                            <InputText @bind-Value="userForm.FirstName" class="form-input" id="firstName" />
+                            <ValidationMessage For="@(() => userForm.FirstName)" />
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="lastName">Last Name *</label>
+                            <InputText @bind-Value="userForm.LastName" class="form-input" id="lastName" />
+                            <ValidationMessage For="@(() => userForm.LastName)" />
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="email">Email Address *</label>
+                            <InputText @bind-Value="userForm.Email" class="form-input" id="email" 
+                                      disabled="@(editingUser?.Email != null)" />
+                            <ValidationMessage For="@(() => userForm.Email)" />
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="password">Password *</label>
+                            <InputText @bind-Value="userForm.Password" class="form-input" id="password" type="password" />
+                            <ValidationMessage For="@(() => userForm.Password)" />
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="role">Role *</label>
+                            <InputSelect @bind-Value="userForm.Role" class="form-select" id="role">
+                                <option value="">Select Role</option>
+                                @foreach (var role in availableRoles)
+                                {
+                                    <option value="@role">@role</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => userForm.Role)" />
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="department">Department *</label>
+                            <InputSelect @bind-Value="userForm.Department" class="form-select" id="department">
+                                <option value="">Select Department</option>
+                                @foreach (var dept in availableDepartments)
+                                {
+                                    <option value="@dept">@dept</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => userForm.Department)" />
+                        </div>
+                    </div>
+                    
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" disabled="@isLoading">
+                            @if (isLoading)
+                            {
+                                <span class="loading-spinner"></span>
+                                <span>Saving...</span>
+                            }
+                            else
+                            {
+                                <span>@(editingUser?.Email != null ? "Update User" : "Create User")</span>
+                            }
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .admin-container {
+        padding: 2rem;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .admin-header {
+        margin-bottom: 2rem;
+    }
+
+    .admin-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin: 0 0 0.5rem 0;
+    }
+
+    .admin-subtitle {
+        color: #6b7280;
+        margin: 0;
+        font-size: 1rem;
+    }
+
+    .alert {
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .alert-error {
+        background: #fef2f2;
+        color: #dc2626;
+        border: 1px solid #fecaca;
+    }
+
+    .alert-success {
+        background: #f0fdf4;
+        color: #16a34a;
+        border: 1px solid #bbf7d0;
+    }
+
+    .action-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        padding: 1rem;
+        background: #f9fafb;
+        border-radius: 8px;
+    }
+
+    .stats {
+        display: flex;
+        gap: 1rem;
+    }
+
+    .stat-item {
+        background: white;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #374151;
+        border: 1px solid #e5e7eb;
+    }
+
+    .table-container {
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .users-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .users-table th {
+        background: #f8fafc;
+        padding: 1rem;
+        text-align: left;
+        font-weight: 600;
+        color: #374151;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .users-table td {
+        padding: 1rem;
+        border-bottom: 1px solid #f3f4f6;
+    }
+
+    .user-row:hover {
+        background: #f9fafb;
+    }
+
+    .user-name .full-name {
+        display: block;
+        font-weight: 600;
+        color: #111827;
+    }
+
+    .role-badge {
+        display: inline-block;
+        padding: 0.125rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin-top: 0.25rem;
+    }
+
+    .role-badge.finance { background: #dbeafe; color: #1e40af; }
+    .role-badge.owner { background: #f3e8ff; color: #7c3aed; }
+    .role-badge.employee { background: #ecfdf5; color: #059669; }
+
+    .role-indicator {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        width: fit-content;
+    }
+
+    .role-indicator.finance { background: #dbeafe; color: #1e40af; }
+    .role-indicator.owner { background: #f3e8ff; color: #7c3aed; }
+    .role-indicator.employee { background: #ecfdf5; color: #059669; }
+
+    .user-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .btn {
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        border: none;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .btn-primary {
+        background: #3b82f6;
+        color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background: #2563eb;
+    }
+
+    .btn-secondary {
+        background: #6b7280;
+        color: white;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+        background: #4b5563;
+    }
+
+    .btn-danger {
+        background: #dc2626;
+        color: white;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+        background: #b91c1c;
+    }
+
+    .btn-sm {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.875rem;
+    }
+
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 12px;
+        padding: 0;
+        width: 90%;
+        max-width: 600px;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 20px 25px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .modal-header h3 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #111827;
+    }
+
+    .btn-close {
+        background: none;
+        border: none;
+        font-size: 1.25rem;
+        cursor: pointer;
+        color: #6b7280;
+        padding: 0.25rem;
+        border-radius: 4px;
+    }
+
+    .btn-close:hover {
+        background: #f3f4f6;
+        color: #374151;
+    }
+
+    .user-form {
+        padding: 1.5rem;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-group label {
+        font-weight: 500;
+        color: #374151;
+        margin-bottom: 0.5rem;
+        font-size: 0.875rem;
+    }
+
+    .form-input, .form-select {
+        padding: 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 1rem;
+        transition: border-color 0.2s;
+    }
+
+    .form-input:focus, .form-select:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .form-input:disabled {
+        background: #f9fafb;
+        color: #6b7280;
+    }
+
+    .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .loading-spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top: 2px solid white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .text-muted {
+        color: #9ca3af;
+        font-style: italic;
+    }
+
+    .validation-message {
+        color: #dc2626;
+        font-size: 0.75rem;
+        margin-top: 0.25rem;
+    }
+
+    /* Mobile responsiveness */
+    @@media (max-width: 768px) {
+        .admin-container {
+            padding: 1rem;
+        }
+
+        .action-bar {
+            flex-direction: column;
+            gap: 1rem;
+            align-items: stretch;
+        }
+
+        .stats {
+            justify-content: space-between;
+        }
+
+        .stat-item {
+            flex: 1;
+            text-align: center;
+        }
+
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .users-table {
+            font-size: 0.875rem;
+        }
+
+        .users-table th,
+        .users-table td {
+            padding: 0.75rem 0.5rem;
+        }
+
+        .user-actions {
+            flex-direction: column;
+        }
+    }
+</style>
+
+@code {
+    private List<TravelOperation.Core.Models.User> users = new();
+    private List<string> availableRoles = new();
+    private List<string> availableDepartments = new();
+    private bool showUserModal = false;
+    private bool isLoading = false;
+    private string? errorMessage;
+    private string? successMessage;
+    private string? currentUserEmail;
+    private TravelOperation.Core.Models.User? editingUser;
+    private UserFormModel userForm = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            currentUserEmail = await AuthService.GetCurrentUserEmailAsync();
+            await LoadData();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Failed to load user data. Please try again.";
+            Console.WriteLine($"Error loading user data: {ex.Message}");
+        }
+    }
+
+    private async Task LoadData()
+    {
+        users = await UserService.GetAllUsersAsync();
+        availableRoles = await UserService.GetRolesAsync();
+        availableDepartments = await UserService.GetDepartmentsAsync();
+    }
+
+    private void ShowAddUserModal()
+    {
+        editingUser = null;
+        userForm = new UserFormModel();
+        showUserModal = true;
+        ClearMessages();
+    }
+
+    private void EditUser(TravelOperation.Core.Models.User user)
+    {
+        editingUser = user;
+        userForm = new UserFormModel
+        {
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            Email = user.Email,
+            Password = user.Password,
+            Role = user.Role,
+            Department = user.Department
+        };
+        showUserModal = true;
+        ClearMessages();
+    }
+
+    private async Task SaveUser()
+    {
+        try
+        {
+            isLoading = true;
+            ClearMessages();
+
+            var user = new TravelOperation.Core.Models.User
+            {
+                FirstName = userForm.FirstName,
+                LastName = userForm.LastName,
+                Email = userForm.Email,
+                Password = userForm.Password,
+                Role = userForm.Role,
+                Department = userForm.Department
+            };
+
+            bool success;
+            if (editingUser?.Email != null)
+            {
+                success = await UserService.UpdateUserAsync(user);
+                successMessage = success ? "User updated successfully!" : "Failed to update user.";
+            }
+            else
+            {
+                success = await UserService.CreateUserAsync(user);
+                successMessage = success ? "User created successfully!" : "Failed to create user. Email may already exist.";
+            }
+
+            if (success)
+            {
+                await LoadData();
+                CloseModal();
+            }
+            else
+            {
+                errorMessage = editingUser?.Email != null ? "Failed to update user." : "Failed to create user. Email may already exist.";
+            }
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "An error occurred while saving the user.";
+            Console.WriteLine($"Error saving user: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteUser(TravelOperation.Core.Models.User user)
+    {
+        try
+        {
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+                $"Are you sure you want to delete {user.FirstName} {user.LastName}? This action cannot be undone.");
+            
+            if (!confirmed) return;
+
+            ClearMessages();
+            var success = await UserService.DeleteUserAsync(user.Email);
+            
+            if (success)
+            {
+                await LoadData();
+                successMessage = "User deleted successfully!";
+            }
+            else
+            {
+                errorMessage = "Failed to delete user.";
+            }
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (InvalidOperationException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "An error occurred while deleting the user.";
+            Console.WriteLine($"Error deleting user: {ex.Message}");
+        }
+    }
+
+    private void CloseModal()
+    {
+        showUserModal = false;
+        editingUser = null;
+        userForm = new UserFormModel();
+    }
+
+    private void ClearMessages()
+    {
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private string GetRoleClass(string role)
+    {
+        return role.ToLower() switch
+        {
+            "finance" => "finance",
+            "owner" => "owner",
+            "employee" => "employee",
+            _ => ""
+        };
+    }
+
+    private string GetRoleDisplay(string role)
+    {
+        return role switch
+        {
+            "Finance" => "💼 Finance",
+            "Owner" => "🏢 Owner",
+            "Employee" => "👤 Employee",
+            _ => role
+        };
+    }
+
+    private string GetRoleIcon(string role)
+    {
+        return role switch
+        {
+            "Finance" => "💼",
+            "Owner" => "🏢",
+            "Employee" => "👤",
+            _ => "👤"
+        };
+    }
+
+    public class UserFormModel
+    {
+        [Required(ErrorMessage = "First name is required")]
+        public string FirstName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Last name is required")]
+        public string LastName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Email is required")]
+        [EmailAddress(ErrorMessage = "Please enter a valid email address")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Password is required")]
+        [MinLength(6, ErrorMessage = "Password must be at least 6 characters")]
+        public string Password { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Role is required")]
+        public string Role { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Department is required")]
+        public string Department { get; set; } = string.Empty;
+    }
+}
