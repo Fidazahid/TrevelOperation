@@ -1,4 +1,5 @@
 using TravelOperation.Core.Models.Lookup;
+using TravelOperation.Core.Models.Entities;
 
 namespace TravelOperation.Core.Services.Interfaces;
 
@@ -19,4 +20,5 @@ public interface ILookupService
     Task<IEnumerable<ValidationStatus>> GetValidationStatusesAsync();
     Task<IEnumerable<BookingType>> GetBookingTypesAsync();
     Task<IEnumerable<BookingStatus>> GetBookingStatusesAsync();
+    Task<IEnumerable<Owner>> GetOwnersAsync();
 }

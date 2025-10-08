@@ -1,0 +1,398 @@
+@using TravelOperation.Core.Services.Interfaces
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Models.Lookup
+@inject ITransactionService TransactionService
+@inject ILookupService LookupService
+@inject IJSRuntime JSRuntime
+
+<!-- Modal -->
+<div class="modal @(isVisible ? "modal-open" : "")" id="transactionEditModal">
+    <div class="modal-box w-11/12 max-w-4xl">
+        <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @onclick="Hide">✕</button>
+        </form>
+        
+        <h3 class="font-bold text-lg mb-4">✏️ Edit Transaction</h3>
+        
+        @if (currentTransaction != null)
+        {
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Left Column -->
+                <div class="space-y-4">
+                    <!-- Transaction ID (Read-only) -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-semibold">Transaction ID</span>
+                        </label>
+                        <input type="text" class="input input-bordered bg-base-200" 
+                               value="@currentTransaction.TransactionId" readonly />
+                    </div>
+
+                    <!-- Email (Read-only) -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-semibold">Email</span>
+                        </label>
+                        <input type="text" class="input input-bordered bg-base-200" 
+                               value="@currentTransaction.Email" readonly />
+                    </div>
+
+                    <!-- Date (Read-only) -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-semibold">Transaction Date</span>
+                        </label>
+                        <input type="text" class="input input-bordered bg-base-200" 
+                               value="@currentTransaction.TransactionDate.ToString("dd/MM/yyyy")" readonly />
+                    </div>
+
+                    <!-- Vendor (Read-only) -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-semibold">Vendor</span>
+                        </label>
+                        <input type="text" class="input input-bordered bg-base-200" 
+                               value="@currentTransaction.Vendor" readonly />
+                    </div>
+
+                    <!-- Amount (Read-only) -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-semibold">Amount</span>
+                        </label>
+                        <div class="flex gap-2">
+                            <input type="text" class="input input-bordered bg-base-200 flex-1" 
+                                   value="@($"{currentTransaction.Currency} {currentTransaction.Amount:N2}")" readonly />
+                            @if (currentTransaction.AmountUSD.HasValue)
+                            {
+                                <input type="text" class="input input-bordered bg-base-200 flex-1" 
+                                       value="@($"USD {currentTransaction.AmountUSD:N2}")" readonly />
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Address -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-semibold">Address</span>
+                        </label>
+                        <textarea class="textarea textarea-bordered bg-base-200" 
+                                  readonly>@currentTransaction.Address</textarea>
+                    </div>
+                </div>
+
+                <!-- Right Column - Editable Fields -->
+                <div class="space-y-4">
+                    <!-- Category (Editable) -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-semibold">Category *</span>
+                            <span class="label-text-alt text-warning">Editable</span>
+                        </label>
+                        <select class="select select-bordered select-warning" @bind="editForm.CategoryId">
+                            <option value="">Select category...</option>
+                            @if (categories != null)
+                            {
+                                @foreach (var category in categories)
+                                {
+                                    <option value="@category.CategoryId">@category.Emoji @category.Name</option>
+                                }
+                            }
+                        </select>
+                    </div>
+
+                    <!-- Cabin Class (Editable) -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-semibold">Cabin Class</span>
+                            <span class="label-text-alt text-warning">Editable</span>
+                        </label>
+                        <select class="select select-bordered select-warning" @bind="editForm.CabinClassId">
+                            <option value="">Select cabin class...</option>
+                            @if (cabinClasses != null)
+                            {
+                                @foreach (var cabinClass in cabinClasses)
+                                {
+                                    <option value="@cabinClass.CabinClassId">@cabinClass.Emoji @cabinClass.Name</option>
+                                }
+                            }
+                        </select>
+                        @if (editForm.CategoryId == categories?.FirstOrDefault(c => c.Name == "Airfare")?.CategoryId && !editForm.CabinClassId.HasValue)
+                        {
+                            <label class="label">
+                                <span class="label-text-alt text-error">⚠️ Cabin class required for airfare</span>
+                            </label>
+                        }
+                    </div>
+
+                    <!-- Participants (Editable) -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-semibold">Participants</span>
+                            <span class="label-text-alt text-warning">Editable</span>
+                        </label>
+                        <textarea class="textarea textarea-bordered textarea-warning" 
+                                  placeholder="Enter email addresses separated by commas"
+                                  @bind="editForm.Participants"></textarea>
+                        <label class="label">
+                            <span class="label-text-alt">Enter email addresses separated by commas</span>
+                        </label>
+                    </div>
+
+                    <!-- Notes (Editable) -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-semibold">Notes</span>
+                            <span class="label-text-alt text-warning">Editable</span>
+                        </label>
+                        <textarea class="textarea textarea-bordered textarea-warning" 
+                                  placeholder="Add any notes about this transaction"
+                                  @bind="editForm.Notes"></textarea>
+                    </div>
+
+                    <!-- Validation Status -->
+                    <div class="form-control">
+                        <label class="label cursor-pointer">
+                            <span class="label-text font-semibold">Mark as Valid</span>
+                            <input type="checkbox" class="toggle toggle-success" @bind="editForm.IsValid" />
+                        </label>
+                    </div>
+
+                    <!-- Data Validation Flag -->
+                    <div class="form-control">
+                        <label class="label cursor-pointer">
+                            <span class="label-text font-semibold">Needs Validation</span>
+                            <input type="checkbox" class="toggle toggle-warning" @bind="editForm.DataValidation" />
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Document Section -->
+            @if (!string.IsNullOrEmpty(currentTransaction.DocumentUrl))
+            {
+                <div class="mt-6">
+                    <h4 class="font-semibold mb-2">📄 Documents</h4>
+                    <div class="card bg-base-200">
+                        <div class="card-body p-4">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Receipt/Documentation</span>
+                                <button type="button" class="btn btn-sm btn-outline" 
+                                        @onclick="() => ViewDocument(currentTransaction.DocumentUrl)">
+                                    👁️ View Document
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Trip Information -->
+            @if (currentTransaction.Trip != null)
+            {
+                <div class="mt-6">
+                    <h4 class="font-semibold mb-2">🧳 Linked Trip</h4>
+                    <div class="card bg-base-200">
+                        <div class="card-body p-4">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <div class="font-semibold">@currentTransaction.Trip.TripName</div>
+                                    <div class="text-sm text-base-content/70">
+                                        @currentTransaction.Trip.StartDate.ToString("dd/MM/yyyy") - 
+                                        @currentTransaction.Trip.EndDate.ToString("dd/MM/yyyy")
+                                    </div>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button type="button" class="btn btn-sm btn-outline" 
+                                            @onclick="() => ViewTrip(currentTransaction.TripId)">
+                                        👁️ View Trip
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-warning" 
+                                            @onclick="UnlinkFromTrip">
+                                        🔓 Unlink
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Action Buttons -->
+            <div class="modal-action">
+                <button type="button" class="btn btn-ghost" @onclick="Hide">Cancel</button>
+                <button type="button" class="btn btn-primary" @onclick="SaveChanges" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <span class="loading loading-spinner loading-sm"></span>
+                    }
+                    💾 Save Changes
+                </button>
+            </div>
+
+            <!-- Audit Trail -->
+            @if (currentTransaction.ModifiedAt != default(DateTime))
+            {
+                <div class="mt-4 p-3 bg-base-200 rounded text-xs text-base-content/70">
+                    <strong>Last Modified:</strong> @currentTransaction.ModifiedAt.ToString("dd/MM/yyyy HH:mm:ss")
+                    @if (!string.IsNullOrEmpty(currentTransaction.ModifiedBy))
+                    {
+                        <span> by @currentTransaction.ModifiedBy</span>
+                    }
+                </div>
+            }
+        }
+        else
+        {
+            <div class="flex justify-center items-center h-32">
+                <span class="loading loading-spinner loading-lg"></span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnTransactionUpdated { get; set; }
+
+    private bool isVisible = false;
+    private bool isSaving = false;
+    private Transaction? currentTransaction;
+    private TransactionEditForm editForm = new();
+
+    // Lookup data
+    private List<Category>? categories;
+    private List<CabinClass>? cabinClasses;
+
+    public class TransactionEditForm
+    {
+        public int? CategoryId { get; set; }
+        public int? CabinClassId { get; set; }
+        public string Participants { get; set; } = "";
+        public string Notes { get; set; } = "";
+        public bool IsValid { get; set; }
+        public bool DataValidation { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookupData();
+    }
+
+    private async Task LoadLookupData()
+    {
+        try
+        {
+            categories = (await LookupService.GetCategoriesAsync()).ToList();
+            cabinClasses = (await LookupService.GetCabinClassesAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", "Failed to load lookup data:", ex.Message);
+        }
+    }
+
+    public async Task ShowAsync(Transaction transaction)
+    {
+        currentTransaction = transaction;
+        
+        // Initialize edit form with current values
+        editForm = new TransactionEditForm
+        {
+            CategoryId = transaction.CategoryId,
+            CabinClassId = transaction.CabinClassId,
+            Participants = transaction.Participants ?? "",
+            Notes = transaction.Notes ?? "",
+            IsValid = transaction.IsValid,
+            DataValidation = transaction.DataValidation
+        };
+
+        isVisible = true;
+        StateHasChanged();
+    }
+
+    public void Hide()
+    {
+        isVisible = false;
+        currentTransaction = null;
+        StateHasChanged();
+    }
+
+    private async Task SaveChanges()
+    {
+        if (currentTransaction == null) return;
+
+        try
+        {
+            isSaving = true;
+
+            // Update the transaction with edited values
+            var updateDto = new
+            {
+                TransactionId = currentTransaction.TransactionId,
+                CategoryId = editForm.CategoryId,
+                CabinClassId = editForm.CabinClassId,
+                Participants = string.IsNullOrWhiteSpace(editForm.Participants) ? null : editForm.Participants,
+                Notes = string.IsNullOrWhiteSpace(editForm.Notes) ? null : editForm.Notes,
+                IsValid = editForm.IsValid,
+                DataValidation = editForm.DataValidation
+            };
+
+            await TransactionService.UpdateTransactionAsync(updateDto);
+
+            // Show success message
+            await JSRuntime.InvokeVoidAsync("showToast", "Transaction updated successfully", "success");
+
+            // Notify parent component
+            await OnTransactionUpdated.InvokeAsync();
+
+            // Hide modal
+            Hide();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("showToast", $"Failed to update transaction: {ex.Message}", "error");
+            await JSRuntime.InvokeVoidAsync("console.error", "Failed to update transaction:", ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task ViewDocument(string documentUrl)
+    {
+        await JSRuntime.InvokeVoidAsync("window.open", documentUrl, "_blank");
+    }
+
+    private void ViewTrip(int? tripId)
+    {
+        if (tripId.HasValue)
+        {
+            // TODO: Navigate to trip detail page
+            // Navigation.NavigateTo($"/trips/{tripId}");
+        }
+    }
+
+    private async Task UnlinkFromTrip()
+    {
+        if (currentTransaction == null) return;
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+            "Are you sure you want to unlink this transaction from the trip?");
+
+        if (confirmed)
+        {
+            try
+            {
+                await TransactionService.UnlinkFromTripAsync(currentTransaction.TransactionId);
+                await JSRuntime.InvokeVoidAsync("showToast", "Transaction unlinked from trip", "success");
+                await OnTransactionUpdated.InvokeAsync();
+                Hide();
+            }
+            catch (Exception ex)
+            {
+                await JSRuntime.InvokeVoidAsync("showToast", $"Failed to unlink transaction: {ex.Message}", "error");
+            }
+        }
+    }
+}

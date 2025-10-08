@@ -1,0 +1,703 @@
+@page "/transactions"
+
+@using TravelOperation.Core.Services.Interfaces
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Models.Lookup
+@using TrevelOperation.RazorLib.Components
+@inject ITransactionService TransactionService
+@inject ILookupService LookupService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+
+<PageTitle>Transactions - Travel Expense Management</PageTitle>
+
+<div class="p-6 space-y-6">
+    <!-- Page Header -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-base-content mb-2">💳 Transactions</h1>
+            <p class="text-base-content/70">View, edit, and manage travel expense transactions</p>
+        </div>
+        <div class="flex gap-3">
+            <button class="btn btn-outline btn-primary" @onclick="ImportTransactions">
+                📥 Import CSV
+            </button>
+            <button class="btn btn-outline btn-secondary" @onclick="ExportTransactions">
+                📤 Export
+            </button>
+            <button class="btn btn-primary" @onclick="CreateTransaction">
+                ➕ Add Transaction
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="stat bg-primary text-primary-content rounded-lg">
+            <div class="stat-figure text-2xl opacity-80">💳</div>
+            <div class="stat-title text-primary-content/80">Total transactions</div>
+            <div class="stat-value">@totalTransactions</div>
+            <div class="stat-desc text-primary-content/60">@validTransactions validated</div>
+        </div>
+        <div class="stat bg-secondary text-secondary-content rounded-lg">
+            <div class="stat-figure text-2xl opacity-80">🔗</div>
+            <div class="stat-title text-secondary-content/80">Linked to trips</div>
+            <div class="stat-value">@linkedTransactions</div>
+            <div class="stat-desc text-secondary-content/60">@unlinkedTransactions unlinked</div>
+        </div>
+        <div class="stat bg-accent text-accent-content rounded-lg">
+            <div class="stat-figure text-2xl opacity-80">💰</div>
+            <div class="stat-title text-accent-content/80">Total amount</div>
+            <div class="stat-value">$@totalAmount.ToString("N0")</div>
+            <div class="stat-desc text-accent-content/60">This period</div>
+        </div>
+        <div class="stat bg-warning text-warning-content rounded-lg">
+            <div class="stat-figure text-2xl opacity-80">⚠️</div>
+            <div class="stat-title text-warning-content/80">Need attention</div>
+            <div class="stat-value">@flaggedTransactions</div>
+            <div class="stat-desc text-warning-content/60">Validation required</div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card bg-base-200 shadow-lg">
+        <div class="card-body p-4">
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Source</span>
+                    </label>
+                    <select class="select select-bordered select-sm" @bind="filterSource">
+                        <option value="">All sources</option>
+                        @if (sources != null)
+                        {
+                            @foreach (var source in sources)
+                            {
+                                <option value="@source.SourceId">@source.Emoji @source.Name</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Category</span>
+                    </label>
+                    <select class="select select-bordered select-sm" @bind="filterCategory">
+                        <option value="">All categories</option>
+                        @if (categories != null)
+                        {
+                            @foreach (var category in categories)
+                            {
+                                <option value="@category.CategoryId">@category.Emoji @category.Name</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Date From</span>
+                    </label>
+                    <input type="date" class="input input-bordered input-sm" @bind="filterDateFrom" />
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Date To</span>
+                    </label>
+                    <input type="date" class="input input-bordered input-sm" @bind="filterDateTo" />
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Status</span>
+                    </label>
+                    <select class="select select-bordered select-sm" @bind="filterStatus">
+                        <option value="">All</option>
+                        <option value="valid">✅ Valid</option>
+                        <option value="invalid">❌ Invalid</option>
+                        <option value="linked">🔗 Linked</option>
+                        <option value="unlinked">🔓 Unlinked</option>
+                    </select>
+                </div>
+                <div class="form-control flex justify-end items-end">
+                    <button class="btn btn-primary btn-sm" @onclick="ApplyFilters">
+                        🔍 Filter
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transaction Table -->
+    <div class="card bg-base-100 shadow-lg">
+        <div class="card-body p-0">
+            @if (isLoading)
+            {
+                <div class="flex justify-center items-center h-64">
+                    <span class="loading loading-spinner loading-lg"></span>
+                </div>
+            }
+            else if (filteredTransactions?.Any() == true)
+            {
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra table-pin-rows">
+                        <thead>
+                            <tr class="bg-base-200">
+                                <th>
+                                    <input type="checkbox" class="checkbox checkbox-sm" 
+                                           @onchange="ToggleSelectAll" 
+                                           checked="@(selectedTransactions.Count == filteredTransactions.Count())" />
+                                </th>
+                                <th class="cursor-pointer" @onclick="() => SortBy(nameof(Transaction.TransactionId))">
+                                    Transaction ID @GetSortIcon(nameof(Transaction.TransactionId))
+                                </th>
+                                <th class="cursor-pointer" @onclick="() => SortBy(nameof(Transaction.TransactionDate))">
+                                    Date @GetSortIcon(nameof(Transaction.TransactionDate))
+                                </th>
+                                <th>Source</th>
+                                <th>Email</th>
+                                <th>Vendor</th>
+                                <th class="cursor-pointer" @onclick="() => SortBy(nameof(Transaction.CategoryId))">
+                                    Category @GetSortIcon(nameof(Transaction.CategoryId))
+                                </th>
+                                <th class="cursor-pointer" @onclick="() => SortBy(nameof(Transaction.AmountUSD))">
+                                    Amount (USD) @GetSortIcon(nameof(Transaction.AmountUSD))
+                                </th>
+                                <th>Cabin Class</th>
+                                <th>Trip</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var transaction in filteredTransactions)
+                            {
+                                <tr class="@(selectedTransactions.Contains(transaction.TransactionId) ? "bg-primary/10" : "")">
+                                    <td>
+                                        <input type="checkbox" class="checkbox checkbox-sm" 
+                                               checked="@selectedTransactions.Contains(transaction.TransactionId)"
+                                               @onchange="(e) => ToggleSelectTransaction(transaction.TransactionId, (bool)e.Value!)" />
+                                    </td>
+                                    <td class="font-mono text-sm">@transaction.TransactionId</td>
+                                    <td>@transaction.TransactionDate.ToString("dd/MM/yyyy")</td>
+                                    <td>
+                                        @if (transaction.Source != null)
+                                        {
+                                            <span class="badge badge-outline">@transaction.Source.Emoji @transaction.Source.Name</span>
+                                        }
+                                    </td>
+                                    <td class="text-sm">@transaction.Email</td>
+                                    <td class="text-sm max-w-32 truncate" title="@transaction.Vendor">@transaction.Vendor</td>
+                                    <td>
+                                        @if (transaction.Category != null)
+                                        {
+                                            <span class="badge badge-secondary">@transaction.Category.Emoji @transaction.Category.Name</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-warning">❓ Uncategorized</span>
+                                        }
+                                    </td>
+                                    <td class="text-right font-mono">
+                                        @if (transaction.AmountUSD.HasValue)
+                                        {
+                                            <span class="@(transaction.AmountUSD < 0 ? "text-error" : "text-success")">
+                                                $@transaction.AmountUSD.Value.ToString("N2")
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-warning">@transaction.Currency @transaction.Amount.ToString("N2")</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (transaction.CabinClass != null)
+                                        {
+                                            <span class="badge badge-accent badge-sm">@transaction.CabinClass.Emoji @transaction.CabinClass.Name</span>
+                                        }
+                                        else if (transaction.Category?.Name == "Airfare")
+                                        {
+                                            <span class="badge badge-error badge-sm">❗ Missing</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (transaction.Trip != null)
+                                        {
+                                            <a href="/trips/@transaction.TripId" class="link link-primary text-sm">
+                                                @transaction.Trip.TripName
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-warning text-sm">🔓 Unlinked</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="flex gap-1">
+                                            @if (transaction.IsValid)
+                                            {
+                                                <span class="badge badge-success badge-sm">✅</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-error badge-sm">❌</span>
+                                            }
+                                            @if (transaction.DataValidation)
+                                            {
+                                                <span class="badge badge-warning badge-sm">⚠️</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="dropdown dropdown-end">
+                                            <label tabindex="0" class="btn btn-ghost btn-sm">⋮</label>
+                                            <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+                                                <li><a @onclick="() => EditTransaction(transaction)">✏️ Edit</a></li>
+                                                <li><a @onclick="() => LinkToTrip(transaction)">🔗 Link to Trip</a></li>
+                                                <li><a @onclick="() => SplitTransaction(transaction)">✂️ Split</a></li>
+                                                <li><a @onclick="() => GenerateMessage(transaction)">💬 Generate Message</a></li>
+                                                <li><a @onclick="() => ViewDocuments(transaction)">📄 Documents</a></li>
+                                                <li class="divider"></li>
+                                                <li><a @onclick="() => MarkAsValid(transaction)" class="text-success">✅ Mark Valid</a></li>
+                                                <li><a @onclick="() => DeleteTransaction(transaction)" class="text-error">🗑️ Delete</a></li>
+                                            </ul>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination -->
+                <div class="flex justify-between items-center p-4 border-t">
+                    <div class="text-sm text-base-content/70">
+                        Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, totalTransactions) of @totalTransactions transactions
+                    </div>
+                    <div class="join">
+                        <button class="join-item btn btn-sm" @onclick="PreviousPage" disabled="@(currentPage <= 1)">
+                            « Previous
+                        </button>
+                        @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                        {
+                            <button class="join-item btn btn-sm @(i == currentPage ? "btn-primary" : "")" 
+                                    @onclick="() => GoToPage(i)">
+                                @i
+                            </button>
+                        }
+                        <button class="join-item btn btn-sm" @onclick="NextPage" disabled="@(currentPage >= totalPages)">
+                            Next »
+                        </button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="flex flex-col items-center justify-center h-64 text-base-content/50">
+                    <div class="text-6xl mb-4">📭</div>
+                    <h3 class="text-xl font-semibold mb-2">No transactions found</h3>
+                    <p class="text-sm">Try adjusting your filters or import some transaction data.</p>
+                    <button class="btn btn-primary mt-4" @onclick="ImportTransactions">
+                        📥 Import Transactions
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Bulk Actions -->
+    @if (selectedTransactions.Any())
+    {
+        <div class="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
+            <div class="card bg-primary text-primary-content shadow-2xl">
+                <div class="card-body p-4 flex-row items-center gap-4">
+                    <span class="font-semibold">@selectedTransactions.Count selected</span>
+                    <div class="flex gap-2">
+                        <button class="btn btn-sm btn-ghost" @onclick="BulkLinkToTrip">🔗 Link to Trip</button>
+                        <button class="btn btn-sm btn-ghost" @onclick="BulkMarkValid">✅ Mark Valid</button>
+                        <button class="btn btn-sm btn-ghost" @onclick="BulkExport">📤 Export</button>
+                        <button class="btn btn-sm btn-outline" @onclick="ClearSelection">✕</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Edit Transaction Modal will be included as a component -->
+<TransactionEditModal @ref="editModal" 
+                     OnTransactionUpdated="RefreshTransactions" />
+
+@code {
+    // Component state
+    private bool isLoading = true;
+    private List<Transaction> transactions = new();
+    private IEnumerable<Transaction> filteredTransactions = new List<Transaction>();
+    private HashSet<string> selectedTransactions = new();
+    
+    // Lookup data
+    private List<Source>? sources;
+    private List<Category>? categories;
+    private List<CabinClass>? cabinClasses;
+    
+    // Filters
+    private string filterSource = "";
+    private string filterCategory = "";
+    private DateTime? filterDateFrom;
+    private DateTime? filterDateTo;
+    private string filterStatus = "";
+    
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 50;
+    private int totalPages = 1;
+    
+    // Sorting
+    private string sortField = nameof(Transaction.TransactionDate);
+    private bool sortAscending = false;
+    
+    // Statistics
+    private int totalTransactions = 0;
+    private int validTransactions = 0;
+    private int linkedTransactions = 0;
+    private int unlinkedTransactions = 0;
+    private decimal totalAmount = 0;
+    private int flaggedTransactions = 0;
+    
+    // Components
+    private TransactionEditModal? editModal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookupData();
+        await LoadTransactions();
+        isLoading = false;
+    }
+
+    private async Task LoadLookupData()
+    {
+        try
+        {
+            sources = (await LookupService.GetSourcesAsync()).ToList();
+            categories = (await LookupService.GetCategoriesAsync()).ToList();
+            cabinClasses = (await LookupService.GetCabinClassesAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", "Failed to load lookup data:", ex.Message);
+        }
+    }
+
+    private async Task LoadTransactions()
+    {
+        try
+        {
+            isLoading = true;
+            
+            // Load transactions with related data
+            transactions = await TransactionService.GetAllTransactionsAsync(includeRelated: true);
+            
+            // Calculate statistics
+            UpdateStatistics();
+            
+            // Apply filters and sorting
+            ApplyFiltersAndSort();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", "Failed to load transactions:", ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void UpdateStatistics()
+    {
+        totalTransactions = transactions.Count;
+        validTransactions = transactions.Count(t => t.IsValid);
+        linkedTransactions = transactions.Count(t => t.TripId.HasValue);
+        unlinkedTransactions = totalTransactions - linkedTransactions;
+        totalAmount = transactions.Where(t => t.AmountUSD.HasValue).Sum(t => t.AmountUSD.Value);
+        flaggedTransactions = transactions.Count(t => t.DataValidation || !t.IsValid);
+    }
+
+    private void ApplyFiltersAndSort()
+    {
+        var filtered = transactions.AsEnumerable();
+
+        // Apply filters
+        if (!string.IsNullOrEmpty(filterSource))
+        {
+            filtered = filtered.Where(t => t.SourceId.ToString() == filterSource);
+        }
+
+        if (!string.IsNullOrEmpty(filterCategory))
+        {
+            filtered = filtered.Where(t => t.CategoryId.ToString() == filterCategory);
+        }
+
+        if (filterDateFrom.HasValue)
+        {
+            filtered = filtered.Where(t => t.TransactionDate >= filterDateFrom.Value);
+        }
+
+        if (filterDateTo.HasValue)
+        {
+            filtered = filtered.Where(t => t.TransactionDate <= filterDateTo.Value);
+        }
+
+        if (!string.IsNullOrEmpty(filterStatus))
+        {
+            filtered = filterStatus switch
+            {
+                "valid" => filtered.Where(t => t.IsValid),
+                "invalid" => filtered.Where(t => !t.IsValid),
+                "linked" => filtered.Where(t => t.TripId.HasValue),
+                "unlinked" => filtered.Where(t => !t.TripId.HasValue),
+                _ => filtered
+            };
+        }
+
+        // Apply sorting
+        filtered = sortField switch
+        {
+            nameof(Transaction.TransactionId) => sortAscending ? 
+                filtered.OrderBy(t => t.TransactionId) : 
+                filtered.OrderByDescending(t => t.TransactionId),
+            nameof(Transaction.TransactionDate) => sortAscending ? 
+                filtered.OrderBy(t => t.TransactionDate) : 
+                filtered.OrderByDescending(t => t.TransactionDate),
+            nameof(Transaction.CategoryId) => sortAscending ? 
+                filtered.OrderBy(t => t.Category?.Name) : 
+                filtered.OrderByDescending(t => t.Category?.Name),
+            nameof(Transaction.AmountUSD) => sortAscending ? 
+                filtered.OrderBy(t => t.AmountUSD ?? 0) : 
+                filtered.OrderByDescending(t => t.AmountUSD ?? 0),
+            _ => filtered.OrderByDescending(t => t.TransactionDate)
+        };
+
+        // Pagination
+        var totalFiltered = filtered.Count();
+        totalPages = (int)Math.Ceiling((double)totalFiltered / pageSize);
+        
+        filteredTransactions = filtered
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+    }
+
+    private async Task ApplyFilters()
+    {
+        currentPage = 1;
+        selectedTransactions.Clear();
+        ApplyFiltersAndSort();
+        StateHasChanged();
+    }
+
+    private void SortBy(string field)
+    {
+        if (sortField == field)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortField = field;
+            sortAscending = true;
+        }
+        
+        ApplyFiltersAndSort();
+        StateHasChanged();
+    }
+
+    private string GetSortIcon(string field)
+    {
+        if (sortField != field) return "";
+        return sortAscending ? "↑" : "↓";
+    }
+
+    // Selection methods
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        var isChecked = (bool)(e.Value ?? false);
+        if (isChecked)
+        {
+            selectedTransactions = filteredTransactions.Select(t => t.TransactionId).ToHashSet();
+        }
+        else
+        {
+            selectedTransactions.Clear();
+        }
+        StateHasChanged();
+    }
+
+    private void ToggleSelectTransaction(string transactionId, bool isSelected)
+    {
+        if (isSelected)
+        {
+            selectedTransactions.Add(transactionId);
+        }
+        else
+        {
+            selectedTransactions.Remove(transactionId);
+        }
+        StateHasChanged();
+    }
+
+    private void ClearSelection()
+    {
+        selectedTransactions.Clear();
+        StateHasChanged();
+    }
+
+    // Pagination methods
+    private void PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            ApplyFiltersAndSort();
+            StateHasChanged();
+        }
+    }
+
+    private void NextPage()
+    {
+        if (currentPage < totalPages)
+        {
+            currentPage++;
+            ApplyFiltersAndSort();
+            StateHasChanged();
+        }
+    }
+
+    private void GoToPage(int page)
+    {
+        currentPage = page;
+        ApplyFiltersAndSort();
+        StateHasChanged();
+    }
+
+    // Action methods
+    private async Task RefreshTransactions()
+    {
+        await LoadTransactions();
+        StateHasChanged();
+    }
+
+    private async Task EditTransaction(Transaction transaction)
+    {
+        if (editModal != null)
+        {
+            await editModal.ShowAsync(transaction);
+        }
+    }
+
+    private async Task LinkToTrip(Transaction transaction)
+    {
+        // TODO: Implement link to trip modal
+        await JSRuntime.InvokeVoidAsync("alert", $"Link transaction {transaction.TransactionId} to trip");
+    }
+
+    private async Task SplitTransaction(Transaction transaction)
+    {
+        // TODO: Implement split transaction modal
+        await JSRuntime.InvokeVoidAsync("alert", $"Split transaction {transaction.TransactionId}");
+    }
+
+    private async Task GenerateMessage(Transaction transaction)
+    {
+        // TODO: Implement message generation
+        await JSRuntime.InvokeVoidAsync("alert", $"Generate message for {transaction.TransactionId}");
+    }
+
+    private async Task ViewDocuments(Transaction transaction)
+    {
+        if (!string.IsNullOrEmpty(transaction.DocumentUrl))
+        {
+            await JSRuntime.InvokeVoidAsync("window.open", transaction.DocumentUrl, "_blank");
+        }
+        else
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "No documents available for this transaction");
+        }
+    }
+
+    private async Task MarkAsValid(Transaction transaction)
+    {
+        try
+        {
+            await TransactionService.MarkAsValidAsync(transaction.TransactionId);
+            await RefreshTransactions();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", "Failed to mark transaction as valid:", ex.Message);
+        }
+    }
+
+    private async Task DeleteTransaction(Transaction transaction)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"Are you sure you want to delete transaction {transaction.TransactionId}?");
+        
+        if (confirmed)
+        {
+            try
+            {
+                await TransactionService.DeleteAsync(transaction.TransactionId);
+                await RefreshTransactions();
+            }
+            catch (Exception ex)
+            {
+                await JSRuntime.InvokeVoidAsync("console.error", "Failed to delete transaction:", ex.Message);
+            }
+        }
+    }
+
+    private async Task CreateTransaction()
+    {
+        Navigation.NavigateTo("/transactions/create");
+    }
+
+    private async Task ImportTransactions()
+    {
+        Navigation.NavigateTo("/import/transactions");
+    }
+
+    private async Task ExportTransactions()
+    {
+        // TODO: Implement export functionality
+        await JSRuntime.InvokeVoidAsync("alert", "Export functionality coming soon");
+    }
+
+    // Bulk actions
+    private async Task BulkLinkToTrip()
+    {
+        // TODO: Implement bulk link to trip
+        await JSRuntime.InvokeVoidAsync("alert", $"Link {selectedTransactions.Count} transactions to trip");
+    }
+
+    private async Task BulkMarkValid()
+    {
+        try
+        {
+            foreach (var transactionId in selectedTransactions)
+            {
+                await TransactionService.MarkAsValidAsync(transactionId);
+            }
+            await RefreshTransactions();
+            ClearSelection();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", "Failed to mark transactions as valid:", ex.Message);
+        }
+    }
+
+    private async Task BulkExport()
+    {
+        // TODO: Implement bulk export
+        await JSRuntime.InvokeVoidAsync("alert", $"Export {selectedTransactions.Count} transactions");
+    }
+}

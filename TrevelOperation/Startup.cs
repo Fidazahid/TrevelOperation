@@ -40,6 +40,8 @@ public static class Startup
             
         services.AddScoped<IAuditService, AuditService>();
         services.AddScoped<ITransactionService, TransactionService>();
+        services.AddScoped<ITripService, TripService>();
+        services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<ITaxCalculationService, TaxCalculationService>();
         services.AddScoped<IMessageTemplateService, MessageTemplateService>();
         services.AddScoped<ICsvImportService, CsvImportService>();

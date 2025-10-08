@@ -23,4 +23,9 @@ public interface ITransactionService
     Task<IEnumerable<Transaction>> GetOtherCategoryTransactionsAsync();
     Task<IEnumerable<Transaction>> GetTransactionsWithoutDocumentationAsync();
     Task<IEnumerable<Transaction>> SearchTransactionsAsync(string searchQuery, int pageSize = 50, bool includeAlreadySplit = true);
+    Task<List<Transaction>> GetAllTransactionsAsync(bool includeRelated = false);
+    Task MarkAsValidAsync(string transactionId);
+    Task DeleteAsync(string transactionId);
+    Task UnlinkFromTripAsync(string transactionId);
+    Task UpdateTransactionAsync(object updateDto);
 }

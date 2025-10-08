@@ -1,0 +1,493 @@
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Services.Interfaces
+@inject ILookupService LookupService
+@inject IJSRuntime JSRuntime
+
+@if (IsVisible && Trip != null)
+{
+    <div class="modal modal-open">
+        <div class="modal-box w-11/12 max-w-4xl">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="font-bold text-xl">@(IsEditMode ? "Edit Trip" : "Create New Trip")</h3>
+                <button class="btn btn-sm btn-circle btn-ghost" @onclick="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Basic Information -->
+                <div class="card bg-base-50">
+                    <div class="card-body">
+                        <h4 class="card-title text-lg mb-4">Basic Information</h4>
+                        
+                        <div class="form-control mb-4">
+                            <label class="label">
+                                <span class="label-text font-medium">Trip Name *</span>
+                            </label>
+                            <input type="text" class="input input-bordered @(GetValidationClass("TripName"))" 
+                                   @bind="Trip.TripName" placeholder="Enter trip name" />
+                            @if (validationErrors.ContainsKey("TripName"))
+                            {
+                                <label class="label">
+                                    <span class="label-text-alt text-error">@validationErrors["TripName"]</span>
+                                </label>
+                            }
+                        </div>
+
+                        <div class="form-control mb-4">
+                            <label class="label">
+                                <span class="label-text font-medium">Email *</span>
+                            </label>
+                            <input type="email" class="input input-bordered @(GetValidationClass("Email"))" 
+                                   @bind="Trip.Email" placeholder="employee@company.com" />
+                            @if (validationErrors.ContainsKey("Email"))
+                            {
+                                <label class="label">
+                                    <span class="label-text-alt text-error">@validationErrors["Email"]</span>
+                                </label>
+                            }
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-medium">Start Date *</span>
+                                </label>
+                                <input type="date" class="input input-bordered @(GetValidationClass("StartDate"))" 
+                                       value="@startDateString" @onchange="OnStartDateChanged" />
+                                @if (validationErrors.ContainsKey("StartDate"))
+                                {
+                                    <label class="label">
+                                        <span class="label-text-alt text-error">@validationErrors["StartDate"]</span>
+                                    </label>
+                                }
+                            </div>
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-medium">End Date *</span>
+                                </label>
+                                <input type="date" class="input input-bordered @(GetValidationClass("EndDate"))" 
+                                       value="@endDateString" @onchange="OnEndDateChanged" />
+                                @if (validationErrors.ContainsKey("EndDate"))
+                                {
+                                    <label class="label">
+                                        <span class="label-text-alt text-error">@validationErrors["EndDate"]</span>
+                                    </label>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text font-medium">Duration</span>
+                            </label>
+                            <input type="text" class="input input-bordered bg-base-200" 
+                                   value="@(Trip.Duration) days" readonly />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Location Information -->
+                <div class="card bg-base-50">
+                    <div class="card-body">
+                        <h4 class="card-title text-lg mb-4">Location Information</h4>
+                        
+                        <div class="form-control mb-4">
+                            <label class="label">
+                                <span class="label-text font-medium">Primary Country *</span>
+                            </label>
+                            <input type="text" class="input input-bordered @(GetValidationClass("Country1"))" 
+                                   @bind="Trip.Country1" placeholder="e.g., Israel, United States" />
+                            @if (validationErrors.ContainsKey("Country1"))
+                            {
+                                <label class="label">
+                                    <span class="label-text-alt text-error">@validationErrors["Country1"]</span>
+                                </label>
+                            }
+                        </div>
+
+                        <div class="form-control mb-4">
+                            <label class="label">
+                                <span class="label-text font-medium">Primary City</span>
+                            </label>
+                            <input type="text" class="input input-bordered" 
+                                   @bind="Trip.City1" placeholder="e.g., Tel Aviv, New York" />
+                        </div>
+
+                        <div class="form-control mb-4">
+                            <label class="label">
+                                <span class="label-text font-medium">Secondary Country</span>
+                            </label>
+                            <input type="text" class="input input-bordered" 
+                                   @bind="Trip.Country2" placeholder="For multi-destination trips" />
+                        </div>
+
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text font-medium">Secondary City</span>
+                            </label>
+                            <input type="text" class="input input-bordered" 
+                                   @bind="Trip.City2" placeholder="For multi-destination trips" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trip Details -->
+                <div class="card bg-base-50">
+                    <div class="card-body">
+                        <h4 class="card-title text-lg mb-4">Trip Details</h4>
+                        
+                        <div class="form-control mb-4">
+                            <label class="label">
+                                <span class="label-text font-medium">Purpose *</span>
+                            </label>
+                            <select class="select select-bordered @(GetValidationClass("PurposeId"))" 
+                                    @bind="Trip.PurposeId">
+                                <option value="">Select Purpose</option>
+                                @if (purposes != null)
+                                {
+                                    @foreach (var purpose in purposes)
+                                    {
+                                        <option value="@purpose.PurposeId">@purpose.Emoji @purpose.Name</option>
+                                    }
+                                }
+                            </select>
+                            @if (validationErrors.ContainsKey("PurposeId"))
+                            {
+                                <label class="label">
+                                    <span class="label-text-alt text-error">@validationErrors["PurposeId"]</span>
+                                </label>
+                            }
+                        </div>
+
+                        <div class="form-control mb-4">
+                            <label class="label">
+                                <span class="label-text font-medium">Trip Type *</span>
+                            </label>
+                            <select class="select select-bordered @(GetValidationClass("TripTypeId"))" 
+                                    @bind="Trip.TripTypeId">
+                                <option value="">Select Trip Type</option>
+                                @if (tripTypes != null)
+                                {
+                                    @foreach (var tripType in tripTypes)
+                                    {
+                                        <option value="@tripType.TripTypeId">@tripType.Emoji @tripType.Name</option>
+                                    }
+                                }
+                            </select>
+                            @if (validationErrors.ContainsKey("TripTypeId"))
+                            {
+                                <label class="label">
+                                    <span class="label-text-alt text-error">@validationErrors["TripTypeId"]</span>
+                                </label>
+                            }
+                        </div>
+
+                        <div class="form-control mb-4">
+                            <label class="label">
+                                <span class="label-text font-medium">Status *</span>
+                            </label>
+                            <select class="select select-bordered @(GetValidationClass("StatusId"))" 
+                                    @bind="Trip.StatusId">
+                                <option value="">Select Status</option>
+                                @if (statuses != null)
+                                {
+                                    @foreach (var status in statuses)
+                                    {
+                                        <option value="@status.StatusId">@status.Emoji @status.Name</option>
+                                    }
+                                }
+                            </select>
+                            @if (validationErrors.ContainsKey("StatusId"))
+                            {
+                                <label class="label">
+                                    <span class="label-text-alt text-error">@validationErrors["StatusId"]</span>
+                                </label>
+                            }
+                        </div>
+
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text font-medium">Owner *</span>
+                            </label>
+                            <select class="select select-bordered @(GetValidationClass("OwnerId"))" 
+                                    @bind="Trip.OwnerId">
+                                <option value="">Select Owner</option>
+                                @if (owners != null)
+                                {
+                                    @foreach (var owner in owners)
+                                    {
+                                        <option value="@owner.OwnerId">@owner.Name</option>
+                                    }
+                                }
+                            </select>
+                            @if (validationErrors.ContainsKey("OwnerId"))
+                            {
+                                <label class="label">
+                                    <span class="label-text-alt text-error">@validationErrors["OwnerId"]</span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Information -->
+                <div class="card bg-base-50">
+                    <div class="card-body">
+                        <h4 class="card-title text-lg mb-4">System Information</h4>
+                        
+                        <div class="form-control mb-4">
+                            <label class="label">
+                                <span class="label-text font-medium">Validation Status</span>
+                            </label>
+                            <select class="select select-bordered" @bind="Trip.ValidationStatusId">
+                                @if (validationStatuses != null)
+                                {
+                                    @foreach (var validationStatus in validationStatuses)
+                                    {
+                                        <option value="@validationStatus.ValidationStatusId">
+                                            @validationStatus.Emoji @validationStatus.Name
+                                        </option>
+                                    }
+                                }
+                            </select>
+                        </div>
+
+                        <div class="form-control mb-4">
+                            <div class="label">
+                                <span class="label-text font-medium">Manual Entry</span>
+                            </div>
+                            <label class="label cursor-pointer">
+                                <span class="label-text">This trip was created manually</span>
+                                <input type="checkbox" class="checkbox" @bind="Trip.IsManual" />
+                            </label>
+                        </div>
+
+                        @if (IsEditMode)
+                        {
+                            <div class="text-sm text-gray-500">
+                                <div>Created: @Trip.CreatedAt.ToString("dd/MM/yyyy HH:mm:ss")</div>
+                                <div>Modified: @Trip.ModifiedAt.ToString("dd/MM/yyyy HH:mm:ss")</div>
+                                @if (!string.IsNullOrEmpty(Trip.ModifiedBy))
+                                {
+                                    <div>Modified by: @Trip.ModifiedBy</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Validation Summary -->
+            @if (validationErrors.Any())
+            {
+                <div class="alert alert-error mt-6">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <div>
+                        <h4 class="font-bold">Please fix the following errors:</h4>
+                        <ul class="list-disc list-inside">
+                            @foreach (var error in validationErrors.Values)
+                            {
+                                <li>@error</li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            }
+
+            <!-- Actions -->
+            <div class="modal-action mt-8">
+                <button class="btn btn-outline" @onclick="Close">Cancel</button>
+                <button class="btn btn-primary" @onclick="Save" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <span class="loading loading-spinner loading-sm mr-2"></span>
+                    }
+                    Save Trip
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public bool IsEditMode { get; set; }
+    [Parameter] public Trip? Trip { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<Trip> OnSave { get; set; }
+
+    private IEnumerable<Purpose>? purposes;
+    private IEnumerable<TripType>? tripTypes;
+    private IEnumerable<Status>? statuses;
+    private IEnumerable<ValidationStatus>? validationStatuses;
+    private IEnumerable<Owner>? owners;
+
+    private Dictionary<string, string> validationErrors = new();
+    private bool isSaving = false;
+
+    // Date binding helpers
+    private string startDateString
+    {
+        get => Trip?.StartDate.ToString("yyyy-MM-dd") ?? "";
+        set
+        {
+            if (Trip != null && DateTime.TryParse(value, out var date))
+            {
+                Trip.StartDate = date;
+                UpdateDuration();
+                StateHasChanged();
+            }
+        }
+    }
+
+    private string endDateString
+    {
+        get => Trip?.EndDate.ToString("yyyy-MM-dd") ?? "";
+        set
+        {
+            if (Trip != null && DateTime.TryParse(value, out var date))
+            {
+                Trip.EndDate = date;
+                UpdateDuration();
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void OnStartDateChanged(ChangeEventArgs e)
+    {
+        if (Trip != null && DateTime.TryParse(e.Value?.ToString(), out var date))
+        {
+            Trip.StartDate = date;
+            UpdateDuration();
+            StateHasChanged();
+        }
+    }
+
+    private void OnEndDateChanged(ChangeEventArgs e)
+    {
+        if (Trip != null && DateTime.TryParse(e.Value?.ToString(), out var date))
+        {
+            Trip.EndDate = date;
+            UpdateDuration();
+            StateHasChanged();
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && (purposes == null || tripTypes == null))
+        {
+            await LoadLookupData();
+        }
+    }
+
+    private async Task LoadLookupData()
+    {
+        purposes = await LookupService.GetPurposesAsync();
+        tripTypes = await LookupService.GetTripTypesAsync();
+        statuses = await LookupService.GetStatusesAsync();
+        validationStatuses = await LookupService.GetValidationStatusesAsync();
+        owners = await LookupService.GetOwnersAsync();
+    }
+
+    private void UpdateDuration()
+    {
+        if (Trip != null && Trip.EndDate >= Trip.StartDate)
+        {
+            Trip.Duration = (Trip.EndDate.Date - Trip.StartDate.Date).Days + 1;
+        }
+    }
+
+    private bool ValidateTrip()
+    {
+        validationErrors.Clear();
+
+        if (Trip == null) return false;
+
+        if (string.IsNullOrWhiteSpace(Trip.TripName))
+            validationErrors["TripName"] = "Trip name is required";
+
+        if (string.IsNullOrWhiteSpace(Trip.Email))
+            validationErrors["Email"] = "Email is required";
+        else if (!IsValidEmail(Trip.Email))
+            validationErrors["Email"] = "Please enter a valid email address";
+
+        if (Trip.StartDate == default)
+            validationErrors["StartDate"] = "Start date is required";
+
+        if (Trip.EndDate == default)
+            validationErrors["EndDate"] = "End date is required";
+
+        if (Trip.StartDate > Trip.EndDate)
+            validationErrors["EndDate"] = "End date must be after start date";
+
+        if (string.IsNullOrWhiteSpace(Trip.Country1))
+            validationErrors["Country1"] = "Primary country is required";
+
+        if (Trip.PurposeId <= 0)
+            validationErrors["PurposeId"] = "Purpose is required";
+
+        if (Trip.TripTypeId <= 0)
+            validationErrors["TripTypeId"] = "Trip type is required";
+
+        if (Trip.StatusId <= 0)
+            validationErrors["StatusId"] = "Status is required";
+
+        if (Trip.OwnerId <= 0)
+            validationErrors["OwnerId"] = "Owner is required";
+
+        return !validationErrors.Any();
+    }
+
+    private bool IsValidEmail(string email)
+    {
+        try
+        {
+            var addr = new System.Net.Mail.MailAddress(email);
+            return addr.Address == email;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private string GetValidationClass(string fieldName)
+    {
+        return validationErrors.ContainsKey(fieldName) ? "input-error" : "";
+    }
+
+    private async Task Save()
+    {
+        if (!ValidateTrip()) return;
+
+        isSaving = true;
+        
+        try
+        {
+            if (Trip != null)
+            {
+                Trip.ModifiedAt = DateTime.UtcNow;
+                Trip.ModifiedBy = "System"; // TODO: Get from current user context
+                
+                await OnSave.InvokeAsync(Trip);
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error saving trip: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task Close()
+    {
+        validationErrors.Clear();
+        await OnClose.InvokeAsync();
+    }
+}

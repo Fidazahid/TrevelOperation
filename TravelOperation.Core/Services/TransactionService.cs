@@ -283,4 +283,84 @@ public class TransactionService : ITransactionService
             .Take(pageSize)
             .ToListAsync();
     }
+
+    public async Task<List<Transaction>> GetAllTransactionsAsync(bool includeRelated = false)
+    {
+        var query = _context.Transactions.AsQueryable();
+
+        if (includeRelated)
+        {
+            query = query
+                .Include(t => t.Source)
+                .Include(t => t.Category)
+                .Include(t => t.Trip)
+                .Include(t => t.CabinClass)
+                .Include(t => t.BookingStatus)
+                .Include(t => t.BookingType);
+        }
+
+        return await query
+            .OrderByDescending(t => t.TransactionDate)
+            .ToListAsync();
+    }
+
+    public async Task MarkAsValidAsync(string transactionId)
+    {
+        await MarkTransactionAsValidAsync(transactionId);
+    }
+
+    public async Task DeleteAsync(string transactionId)
+    {
+        await DeleteTransactionAsync(transactionId);
+    }
+
+    public async Task UnlinkFromTripAsync(string transactionId)
+    {
+        await UnlinkTransactionFromTripAsync(transactionId);
+    }
+
+    public async Task UpdateTransactionAsync(object updateDto)
+    {
+        // Use reflection to get properties from the DTO
+        var properties = updateDto.GetType().GetProperties();
+        var transactionIdProperty = properties.FirstOrDefault(p => p.Name == "TransactionId");
+        
+        if (transactionIdProperty?.GetValue(updateDto) is not string transactionId)
+            throw new ArgumentException("TransactionId is required in update DTO");
+
+        var transaction = await GetTransactionByIdAsync(transactionId);
+        if (transaction == null)
+            throw new ArgumentException($"Transaction with ID {transactionId} not found");
+
+        var oldTransaction = new Transaction
+        {
+            TransactionId = transaction.TransactionId,
+            CategoryId = transaction.CategoryId,
+            CabinClassId = transaction.CabinClassId,
+            Participants = transaction.Participants,
+            Notes = transaction.Notes,
+            IsValid = transaction.IsValid,
+            DataValidation = transaction.DataValidation
+        };
+
+        // Update properties from DTO
+        foreach (var property in properties)
+        {
+            if (property.Name == "TransactionId") continue;
+
+            var transactionProperty = typeof(Transaction).GetProperty(property.Name);
+            if (transactionProperty != null && transactionProperty.CanWrite)
+            {
+                var value = property.GetValue(updateDto);
+                transactionProperty.SetValue(transaction, value);
+            }
+        }
+
+        transaction.ModifiedAt = DateTime.UtcNow;
+        transaction.ModifiedBy = "System"; // TODO: Get current user
+
+        await _context.SaveChangesAsync();
+
+        await _auditService.LogActionAsync("System", "Edit", "Transactions", transactionId, oldTransaction, transaction);
+    }
 }

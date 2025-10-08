@@ -2,89 +2,143 @@
 @using Microsoft.AspNetCore.Components.Routing
 @implements IDisposable
 
-<div class="h-full w-72 sidebar-nav text-white shadow-lg min-h-screen" style="background: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%) !important; color: white !important; min-height: 100vh;">
-    <div class="p-4">
+<div class="w-72 text-white shadow-lg flex flex-col"
+     style="background: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%) fixed;
+            color: white !important;
+            height: 100vh;
+            overflow-y: auto;">
+
+    <div class="p-4 flex-shrink-0">
         <a href="/" class="text-2xl font-bold block mb-4 text-center link link-hover" style="color: white !important;">
             ✈️ Travel Expense
         </a>
     </div>
-    <ul class="menu p-4 space-y-1 text-sm" style="color: white !important; background: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%) !important;">
-        @foreach (var item in navItems)
+
+    <ul class="menu p-4 space-y-1 text-sm flex-1"
+        style="color: white !important; background: transparent !important;">
+        @if (menuItems != null)
         {
-            @if (item.IsSection)
+            @foreach (var item in menuItems)
             {
-                <li class="menu-title text-xs font-semibold mt-4 mb-2" style="color: rgba(255, 255, 255, 0.7);">
-                    <span>@item.Label</span>
-                </li>
-            }
-            else
-            {
-                var isCurrentLocation = IsCurrentLocation(item.Href);
-                var menuItemClass = $"menu-item {(isCurrentLocation ? "active" : "")}";
-                var linkClass = $"flex items-center space-x-3 rounded-lg text-sm py-2 transition-colors duration-200 {(isCurrentLocation ? "active" : "")}";
-                var linkStyle = isCurrentLocation 
-                    ? "color: white; background-color: rgba(255, 255, 255, 0.2);" 
+                @if (item.IsSection)
+                {
+                    <li class="menu-title text-xs font-semibold mt-4 mb-2"
+                        style="color: rgba(255, 255, 255, 0.7);">
+                        <span>@item.Label</span>
+                    </li>
+                }
+                else
+                {
+                    var isCurrentLocation = IsCurrentLocation(item.Href);
+                    var menuItemClass = $"menu-item {(isCurrentLocation ? "active" : "")}";
+                    var linkClass = $"flex items-center space-x-3 rounded-lg text-sm py-2 transition-colors duration-200 {(isCurrentLocation ? "active" : "")}";
+                    var linkStyle = isCurrentLocation
+                    ? "color: white; background-color: rgba(255, 255, 255, 0.2);"
                     : "color: rgba(255, 255, 255, 0.9);";
-                
-                <li class="@menuItemClass" style="background: linear-gradient(180deg, rgb(5, 39, 103) 0%">
-                    <NavLink href="@item.Href" Match="@item.Match"
-                             class="@linkClass"
-                             style="@linkStyle"
-                             ActiveClass="active"
-                             @onclick="@(() => HandleNavClick(item.Href))">
-                        <span class="text-lg w-5 text-center">@item.Icon</span>
-                        <span style="color: inherit;">@item.Label</span>
-                    </NavLink>
-                </li>
+
+                    <li class="@menuItemClass">
+                        <NavLink href="@item.Href" Match="NavLinkMatch.Prefix"
+                                 class="@linkClass"
+                                 style="@linkStyle"
+                                 ActiveClass="active"
+                                 @onclick="@(() => HandleNavClick(item.Href))">
+                            <span class="text-lg w-5 text-center">@item.Icon</span>
+                            <span style="color: inherit;">@item.Label</span>
+                        </NavLink>
+                    </li>
+                }
             }
+        }
+        else
+        {
+            <li class="menu-title text-xs font-semibold mt-4 mb-2" style="color: rgba(255, 255, 255, 0.7);">
+                <span>Loading...</span>
+            </li>
         }
     </ul>
 </div>
 
 @code {
     private string currentLocation = "";
+    private IEnumerable<NavMenuItem>? menuItems;
     
-    private List<NavItem> navItems = new List<NavItem>
-    {
-        // Dashboard
-        new NavItem { Href = "/", Icon = "📊", Label = "Dashboard", Match = NavLinkMatch.All },
-        
-        // Reports Section
-        new NavItem { IsSection = true, Label = "REPORTS" },
-        new NavItem { Href = "/transactions", Icon = "💳", Label = "Transactions" },
-        new NavItem { Href = "/trips", Icon = "🧳", Label = "Trips" },
-        new NavItem { Href = "/create-trip", Icon = "➕", Label = "Create manual trip" },
-        new NavItem { Href = "/trip-suggestions", Icon = "💡", Label = "Trip suggestions" },
-        new NavItem { Href = "/trip-validation", Icon = "✅", Label = "Trip validation" },
-        new NavItem { Href = "/travel-spend", Icon = "💰", Label = "Travel spend" },
-        
-        // Data Integrity Section  
-        new NavItem { IsSection = true, Label = "DATA INTEGRITY" },
-        new NavItem { Href = "/airfare-control", Icon = "✈️", Label = "Airfare control" },
-        new NavItem { Href = "/meals-control", Icon = "🍽️", Label = "Meals control" },
-        new NavItem { Href = "/lodging-control", Icon = "🏨", Label = "Lodging control" },
-        new NavItem { Href = "/client-entertainment-control", Icon = "🍸", Label = "Client entertainment" },
-        new NavItem { Href = "/other-control", Icon = "❔", Label = "Other control" },
-        new NavItem { Href = "/missing-documentation-control", Icon = "📄", Label = "Missing documentation" },
-        new NavItem { Href = "/data-integrity/matching", Icon = "🔗", Label = "Matching engine" },
-        new NavItem { Href = "/data-integrity/split-engine", Icon = "✂️", Label = "Split engine" },
-        
-        // Settings Section
-        new NavItem { IsSection = true, Label = "SETTINGS" },
-        new NavItem { Href = "/settings/lists", Icon = "📝", Label = "Manage lists" },
-        new NavItem { Href = "/settings/csv-import", Icon = "📤", Label = "CSV import" },
-        new NavItem { Href = "/settings/transformation-rules", Icon = "🔄", Label = "Transformation rules" },
-        new NavItem { Href = "/settings/countries", Icon = "🌍", Label = "Countries & cities" },
-        new NavItem { Href = "/settings/rules", Icon = "⚙️", Label = "Quick rules" },
-        new NavItem { Href = "/settings/tax", Icon = "💼", Label = "Tax settings" },
-        new NavItem { Href = "/settings/owners", Icon = "👥", Label = "Owners" },
-        new NavItem { Href = "/audit-log", Icon = "📋", Label = "Audit log" }
-    };
-
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         NavigationManager.LocationChanged += OnLocationChanged;
         currentLocation = NavigationManager.Uri;
+        
+        // Load menu items based on user role
+        menuItems = await GetMenuItemsForCurrentUserAsync();
+    }
+
+    private async Task<IEnumerable<NavMenuItem>> GetMenuItemsForCurrentUserAsync()
+    {
+        // For now, assume admin user until authentication is implemented
+        var userRole = "admin";
+
+        var items = new List<NavMenuItem>();
+
+        // Dashboard (all users)
+        items.Add(new NavMenuItem { Icon = "🏠", Label = "Dashboard", Href = "/" });
+
+        // Reports Section - Employee and up
+        if (userRole is "employee" or "manager" or "finance" or "admin")
+        {
+            items.Add(new NavMenuItem { IsSection = true, Label = "REPORTS" });
+            items.Add(new NavMenuItem { Icon = "💳", Label = "Transactions", Href = "/transactions" });
+            items.Add(new NavMenuItem { Icon = "✈️", Label = "Trips", Href = "/trips" });
+            
+            if (userRole is "manager" or "finance" or "admin")
+            {
+                items.Add(new NavMenuItem { Icon = "📊", Label = "Travel Spend", Href = "/reports/travel-spend" });
+            }
+        }
+
+        // Trip Management - Employee and up
+        if (userRole is "employee" or "manager" or "finance" or "admin")
+        {
+            items.Add(new NavMenuItem { IsSection = true, Label = "TRIP MANAGEMENT" });
+            items.Add(new NavMenuItem { Icon = "➕", Label = "Create Manual Trip", Href = "/trips/create" });
+            items.Add(new NavMenuItem { Icon = "🔍", Label = "Trip Suggestions", Href = "/trips/suggestions" });
+            
+            if (userRole is "manager" or "finance" or "admin")
+            {
+                items.Add(new NavMenuItem { Icon = "✅", Label = "Trip Validation", Href = "/trips/validation" });
+            }
+        }
+
+        // Data Integrity - Finance and Admin only
+        if (userRole is "finance" or "admin")
+        {
+            items.Add(new NavMenuItem { IsSection = true, Label = "DATA INTEGRITY" });
+            items.Add(new NavMenuItem { Icon = "🛡️", Label = "Controls", Href = "/data-integrity/controls" });
+            items.Add(new NavMenuItem { Icon = "🔗", Label = "Matching Engine", Href = "/data-integrity/matching" });
+            items.Add(new NavMenuItem { Icon = "✂️", Label = "Split Engine", Href = "/data-integrity/split" });
+        }
+
+        // Settings - Finance and Admin only
+        if (userRole is "finance" or "admin")
+        {
+            items.Add(new NavMenuItem { IsSection = true, Label = "SETTINGS" });
+            items.Add(new NavMenuItem { Icon = "📋", Label = "Lists", Href = "/settings/lists" });
+            items.Add(new NavMenuItem { Icon = "🌍", Label = "Countries & Cities", Href = "/settings/countries-cities" });
+            items.Add(new NavMenuItem { Icon = "👥", Label = "Owners", Href = "/settings/owners" });
+            items.Add(new NavMenuItem { Icon = "💰", Label = "Tax Settings", Href = "/settings/tax" });
+            items.Add(new NavMenuItem { Icon = "📈", Label = "Headcount", Href = "/settings/headcount" });
+            
+            if (userRole == "admin")
+            {
+                items.Add(new NavMenuItem { Icon = "⚙️", Label = "System Settings", Href = "/settings/system" });
+                items.Add(new NavMenuItem { Icon = "📜", Label = "Audit Log", Href = "/settings/audit" });
+            }
+        }
+
+        // User Account (all users)
+        items.Add(new NavMenuItem { IsSection = true, Label = "ACCOUNT" });
+        items.Add(new NavMenuItem { Icon = "👤", Label = "Profile", Href = "/profile" });
+        items.Add(new NavMenuItem { Icon = "🚪", Label = "Logout", Href = "/logout" });
+
+        return items;
     }
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
@@ -123,12 +177,11 @@
         NavigationManager.LocationChanged -= OnLocationChanged;
     }
 
-    public class NavItem
+    public class NavMenuItem
     {
-        public string Href { get; set; } = "";
         public string Icon { get; set; } = "";
         public string Label { get; set; } = "";
-        public NavLinkMatch Match { get; set; } = NavLinkMatch.Prefix;
+        public string Href { get; set; } = "";
         public bool IsSection { get; set; } = false;
     }
 }
