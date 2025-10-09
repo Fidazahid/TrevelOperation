@@ -1,4 +1,10 @@
 ﻿@page "/dashboard"
+@using TravelOperation.Core.Services.Interfaces
+@using TravelOperation.Core.Models.Entities
+@inject ITransactionService TransactionService
+@inject ITripService TripService
+@inject IAuditService AuditService
+@inject NavigationManager NavigationManager
 
 <PageTitle>Dashboard - Travel Expense Management</PageTitle>
 
@@ -89,57 +95,197 @@
     <div class="card bg-base-200 shadow-xl">
         <div class="card-body">
             <h2 class="card-title">📅 Recent activity</h2>
-            <div class="overflow-x-auto">
-                <table class="table table-zebra w-full">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Action</th>
-                            <th>Description</th>
-                            <th>User</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>@DateTime.Now.ToString("dd/MM/yyyy")</td>
-                            <td><span class="badge badge-primary">Created</span></td>
-                            <td>New transaction imported from Navan</td>
-                            <td>System</td>
-                        </tr>
-                        <tr>
-                            <td>@DateTime.Now.AddDays(-1).ToString("dd/MM/yyyy")</td>
-                            <td><span class="badge badge-secondary">Validated</span></td>
-                            <td>Trip to London validated</td>
-                            <td>Admin User</td>
-                        </tr>
-                        <tr>
-                            <td>@DateTime.Now.AddDays(-2).ToString("dd/MM/yyyy")</td>
-                            <td><span class="badge badge-accent">Linked</span></td>
-                            <td>5 transactions linked to Paris trip</td>
-                            <td>Admin User</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            
+            @if (isLoading)
+            {
+                <div class="flex justify-center py-8">
+                    <span class="loading loading-spinner loading-lg"></span>
+                </div>
+            }
+            else if (recentActivity.Any())
+            {
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra w-full">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Action</th>
+                                <th>Description</th>
+                                <th>User</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var log in recentActivity)
+                            {
+                                <tr>
+                                    <td>@log.Timestamp.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td><span class="badge @GetActionBadgeClass(log.Action)">@log.Action</span></td>
+                                    <td>
+                                        <span class="text-sm">
+                                            @log.Action on @log.LinkedTable
+                                            @if (!string.IsNullOrEmpty(log.LinkedRecordId))
+                                            {
+                                                <span class="text-gray-500">(@log.LinkedRecordId)</span>
+                                            }
+                                        </span>
+                                    </td>
+                                    <td>@log.UserId</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="mt-4 text-center">
+                    <a href="/audit-log" class="btn btn-sm btn-outline">
+                        View all activity
+                    </a>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-8 text-gray-500">
+                    <p>No recent activity</p>
+                </div>
+            }
         </div>
     </div>
 </div>
 
 @code {
-    private int totalTransactions = 1247;
-    private int unlinkedTransactions = 23;
-    private int activeTrips = 45;
-    private int tripsNeedingValidation = 8;
-    private decimal totalSpend = 245670;
-    private int issuesCount = 31;
-    private int highValueMeals = 12;
-    private int airfareWithoutCabin = 7;
-    private int missingDocuments = 12;
+    private int totalTransactions = 0;
+    private int unlinkedTransactions = 0;
+    private int activeTrips = 0;
+    private int tripsNeedingValidation = 0;
+    private decimal totalSpend = 0;
+    private int issuesCount = 0;
+    private int highValueMeals = 0;
+    private int airfareWithoutCabin = 0;
+    private int missingDocuments = 0;
+    private bool isLoading = true;
+    private List<TravelOperation.Core.Models.Entities.AuditLog> recentActivity = new();
 
     protected override async Task OnInitializedAsync()
     {
-        // In a real application, these would be loaded from the database
-        // For now, using mock data to show the UI structure
-        await Task.CompletedTask;
+        await LoadDashboardDataAsync();
+    }
+
+    private async Task LoadDashboardDataAsync()
+    {
+        isLoading = true;
+        try
+        {
+            // Load all data in parallel for better performance
+            await Task.WhenAll(
+                LoadTransactionStatsAsync(),
+                LoadTripStatsAsync(),
+                LoadIssuesStatsAsync(),
+                LoadRecentActivityAsync()
+            );
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading dashboard data: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadTransactionStatsAsync()
+    {
+        try
+        {
+            var allTransactions = await TransactionService.GetAllTransactionsAsync();
+            totalTransactions = allTransactions.Count();
+            unlinkedTransactions = allTransactions.Count(t => t.TripId == null);
+            
+            // Calculate total spend for this fiscal year
+            var currentYear = DateTime.Now.Year;
+            totalSpend = allTransactions
+                .Where(t => t.TransactionDate.Year == currentYear)
+                .Sum(t => t.AmountUSD ?? 0);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading transaction stats: {ex.Message}");
+        }
+    }
+
+    private async Task LoadTripStatsAsync()
+    {
+        try
+        {
+            var allTrips = await TripService.GetAllTripsAsync();
+            
+            // Active trips: Upcoming or Ongoing
+            activeTrips = allTrips.Count(t => 
+                t.Status?.Name == "⚪ Upcoming" || 
+                t.Status?.Name == "🔵 Ongoing");
+            
+            // Trips needing validation
+            tripsNeedingValidation = allTrips.Count(t => 
+                t.ValidationStatus?.Name == "🟡 Ready to validate");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading trip stats: {ex.Message}");
+        }
+    }
+
+    private async Task LoadIssuesStatsAsync()
+    {
+        try
+        {
+            // High value meals
+            var mealsTransactions = await TransactionService.GetHighValueMealsAsync(80);
+            highValueMeals = mealsTransactions.Count();
+
+            // Airfare without cabin class
+            var airfareTransactions = await TransactionService.GetAirfareWithoutCabinClassAsync();
+            airfareWithoutCabin = airfareTransactions.Count();
+
+            // Missing documents
+            var transactionsWithoutDocs = await TransactionService.GetTransactionsWithoutDocumentationAsync();
+            missingDocuments = transactionsWithoutDocs.Count();
+
+            // Total issues
+            issuesCount = highValueMeals + airfareWithoutCabin + missingDocuments;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading issues stats: {ex.Message}");
+        }
+    }
+
+    private async Task LoadRecentActivityAsync()
+    {
+        try
+        {
+            var allLogs = await AuditService.GetAllAuditLogsAsync();
+            recentActivity = allLogs
+                .OrderByDescending(a => a.Timestamp)
+                .Take(5)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading recent activity: {ex.Message}");
+            recentActivity = new List<TravelOperation.Core.Models.Entities.AuditLog>();
+        }
+    }
+
+    private string GetActionBadgeClass(string action)
+    {
+        return action.ToLower() switch
+        {
+            "create" => "badge-success",
+            "edit" => "badge-warning",
+            "delete" => "badge-error",
+            "link" => "badge-info",
+            "validate" => "badge-primary",
+            _ => "badge-ghost"
+        };
     }
 }

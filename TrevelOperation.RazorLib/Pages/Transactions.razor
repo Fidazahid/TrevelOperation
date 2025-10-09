@@ -247,9 +247,9 @@
                                         </div>
                                     </td>
                                     <td>
-                                        <div class="dropdown dropdown-end">
+                                        <div class="dropdown dropdown-end" >
                                             <label tabindex="0" class="btn btn-ghost btn-sm">⋮</label>
-                                            <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+                                            <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow-lg bg-white border border-base-300 rounded-box w-52">
                                                 <li><a @onclick="() => EditTransaction(transaction)">✏️ Edit</a></li>
                                                 <li><a @onclick="() => LinkToTrip(transaction)">🔗 Link to Trip</a></li>
                                                 <li><a @onclick="() => SplitTransaction(transaction)">✂️ Split</a></li>
@@ -322,9 +322,12 @@
     }
 </div>
 
-<!-- Edit Transaction Modal will be included as a component -->
+<!-- Modals -->
 <TransactionEditModal @ref="editModal" 
                      OnTransactionUpdated="RefreshTransactions" />
+
+<TransactionCreateModal @ref="createModal" 
+                       OnTransactionCreated="RefreshTransactions" />
 
 @code {
     // Component state
@@ -364,6 +367,7 @@
     
     // Components
     private TransactionEditModal? editModal;
+    private TransactionCreateModal? createModal;
 
     protected override async Task OnInitializedAsync()
     {
@@ -655,14 +659,23 @@
         }
     }
 
-    private async Task CreateTransaction()
+    private void CreateTransaction()
     {
-        Navigation.NavigateTo("/transactions/create");
+        // Open the create modal for adding a new transaction
+        if (createModal != null)
+        {
+            createModal.Show();
+        }
+        else
+        {
+            JSRuntime.InvokeVoidAsync("console.error", "createModal is null!");
+            JSRuntime.InvokeVoidAsync("alert", "Error: Create modal component not initialized. Please refresh the page.");
+        }
     }
 
     private async Task ImportTransactions()
     {
-        Navigation.NavigateTo("/import/transactions");
+        Navigation.NavigateTo("/settings/csv-import");
     }
 
     private async Task ExportTransactions()

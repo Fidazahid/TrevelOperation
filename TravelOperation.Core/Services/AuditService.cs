@@ -18,6 +18,14 @@ public class AuditService : IAuditService
     public async Task LogActionAsync(string userId, string action, string linkedTable, string linkedRecordId, 
         object? oldValue = null, object? newValue = null, string? comments = null)
     {
+        // Configure JSON serialization to handle circular references
+        var jsonOptions = new JsonSerializerOptions
+        {
+            ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles,
+            WriteIndented = false,
+            MaxDepth = 32
+        };
+
         var auditLog = new AuditLog
         {
             Timestamp = DateTime.UtcNow,
@@ -25,8 +33,8 @@ public class AuditService : IAuditService
             Action = action,
             LinkedTable = linkedTable,
             LinkedRecordId = linkedRecordId,
-            OldValue = oldValue != null ? JsonSerializer.Serialize(oldValue) : null,
-            NewValue = newValue != null ? JsonSerializer.Serialize(newValue) : null,
+            OldValue = oldValue != null ? JsonSerializer.Serialize(oldValue, jsonOptions) : null,
+            NewValue = newValue != null ? JsonSerializer.Serialize(newValue, jsonOptions) : null,
             Comments = comments
         };
 

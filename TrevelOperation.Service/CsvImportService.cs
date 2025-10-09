@@ -136,7 +136,7 @@ public class CsvImportService : ICsvImportService
 
         try
         {
-            var importedData = ParseCsvData(csvStream, mapping);
+            var importedData = await ParseCsvDataAsync(csvStream, mapping);
             result.RecordsProcessed = importedData.Count;
 
             var transformationRules = await GetTransformationRulesAsync();
@@ -199,7 +199,7 @@ public class CsvImportService : ICsvImportService
         return result;
     }
 
-    private List<ImportedTransactionData> ParseCsvData(Stream csvStream, CsvFieldMapping mapping)
+    private async Task<List<ImportedTransactionData>> ParseCsvDataAsync(Stream csvStream, CsvFieldMapping mapping)
     {
         var results = new List<ImportedTransactionData>();
         
@@ -207,7 +207,7 @@ public class CsvImportService : ICsvImportService
         var lines = new List<string>();
         
         string? line;
-        while ((line = reader.ReadLine()) != null)
+        while ((line = await reader.ReadLineAsync()) != null)
         {
             lines.Add(line);
         }

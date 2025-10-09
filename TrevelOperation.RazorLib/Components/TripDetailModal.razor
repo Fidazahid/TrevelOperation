@@ -1,0 +1,524 @@
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Services.Interfaces
+@using TrevelOperation.Service
+@inject ITripService TripService
+@inject ITransactionService TransactionService
+@inject ITaxCalculationService TaxService
+@inject IJSRuntime JSRuntime
+
+@if (IsVisible && Trip != null)
+{
+    <div class="modal modal-open">
+        <div class="modal-box max-w-7xl max-h-[90vh] overflow-y-auto">
+            <!-- Header -->
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h3 class="font-bold text-2xl mb-1">@Trip.TripName</h3>
+                    <p class="text-sm text-gray-600">Trip ID: @Trip.TripId</p>
+                </div>
+                <button class="btn btn-sm btn-circle btn-ghost" @onclick="Close">✕</button>
+            </div>
+
+            <!-- Status Badges -->
+            <div class="flex gap-2 mb-6">
+                <span class="badge @GetStatusBadgeClass(Trip.Status?.Name) gap-2">
+                    @Trip.Status?.Name
+                </span>
+                <span class="badge @GetValidationBadgeClass(Trip.ValidationStatus?.Name) gap-2">
+                    @Trip.ValidationStatus?.Name
+                </span>
+                @if (Trip.IsManual)
+                {
+                    <span class="badge badge-ghost gap-2">
+                        📝 Manual entry
+                    </span>
+                }
+            </div>
+
+            <!-- Main Content - Three Column Layout -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <!-- Column 1: Basic Trip Info -->
+                <div class="space-y-4">
+                    <div class="card bg-base-200">
+                        <div class="card-body p-4">
+                            <h4 class="font-semibold text-lg mb-3">📋 Trip information</h4>
+                            
+                            <div class="space-y-2">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Traveler:</span>
+                                    <span class="font-medium text-sm">@Trip.Email</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Start date:</span>
+                                    <span class="font-medium">@Trip.StartDate.ToString("dd/MM/yyyy")</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">End date:</span>
+                                    <span class="font-medium">@Trip.EndDate.ToString("dd/MM/yyyy")</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Duration:</span>
+                                    <span class="font-medium">@Trip.Duration days</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card bg-base-200">
+                        <div class="card-body p-4">
+                            <h4 class="font-semibold text-lg mb-3">📍 Destination</h4>
+                            
+                            <div class="space-y-2">
+                                <div>
+                                    <span class="text-gray-600">Primary:</span>
+                                    <p class="font-medium">@Trip.Country1@(!string.IsNullOrEmpty(Trip.City1) ? $", {Trip.City1}" : "")</p>
+                                </div>
+                                @if (!string.IsNullOrEmpty(Trip.Country2))
+                                {
+                                    <div>
+                                        <span class="text-gray-600">Secondary:</span>
+                                        <p class="font-medium">@Trip.Country2@(!string.IsNullOrEmpty(Trip.City2) ? $", {Trip.City2}" : "")</p>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card bg-base-200">
+                        <div class="card-body p-4">
+                            <h4 class="font-semibold text-lg mb-3">🎯 Trip details</h4>
+                            
+                            <div class="space-y-2">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Purpose:</span>
+                                    <span class="font-medium">@Trip.Purpose?.Name</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Type:</span>
+                                    <span class="font-medium">@Trip.TripType?.Name</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Owner:</span>
+                                    <span class="font-medium">@Trip.Owner?.Name</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Column 2: Linked Transactions -->
+                <div class="space-y-4">
+                    <div class="card bg-base-200">
+                        <div class="card-body p-4">
+                            <div class="flex justify-between items-center mb-3">
+                                <h4 class="font-semibold text-lg">💳 Linked transactions</h4>
+                                <span class="badge badge-lg">@_linkedTransactions.Count</span>
+                            </div>
+
+                            @if (_isLoadingTransactions)
+                            {
+                                <div class="flex justify-center py-8">
+                                    <span class="loading loading-spinner loading-lg"></span>
+                                </div>
+                            }
+                            else if (_linkedTransactions.Any())
+                            {
+                                <div class="overflow-x-auto max-h-96">
+                                    <table class="table table-xs">
+                                        <thead>
+                                            <tr>
+                                                <th>Date</th>
+                                                <th>Category</th>
+                                                <th>Vendor</th>
+                                                <th class="text-right">Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var txn in _linkedTransactions)
+                                            {
+                                                <tr class="hover">
+                                                    <td>@txn.TransactionDate.ToString("dd/MM")</td>
+                                                    <td><span class="text-xs">@txn.Category?.Name</span></td>
+                                                    <td><span class="text-xs">@txn.Vendor</span></td>
+                                                    <td class="text-right font-medium">${txn.AmountUSD?.ToString("N2") ?? "0.00"}</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                        <tfoot>
+                                            <tr class="font-bold">
+                                                <td colspan="3">Total</td>
+                                                <td class="text-right">${_totalAmount:N2}</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+
+                                <div class="mt-4">
+                                    <button class="btn btn-sm btn-outline btn-primary w-full" @onclick="HandleLinkMore">
+                                        ➕ Link more transactions
+                                    </button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="text-center py-8 text-gray-500">
+                                    <p class="mb-4">No transactions linked</p>
+                                    <button class="btn btn-sm btn-primary" @onclick="HandleLinkMore">
+                                        🔗 Link transactions
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Spending Breakdown -->
+                    @if (_linkedTransactions.Any())
+                    {
+                        <div class="card bg-base-200">
+                            <div class="card-body p-4">
+                                <h4 class="font-semibold text-lg mb-3">💰 Spending breakdown</h4>
+                                
+                                <div class="space-y-2 text-sm">
+                                    @foreach (var category in _spendingByCategory.OrderByDescending(x => x.Value))
+                                    {
+                                        <div class="flex justify-between">
+                                            <span>@category.Key:</span>
+                                            <span class="font-medium">${category.Value:N2}</span>
+                                        </div>
+                                    }
+                                    <div class="divider my-2"></div>
+                                    <div class="flex justify-between font-bold">
+                                        <span>Cost per day:</span>
+                                        <span>${(_totalAmount / Math.Max(1, Trip.Duration)):N2}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Column 3: Tax Calculations -->
+                <div class="space-y-4">
+                    <div class="card bg-base-200">
+                        <div class="card-body p-4">
+                            <h4 class="font-semibold text-lg mb-3">💼 Tax exposure</h4>
+
+                            @if (_isLoadingTax)
+                            {
+                                <div class="flex justify-center py-8">
+                                    <span class="loading loading-spinner loading-md"></span>
+                                </div>
+                            }
+                            else if (_taxBreakdown != null)
+                            {
+                                <!-- Meals -->
+                                @if (_taxBreakdown.MealsCalculation != null)
+                                {
+                                    <div class="mb-4">
+                                        <p class="font-semibold text-sm mb-2">🍽️ Meals</p>
+                                        <div class="space-y-1 text-xs">
+                                            <div class="flex justify-between">
+                                                <span>Total spent:</span>
+                                                <span>${_taxBreakdown.MealsCalculation.TotalMealsSpent:N2}</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span>Per day:</span>
+                                                <span>${_taxBreakdown.MealsCalculation.MealsPerDay:N2}</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span>Cap:</span>
+                                                <span>${_taxBreakdown.MealsCalculation.MealsCap:N2}</span>
+                                            </div>
+                                            <div class="flex justify-between font-bold @(_taxBreakdown.MealsCalculation.TotalExposure > 0 ? "text-error" : "text-success")">
+                                                <span>Exposure:</span>
+                                                <span>${_taxBreakdown.MealsCalculation.TotalExposure:N2}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+
+                                <!-- Lodging -->
+                                @if (_taxBreakdown.LodgingCalculation != null)
+                                {
+                                    <div class="mb-4">
+                                        <p class="font-semibold text-sm mb-2">🏨 Lodging</p>
+                                        <div class="space-y-1 text-xs">
+                                            <div class="flex justify-between">
+                                                <span>Total spent:</span>
+                                                <span>${_taxBreakdown.LodgingCalculation.TotalLodgingSpent:N2}</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span>Per night:</span>
+                                                <span>${_taxBreakdown.LodgingCalculation.LodgingPerNight:N2}</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span>Cap:</span>
+                                                <span>${_taxBreakdown.LodgingCalculation.LodgingCap:N2}</span>
+                                            </div>
+                                            <div class="flex justify-between font-bold @(_taxBreakdown.LodgingCalculation.TotalExposure > 0 ? "text-error" : "text-success")">
+                                                <span>Exposure:</span>
+                                                <span>${_taxBreakdown.LodgingCalculation.TotalExposure:N2}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+
+                                <!-- Airfare -->
+                                @if (_taxBreakdown.AirfareAnalysis != null)
+                                {
+                                    <div class="mb-4">
+                                        <p class="font-semibold text-sm mb-2">✈️ Airfare</p>
+                                        <div class="space-y-1 text-xs">
+                                            <div class="flex justify-between">
+                                                <span>Total spent:</span>
+                                                <span>${_taxBreakdown.AirfareAnalysis.TotalAirfareSpent:N2}</span>
+                                            </div>
+                                            @if (_taxBreakdown.AirfareAnalysis.HasPremiumCabins)
+                                            {
+                                                <div class="alert alert-warning alert-sm">
+                                                    <span class="text-xs">⚠️ Premium cabin: @string.Join(", ", _taxBreakdown.AirfareAnalysis.PremiumCabinClasses)</span>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="text-success text-xs">✅ No premium cabins</div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+
+                                <!-- Total Exposure -->
+                                <div class="divider my-2"></div>
+                                <div class="flex justify-between items-center">
+                                    <span class="font-bold">Total tax exposure:</span>
+                                    <span class="font-bold text-lg @(_taxBreakdown.Summary.TotalTaxExposure > 0 ? "text-error" : "text-success")">
+                                        ${_taxBreakdown.Summary.TotalTaxExposure:N2}
+                                    </span>
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(_taxBreakdown.Summary.TaxNote))
+                                {
+                                    <div class="alert alert-info alert-sm mt-2">
+                                        <span class="text-xs">@_taxBreakdown.Summary.TaxNote</span>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <p class="text-sm text-gray-500 text-center py-4">No tax data available</p>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- System Information -->
+                    <div class="card bg-base-200">
+                        <div class="card-body p-4">
+                            <h4 class="font-semibold text-lg mb-3">🔧 System information</h4>
+                            
+                            <div class="space-y-2 text-xs">
+                                <div>
+                                    <span class="text-gray-600">Created:</span>
+                                    <p class="font-medium">@Trip.CreatedAt.ToString("dd/MM/yyyy HH:mm")</p>
+                                </div>
+                                <div>
+                                    <span class="text-gray-600">Last modified:</span>
+                                    <p class="font-medium">@Trip.ModifiedAt.ToString("dd/MM/yyyy HH:mm")</p>
+                                </div>
+                                @if (!string.IsNullOrEmpty(Trip.ModifiedBy))
+                                {
+                                    <div>
+                                        <span class="text-gray-600">Modified by:</span>
+                                        <p class="font-medium">@Trip.ModifiedBy</p>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="modal-action flex flex-wrap gap-2">
+                @if (OnEdit.HasDelegate)
+                {
+                    <button class="btn btn-primary" @onclick="HandleEdit">
+                        ✏️ Edit trip
+                    </button>
+                }
+
+                @if (OnDelete.HasDelegate)
+                {
+                    <button class="btn btn-error" @onclick="HandleDelete">
+                        🗑️ Delete trip
+                    </button>
+                }
+
+                @if (OnValidate.HasDelegate && Trip.ValidationStatus?.Name == "Ready to validate")
+                {
+                    <button class="btn btn-success" @onclick="HandleValidate">
+                        ✅ Validate trip
+                    </button>
+                }
+
+                @if (OnLinkTransactions.HasDelegate)
+                {
+                    <button class="btn btn-info" @onclick="HandleLinkMore">
+                        🔗 Link transactions
+                    </button>
+                }
+
+                <button class="btn btn-ghost ml-auto" @onclick="Close">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public Trip? Trip { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<Trip> OnEdit { get; set; }
+    [Parameter] public EventCallback<Trip> OnDelete { get; set; }
+    [Parameter] public EventCallback<Trip> OnValidate { get; set; }
+    [Parameter] public EventCallback<Trip> OnLinkTransactions { get; set; }
+
+    private List<Transaction> _linkedTransactions = new();
+    private Dictionary<string, decimal> _spendingByCategory = new();
+    private decimal _totalAmount = 0;
+    private bool _isLoadingTransactions = false;
+    private bool _isLoadingTax = false;
+    private TaxBreakdown? _taxBreakdown;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && Trip != null)
+        {
+            await LoadTripDataAsync();
+        }
+    }
+
+    private async Task LoadTripDataAsync()
+    {
+        await Task.WhenAll(
+            LoadTransactionsAsync(),
+            LoadTaxBreakdownAsync()
+        );
+    }
+
+    private async Task LoadTransactionsAsync()
+    {
+        if (Trip == null) return;
+
+        _isLoadingTransactions = true;
+        try
+        {
+            var transactions = await TransactionService.GetTransactionsByTripIdAsync(Trip.TripId);
+            _linkedTransactions = transactions.ToList();
+            _totalAmount = _linkedTransactions.Sum(t => t.AmountUSD ?? 0);
+
+            // Calculate spending by category
+            _spendingByCategory = _linkedTransactions
+                .Where(t => t.Category != null)
+                .GroupBy(t => t.Category!.Name)
+                .ToDictionary(g => g.Key, g => g.Sum(t => t.AmountUSD ?? 0));
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading transactions: {ex.Message}");
+        }
+        finally
+        {
+            _isLoadingTransactions = false;
+        }
+    }
+
+    private async Task LoadTaxBreakdownAsync()
+    {
+        if (Trip == null) return;
+
+        _isLoadingTax = true;
+        try
+        {
+            _taxBreakdown = await TaxService.GetTaxBreakdownAsync(Trip.TripId);
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading tax breakdown: {ex.Message}");
+        }
+        finally
+        {
+            _isLoadingTax = false;
+        }
+    }
+
+    private string GetStatusBadgeClass(string? status)
+    {
+        return status switch
+        {
+            "🔴 Canceled" => "badge-error",
+            "⚪ Upcoming" => "badge-warning",
+            "🔵 Ongoing" => "badge-info",
+            "🟢 Completed" => "badge-success",
+            _ => "badge-ghost"
+        };
+    }
+
+    private string GetValidationBadgeClass(string? validation)
+    {
+        return validation switch
+        {
+            "⚪ Not ready to validate" => "badge-outline",
+            "🟡 Ready to validate" => "badge-warning",
+            "🟢 Validated" => "badge-success",
+            _ => "badge-ghost"
+        };
+    }
+
+    private async Task Close()
+    {
+        IsVisible = false;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleEdit()
+    {
+        if (Trip != null)
+        {
+            await OnEdit.InvokeAsync(Trip);
+        }
+    }
+
+    private async Task HandleDelete()
+    {
+        if (Trip != null)
+        {
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
+                $"Are you sure you want to delete the trip '{Trip.TripName}'? This will unlink all associated transactions.");
+
+            if (confirmed)
+            {
+                await OnDelete.InvokeAsync(Trip);
+                await Close();
+            }
+        }
+    }
+
+    private async Task HandleValidate()
+    {
+        if (Trip != null)
+        {
+            await OnValidate.InvokeAsync(Trip);
+            await Close();
+        }
+    }
+
+    private async Task HandleLinkMore()
+    {
+        if (Trip != null)
+        {
+            await OnLinkTransactions.InvokeAsync(Trip);
+        }
+    }
+}

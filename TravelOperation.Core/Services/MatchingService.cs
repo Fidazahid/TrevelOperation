@@ -52,6 +52,7 @@ public class MatchingService : IMatchingService
         var toleranceEnd = endDate.AddDays(5);
 
         return await _context.Transactions
+            .Include(t => t.Category)
             .Where(t => t.Email == email && 
                        t.TripId == null &&
                        t.TransactionDate >= toleranceStart &&

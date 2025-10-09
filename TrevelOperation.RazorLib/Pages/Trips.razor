@@ -4,6 +4,7 @@
 @inject ITripService TripService
 @inject ILookupService LookupService
 @inject IJSRuntime JSRuntime
+@implements IDisposable
 
 <div class="container mx-auto p-6">
     <div class="flex justify-between items-center mb-6">
@@ -122,7 +123,8 @@
                             <th>
                                 <label>
                                     <input type="checkbox" class="checkbox checkbox-sm" 
-                                           @onchange="ToggleSelectAll" checked="@isAllSelected" />
+                                           checked="@isAllSelected"
+                                           @onchange="@((ChangeEventArgs e) => ToggleSelectAllChange((bool)e.Value!))" />
                                 </label>
                             </th>
                             <th class="cursor-pointer" @onclick='() => SortBy("TripName")'>
@@ -168,11 +170,11 @@
                             @foreach (var trip in pagedTrips)
                             {
                                 <tr class="hover" @ondblclick="() => ViewTripDetails(trip.TripId)">
-                                    <td>
+                                    <td @onclick:stopPropagation="true">
                                         <label>
                                             <input type="checkbox" class="checkbox checkbox-sm" 
                                                    checked="@selectedTripIds.Contains(trip.TripId)"
-                                                   @onchange="(e) => ToggleSelection(trip.TripId, (bool)e.Value!)" />
+                                                   @onchange="@((ChangeEventArgs e) => ToggleSelectionChange(trip.TripId, (bool)e.Value!))" />
                                         </label>
                                     </td>
                                     <td class="font-medium">@trip.TripName</td>
@@ -295,7 +297,7 @@
     <!-- Bulk Actions (shown when trips are selected) -->
     @if (selectedTripIds.Any())
     {
-        <div class="fixed bottom-4 right-4 bg-base-100 rounded-lg shadow-lg p-4 border">
+        <div class="fixed bottom-4 right-4 bg-base-100 rounded-lg shadow-lg p-4 border z-[1000]">
             <div class="flex items-center gap-4">
                 <span class="text-sm font-medium">@selectedTripIds.Count selected</span>
                 <div class="flex gap-2">
@@ -323,6 +325,12 @@
                Trip="editingTrip" 
                OnClose="CloseEditModal" 
                OnSave="SaveTrip" />
+
+<!-- Trip Suggestions Modal -->
+<TripSuggestionsModal IsVisible="showSuggestionsModal"
+                      Suggestions="tripSuggestions"
+                      OnClose="CloseSuggestionsModal"
+                      OnTripsCreated="OnTripsCreated" />
 
 @code {
     private IEnumerable<Trip>? allTrips;
@@ -359,9 +367,27 @@
     private bool isEditMode = false;
     private Trip? editingTrip;
 
+    // Suggestions modal state
+    private bool showSuggestionsModal = false;
+    private IEnumerable<Trip>? tripSuggestions;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
+    }
+
+    public void Dispose()
+    {
+        // Force close modal when navigating away to prevent blocking other pages
+        showEditModal = false;
+        editingTrip = null;
+        
+        showSuggestionsModal = false;
+        tripSuggestions = null;
+        
+        // Clear any selections
+        selectedTripIds.Clear();
+        isAllSelected = false;
     }
 
     private async Task LoadData()
@@ -445,6 +471,9 @@
             .Take(pageSize)
             .ToList();
 
+        // Update select all state when page changes
+        UpdateSelectAllState();
+
         await InvokeAsync(StateHasChanged);
     }
 
@@ -469,9 +498,9 @@
         await UpdatePagination();
     }
 
-    private void ToggleSelection(int tripId, bool isSelected)
+    private void ToggleSelectionChange(int tripId, bool isChecked)
     {
-        if (isSelected)
+        if (isChecked)
         {
             selectedTripIds.Add(tripId);
         }
@@ -480,24 +509,23 @@
             selectedTripIds.Remove(tripId);
         }
 
+        StateHasChanged();
         UpdateSelectAllState();
     }
 
-    private void ToggleSelectAll(ChangeEventArgs e)
+    private void ToggleSelectAllChange(bool isChecked)
     {
-        var isSelected = (bool)e.Value!;
+        isAllSelected = isChecked;
         
         selectedTripIds.Clear();
         
-        if (isSelected && pagedTrips != null)
+        if (isAllSelected && pagedTrips != null)
         {
             foreach (var trip in pagedTrips)
             {
                 selectedTripIds.Add(trip.TripId);
             }
         }
-
-        isAllSelected = isSelected;
     }
 
     private void UpdateSelectAllState()
@@ -506,12 +534,14 @@
         
         var pageIds = pagedTrips.Select(t => t.TripId).ToHashSet();
         isAllSelected = pageIds.All(id => selectedTripIds.Contains(id)) && pageIds.Any();
+        StateHasChanged();
     }
 
     private void ClearSelection()
     {
         selectedTripIds.Clear();
         isAllSelected = false;
+        StateHasChanged();
     }
 
     private string GetStatusBadgeClass(string statusName)
@@ -628,14 +658,47 @@
     {
         try
         {
-            var suggestions = await TripService.SuggestTripsFromTransactionsAsync();
-            // TODO: Show suggestions in a modal for user review
-            await JSRuntime.InvokeVoidAsync("showToast", "info", $"Found {suggestions.Count()} trip suggestions");
+            tripSuggestions = await TripService.SuggestTripsFromTransactionsAsync();
+            
+            if (tripSuggestions?.Any() == true)
+            {
+                showSuggestionsModal = true;
+            }
+            else
+            {
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("showToast", "info", "No trip suggestions found");
+                }
+                catch
+                {
+                    Console.WriteLine("No trip suggestions found");
+                }
+            }
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error generating suggestions: {ex.Message}");
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error generating suggestions: {ex.Message}");
+            }
+            catch
+            {
+                Console.WriteLine($"Error generating suggestions: {ex.Message}");
+            }
         }
+    }
+
+    private void CloseSuggestionsModal()
+    {
+        showSuggestionsModal = false;
+        tripSuggestions = null;
+    }
+
+    private async Task OnTripsCreated()
+    {
+        await LoadData();
+        CloseSuggestionsModal();
     }
 
     private void ViewTripDetails(int tripId)
@@ -650,57 +713,126 @@
 
     private async Task BulkValidate()
     {
-        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-            $"Are you sure you want to validate {selectedTripIds.Count} selected trips?");
-        
-        if (confirmed)
+        try
         {
-            try
+            Console.WriteLine($"BulkValidate called with {selectedTripIds.Count} trips");
+            
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+                $"Are you sure you want to validate {selectedTripIds.Count} selected trips?");
+            
+            Console.WriteLine($"Confirmation result: {confirmed}");
+            
+            if (confirmed)
             {
-                foreach (var tripId in selectedTripIds.ToList())
+                try
                 {
-                    await TripService.ValidateTripAsync(tripId);
+                    foreach (var tripId in selectedTripIds.ToList())
+                    {
+                        await TripService.ValidateTripAsync(tripId);
+                    }
+                    
+                    await LoadData();
+                    ClearSelection();
+                    
+                    try
+                    {
+                        await JSRuntime.InvokeVoidAsync("showToast", "success", "Selected trips validated successfully");
+                    }
+                    catch
+                    {
+                        Console.WriteLine("Selected trips validated successfully");
+                    }
                 }
-                
-                await LoadData();
-                ClearSelection();
-                await JSRuntime.InvokeVoidAsync("showToast", "success", "Selected trips validated successfully");
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error validating trips: {ex.Message}");
+                    try
+                    {
+                        await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error validating trips: {ex.Message}");
+                    }
+                    catch
+                    {
+                        // Fallback
+                    }
+                }
             }
-            catch (Exception ex)
-            {
-                await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error validating trips: {ex.Message}");
-            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"BulkValidate exception: {ex.Message}");
         }
     }
 
     private async Task BulkExport()
     {
-        // TODO: Implement bulk export functionality
-        await JSRuntime.InvokeVoidAsync("showToast", "info", "Export functionality coming soon");
+        try
+        {
+            Console.WriteLine($"BulkExport called with {selectedTripIds.Count} trips");
+            
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("showToast", "info", "Export functionality coming soon");
+            }
+            catch
+            {
+                Console.WriteLine("Export functionality coming soon");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"BulkExport exception: {ex.Message}");
+        }
     }
 
     private async Task BulkDelete()
     {
-        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-            $"Are you sure you want to delete {selectedTripIds.Count} selected trips? This will unlink all associated transactions.");
-        
-        if (confirmed)
+        try
         {
-            try
+            Console.WriteLine($"BulkDelete called with {selectedTripIds.Count} trips");
+            
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+                $"Are you sure you want to delete {selectedTripIds.Count} selected trips? This will unlink all associated transactions.");
+            
+            Console.WriteLine($"Delete confirmation result: {confirmed}");
+            
+            if (confirmed)
             {
-                foreach (var tripId in selectedTripIds.ToList())
+                try
                 {
-                    await TripService.DeleteTripAsync(tripId);
+                    foreach (var tripId in selectedTripIds.ToList())
+                    {
+                        await TripService.DeleteTripAsync(tripId);
+                    }
+                    
+                    await LoadData();
+                    ClearSelection();
+                    
+                    try
+                    {
+                        await JSRuntime.InvokeVoidAsync("showToast", "success", "Selected trips deleted successfully");
+                    }
+                    catch
+                    {
+                        Console.WriteLine("Selected trips deleted successfully");
+                    }
                 }
-                
-                await LoadData();
-                ClearSelection();
-                await JSRuntime.InvokeVoidAsync("showToast", "success", "Selected trips deleted successfully");
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error deleting trips: {ex.Message}");
+                    try
+                    {
+                        await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error deleting trips: {ex.Message}");
+                    }
+                    catch
+                    {
+                        // Fallback
+                    }
+                }
             }
-            catch (Exception ex)
-            {
-                await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error deleting trips: {ex.Message}");
-            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"BulkDelete exception: {ex.Message}");
         }
     }
 

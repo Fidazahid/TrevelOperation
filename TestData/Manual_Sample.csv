@@ -1,0 +1,7 @@
+ID,Email,Date,Vendor,Category,Currency,Amount
+MAN001,karen.white@wsc.com,10/10/2024,United Airlines,Airfare,USD,650.00
+MAN002,karen.white@wsc.com,11/10/2024,Sheraton Hotel,Lodging,USD,280.00
+MAN003,kevin.brown@wsc.com,05/09/2024,Uber,Taxi & rideshare,USD,22.00
+MAN004,kevin.brown@wsc.com,06/09/2024,Restaurant Le Bernardin,entertaining clients,USD,380.00
+MAN005,nancy.johnson@wsc.com,15/08/2024,T-Mobile,telecommunication_services,USD,50.00
+MAN006,paul.garcia@wsc.com,20/09/2024,Hertz,Rental cars,USD,195.00

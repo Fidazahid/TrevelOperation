@@ -10,6 +10,15 @@ public class TravelDbContext : DbContext
     {
     }
 
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+        
+        // Suppress the pending model changes warning for seed data
+        optionsBuilder.ConfigureWarnings(warnings => 
+            warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+    }
+
     public DbSet<Source> Sources { get; set; }
     public DbSet<Category> Categories { get; set; }
     public DbSet<Purpose> Purposes { get; set; }

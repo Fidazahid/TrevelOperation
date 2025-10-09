@@ -1,16 +1,288 @@
-﻿@page "/data-integrity/matching"
+@page "/data-integrity/matching"
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Services.Interfaces
 
 <div class="container mx-auto p-6">
-    <div class="card bg-base-100 shadow-md">
-        <div class="card-body">
-            <h2 class="card-title"> Matching Engine</h2>
-            <p class="text-gray-600">Transaction matching functionality will be available soon.</p>
-            
-            <div class="text-center py-8">
-                <div class="text-6xl mb-4"></div>
-                <h3 class="text-xl font-semibold">Under Development</h3>
-                <p class="text-gray-500">Advanced matching features coming soon</p>
-            </div>
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">🔗 Matching Engine</h1>
+            <p class="text-gray-600">Link transactions to trips automatically or manually</p>
+        </div>
+        <div class="flex gap-2">
+            @if (statistics != null)
+            {
+                <button class="btn btn-info btn-sm" @onclick="ShowStatistics">
+                    📊 Statistics
+                </button>
+            }
+            <button class="btn btn-secondary btn-sm" @onclick="RefreshSuggestions">
+                🔄 Refresh
+            </button>
         </div>
     </div>
+
+    <!-- Statistics Cards -->
+    @if (statistics != null)
+    {
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="stat bg-base-200 rounded-lg">
+                <div class="stat-title">Total Transactions</div>
+                <div class="stat-value text-primary">@statistics.TotalTransactions</div>
+                <div class="stat-desc">@statistics.LinkedTransactions linked (@statistics.LinkingPercentage.ToString("N1")%)</div>
+            </div>
+            <div class="stat bg-base-200 rounded-lg">
+                <div class="stat-title">Unlinked</div>
+                <div class="stat-value text-warning">@statistics.UnlinkedTransactions</div>
+                <div class="stat-desc">Transactions without trips</div>
+            </div>
+            <div class="stat bg-base-200 rounded-lg">
+                <div class="stat-title">Trips</div>
+                <div class="stat-value text-secondary">@statistics.TotalTrips</div>
+                <div class="stat-desc">@statistics.TripsWithTransactions with transactions</div>
+            </div>
+            <div class="stat bg-base-200 rounded-lg">
+                <div class="stat-title">Suggestions</div>
+                <div class="stat-value text-accent">@statistics.PendingSuggestions</div>
+                <div class="stat-desc">Pending review</div>
+            </div>
+        </div>
+    }
+
+    <!-- Tabs -->
+    <div class="tabs tabs-boxed bg-base-200 mb-6">
+        <a class="tab @(activeTab == "auto" ? "tab-active" : "")" @onclick='() => SetActiveTab("auto")'>
+            ⚡ Automatic Suggestions
+        </a>
+        <a class="tab @(activeTab == "manual" ? "tab-active" : "")" @onclick='() => SetActiveTab("manual")'>
+            🎯 Manual Search
+        </a>
+    </div>
+
+    @if (loading)
+    {
+        <div class="flex justify-center items-center py-12">
+            <span class="loading loading-spinner loading-lg"></span>
+        </div>
+    }
+    else if (activeTab == "auto")
+    {
+        <!-- Automatic Suggestions Tab -->
+        @if (matchingSuggestions != null && matchingSuggestions.Any())
+        {
+            <div class="space-y-4">
+                @foreach (var suggestion in matchingSuggestions)
+                {
+                    <div class="card bg-base-100 shadow-md">
+                        <div class="card-body">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <h3 class="card-title text-xl">
+                                        Trip #@suggestion.TripId: @suggestion.TripName
+                                    </h3>
+                                    <div class="text-sm text-gray-600 mt-2">
+                                        <p>📧 @suggestion.Email</p>
+                                        <p>📅 @suggestion.StartDate.ToString("dd/MM/yyyy") - @suggestion.EndDate.ToString("dd/MM/yyyy")</p>
+                                        <p class="mt-2">
+                                            <span class="badge @GetConfidenceBadgeClass(suggestion.OverallConfidence) badge-lg">
+                                                @suggestion.OverallConfidence.ToString("N1")% Overall Confidence
+                                            </span>
+                                            <span class="ml-2">
+                                                💰 Total Amount: $@suggestion.TotalAmount.ToString("N2")
+                                            </span>
+                                        </p>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary" @onclick="() => LinkAllSuggestedTransactions(suggestion)">
+                                    🔗 Link All (@suggestion.TotalTransactions)
+                                </button>
+                            </div>
+
+                            <!-- Suggested Transactions -->
+                            <div class="overflow-x-auto mt-4">
+                                <table class="table table-sm table-zebra">
+                                    <thead>
+                                        <tr>
+                                            <th>Transaction ID</th>
+                                            <th>Date</th>
+                                            <th>Category</th>
+                                            <th>Vendor</th>
+                                            <th>Amount (USD)</th>
+                                            <th>Confidence</th>
+                                            <th>Reason</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var txn in suggestion.SuggestedTransactions)
+                                        {
+                                            <tr class="@(txn.IsAlreadyLinked ? "opacity-50" : "")">
+                                                <td class="font-mono text-xs">@txn.TransactionId</td>
+                                                <td>@txn.TransactionDate.ToString("dd/MM/yyyy")</td>
+                                                <td>@txn.Category</td>
+                                                <td>@txn.Vendor</td>
+                                                <td class="text-right">$@txn.AmountUSD.ToString("N2")</td>
+                                                <td>
+                                                    <span class="badge @GetConfidenceBadgeClass(txn.Confidence)">
+                                                        @txn.Confidence.ToString("N0")%
+                                                    </span>
+                                                </td>
+                                                <td class="text-xs max-w-xs truncate">@txn.MatchingReason</td>
+                                                <td>
+                                                    @if (!txn.IsAlreadyLinked)
+                                                    {
+                                                        <button class="btn btn-xs btn-primary" 
+                                                                @onclick="() => LinkTransaction(txn.TransactionId, suggestion.TripId)">
+                                                            🔗 Link
+                                                        </button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-ghost badge-sm">Already Linked</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="card bg-base-100 shadow-md">
+                <div class="card-body text-center">
+                    <div class="text-6xl mb-4">✅</div>
+                    <h3 class="text-xl font-semibold">No Pending Suggestions</h3>
+                    <p class="text-gray-500">All trips have been matched with their transactions</p>
+                </div>
+            </div>
+        }
+    }
+    else if (activeTab == "manual")
+    {
+        <!-- Manual Search Tab -->
+        <div class="card bg-base-100 shadow-md mb-6">
+            <div class="card-body">
+                <h2 class="card-title">Manual Transaction Search</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Trip ID</span>
+                        </label>
+                        <input type="number" class="input input-bordered" @bind="selectedTripId" 
+                               placeholder="Enter Trip ID" />
+                    </div>
+                    
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Email Filter (Optional)</span>
+                        </label>
+                        <input type="text" class="input input-bordered" @bind="emailFilter" 
+                               placeholder="user@example.com" />
+                    </div>
+                    
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Days Tolerance</span>
+                        </label>
+                        <input type="number" class="input input-bordered" @bind="daysTolerance" 
+                               min="0" max="30" />
+                    </div>
+                    
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">&nbsp;</span>
+                        </label>
+                        <div class="flex gap-2">
+                            <button class="btn btn-primary" @onclick="SearchForMatches">
+                                🔍 Search
+                            </button>
+                            <button class="btn btn-ghost" @onclick="ClearManualSearch">
+                                🗑️ Clear
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manual Search Results -->
+        @if (manualSearchResults != null)
+        {
+            @if (manualSearchResults.Any())
+            {
+                <div class="card bg-base-100 shadow-md">
+                    <div class="card-body">
+                        <h3 class="card-title">Found @manualSearchResults.Count() Transactions</h3>
+                        
+                        <div class="overflow-x-auto mt-4">
+                            <table class="table table-zebra">
+                                <thead>
+                                    <tr>
+                                        <th>Transaction ID</th>
+                                        <th>Email</th>
+                                        <th>Date</th>
+                                        <th>Category</th>
+                                        <th>Vendor</th>
+                                        <th>Amount (USD)</th>
+                                        <th>Current Trip</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var txn in manualSearchResults)
+                                    {
+                                        <tr>
+                                            <td class="font-mono text-xs">@txn.TransactionId</td>
+                                            <td>@txn.Email</td>
+                                            <td>@txn.TransactionDate.ToString("dd/MM/yyyy")</td>
+                                            <td>@(txn.Category?.Name ?? "N/A")</td>
+                                            <td>@(txn.Vendor ?? "N/A")</td>
+                                            <td class="text-right">$@(txn.AmountUSD?.ToString("N2") ?? "0.00")</td>
+                                            <td>
+                                                @if (txn.TripId.HasValue)
+                                                {
+                                                    <span class="badge badge-info">Trip #@txn.TripId.Value</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-ghost">Unlinked</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (txn.TripId.HasValue)
+                                                {
+                                                    <button class="btn btn-xs btn-warning" 
+                                                            @onclick="() => UnlinkTransaction(txn.TransactionId)">
+                                                        🔓 Unlink
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button class="btn btn-xs btn-primary" 
+                                                            @onclick="() => LinkTransaction(txn.TransactionId, selectedTripId)">
+                                                        🔗 Link to Trip
+                                                    </button>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info">
+                    <span>ℹ️ No transactions found matching your search criteria</span>
+                </div>
+            }
+        }
+    }
 </div>

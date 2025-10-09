@@ -1,0 +1,292 @@
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Services.Interfaces
+@inject ITripService TripService
+@inject IJSRuntime JSRuntime
+
+@if (IsVisible && Suggestions != null)
+{
+    <div class="modal modal-open" @onclick="OnBackdropClick">
+        <div class="modal-box w-11/12 max-w-6xl max-h-[90vh]" @onclick:stopPropagation="true">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="font-bold text-xl">Trip Suggestions (@Suggestions.Count())</h3>
+                <button class="btn btn-sm btn-circle btn-ghost" @onclick="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            @if (!Suggestions.Any())
+            {
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <span>No trip suggestions found. Make sure you have transactions with airfare or lodging.</span>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-lightbulb"></i>
+                    <span>Review the suggested trips below and approve the ones you want to create.</span>
+                </div>
+
+                <div class="overflow-y-auto max-h-[60vh] space-y-4">
+                    @foreach (var suggestion in Suggestions)
+                    {
+                        <div class="card bg-base-100 border @(selectedSuggestions.Contains(suggestion) ? "border-primary" : "border-base-300")">
+                            <div class="card-body">
+                                <div class="flex items-start justify-between">
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-3 mb-3">
+                                            <input type="checkbox" class="checkbox checkbox-primary" 
+                                                   checked="@selectedSuggestions.Contains(suggestion)"
+                                                   @onchange="@((e) => ToggleSuggestion(suggestion, (bool)e.Value!))" />
+                                            <h4 class="text-lg font-semibold">@suggestion.TripName</h4>
+                                        </div>
+
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                            <div>
+                                                <span class="font-medium">Email:</span> @suggestion.Email
+                                            </div>
+                                            <div>
+                                                <span class="font-medium">Duration:</span> @suggestion.Duration days
+                                            </div>
+                                            <div>
+                                                <span class="font-medium">Dates:</span> 
+                                                @suggestion.StartDate.ToString("dd/MM/yyyy") - @suggestion.EndDate.ToString("dd/MM/yyyy")
+                                            </div>
+                                            <div>
+                                                <span class="font-medium">Destination:</span> 
+                                                @if (!string.IsNullOrEmpty(suggestion.City1))
+                                                {
+                                                    <text>@suggestion.City1, </text>
+                                                }
+                                                @suggestion.Country1
+                                            </div>
+                                        </div>
+
+                                        @if (suggestion.Transactions?.Any() == true)
+                                        {
+                                            <div class="mt-3">
+                                                <button class="btn btn-xs btn-ghost" @onclick="() => ToggleTransactions(suggestion.TripId)">
+                                                    <i class="fas fa-list mr-1"></i>
+                                                    @suggestion.Transactions.Count() transactions
+                                                    <i class="fas @(expandedSuggestions.Contains(suggestion.TripId) ? "fa-chevron-up" : "fa-chevron-down") ml-1"></i>
+                                                </button>
+
+                                                @if (expandedSuggestions.Contains(suggestion.TripId))
+                                                {
+                                                    <div class="overflow-x-auto mt-2">
+                                                        <table class="table table-xs">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Date</th>
+                                                                    <th>Category</th>
+                                                                    <th>Vendor</th>
+                                                                    <th>Amount</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @foreach (var transaction in suggestion.Transactions.OrderBy(t => t.TransactionDate))
+                                                                {
+                                                                    <tr>
+                                                                        <td>@transaction.TransactionDate.ToString("dd/MM/yyyy")</td>
+                                                                        <td>
+                                                                            @if (transaction.Category != null)
+                                                                            {
+                                                                                <span class="badge badge-xs">@transaction.Category.Emoji @transaction.Category.Name</span>
+                                                                            }
+                                                                        </td>
+                                                                        <td>@transaction.Vendor</td>
+                                                                        <td>@transaction.Currency @transaction.Amount.ToString("N2")</td>
+                                                                    </tr>
+                                                                }
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div class="modal-action mt-6">
+                    <div class="flex justify-between items-center w-full">
+                        <div class="text-sm text-gray-600">
+                            @selectedSuggestions.Count of @Suggestions.Count() selected
+                        </div>
+                        <div class="flex gap-2">
+                            <button class="btn btn-ghost" @onclick="SelectAll">
+                                Select All
+                            </button>
+                            <button class="btn btn-outline" @onclick="Close">Cancel</button>
+                            <button class="btn btn-primary" @onclick="ApproveSelected" 
+                                    disabled="@(!selectedSuggestions.Any() || isSaving)">
+                                @if (isSaving)
+                                {
+                                    <span class="loading loading-spinner loading-sm mr-2"></span>
+                                }
+                                Approve @selectedSuggestions.Count Trip@(selectedSuggestions.Count != 1 ? "s" : "")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public IEnumerable<Trip>? Suggestions { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnTripsCreated { get; set; }
+
+    private HashSet<Trip> selectedSuggestions = new();
+    private HashSet<int> expandedSuggestions = new();
+    private bool isSaving = false;
+
+    protected override void OnParametersSet()
+    {
+        if (IsVisible && Suggestions != null && !selectedSuggestions.Any())
+        {
+            // Auto-select all suggestions by default
+            selectedSuggestions = new HashSet<Trip>(Suggestions);
+        }
+    }
+
+    private void ToggleSuggestion(Trip suggestion, bool isSelected)
+    {
+        if (isSelected)
+        {
+            selectedSuggestions.Add(suggestion);
+        }
+        else
+        {
+            selectedSuggestions.Remove(suggestion);
+        }
+        StateHasChanged();
+    }
+
+    private void ToggleTransactions(int suggestionId)
+    {
+        if (expandedSuggestions.Contains(suggestionId))
+        {
+            expandedSuggestions.Remove(suggestionId);
+        }
+        else
+        {
+            expandedSuggestions.Add(suggestionId);
+        }
+    }
+
+    private void SelectAll()
+    {
+        if (Suggestions == null) return;
+
+        if (selectedSuggestions.Count == Suggestions.Count())
+        {
+            selectedSuggestions.Clear();
+        }
+        else
+        {
+            selectedSuggestions = new HashSet<Trip>(Suggestions);
+        }
+    }
+
+    private async Task ApproveSelected()
+    {
+        if (!selectedSuggestions.Any()) return;
+
+        isSaving = true;
+
+        try
+        {
+            int successCount = 0;
+            int errorCount = 0;
+
+            foreach (var suggestion in selectedSuggestions)
+            {
+                try
+                {
+                    // Set default values
+                    suggestion.IsManual = false; // These are auto-suggested
+                    suggestion.CreatedAt = DateTime.UtcNow;
+                    suggestion.ModifiedAt = DateTime.UtcNow;
+                    suggestion.ModifiedBy = "System";
+
+                    // Create the trip
+                    await TripService.CreateTripAsync(suggestion);
+                    successCount++;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error creating trip: {ex.Message}");
+                    errorCount++;
+                }
+            }
+
+            // Show results
+            if (successCount > 0)
+            {
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("showToast", "success", 
+                        $"Successfully created {successCount} trip{(successCount != 1 ? "s" : "")}");
+                }
+                catch
+                {
+                    Console.WriteLine($"Successfully created {successCount} trips");
+                }
+            }
+
+            if (errorCount > 0)
+            {
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("showToast", "warning", 
+                        $"Failed to create {errorCount} trip{(errorCount != 1 ? "s" : "")}");
+                }
+                catch
+                {
+                    Console.WriteLine($"Failed to create {errorCount} trips");
+                }
+            }
+
+            // Notify parent to reload data
+            await OnTripsCreated.InvokeAsync();
+
+            // Close the modal
+            await Close();
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error creating trips: {ex.Message}");
+            }
+            catch
+            {
+                Console.WriteLine($"Error creating trips: {ex.Message}");
+            }
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task Close()
+    {
+        selectedSuggestions.Clear();
+        expandedSuggestions.Clear();
+        await OnClose.InvokeAsync();
+    }
+
+    private void OnBackdropClick()
+    {
+        Close();
+    }
+}

@@ -11,14 +11,63 @@ using TravelOperation.Core.Data;
 namespace TravelOperation.Core.Migrations
 {
     [DbContext(typeof(TravelDbContext))]
-    [Migration("20251022151109_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20251009093752_InitialCreateComplete")]
+    partial class InitialCreateComplete
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.10");
+
+            modelBuilder.Entity("TravelOperation.Core.Models.Entities.Approval", b =>
+                {
+                    b.Property<int>("ApprovalId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("ApprovedAmount")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<int>("ApprovedByEmployeeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("ApprovedDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Comments")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TripRequestId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ApprovalId");
+
+                    b.HasIndex("ApprovedByEmployeeId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("TripRequestId");
+
+                    b.ToTable("Approvals");
+                });
 
             modelBuilder.Entity("TravelOperation.Core.Models.Entities.AuditLog", b =>
                 {
@@ -122,6 +171,309 @@ namespace TravelOperation.Core.Migrations
                     b.ToTable("Countries");
                 });
 
+            modelBuilder.Entity("TravelOperation.Core.Models.Entities.CountryCity", b =>
+                {
+                    b.Property<int>("CountryCityId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Country")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModifiedBy")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("CountryCityId");
+
+                    b.HasIndex("Country", "City")
+                        .IsUnique();
+
+                    b.ToTable("CountriesCities");
+
+                    b.HasData(
+                        new
+                        {
+                            CountryCityId = 1,
+                            City = "Tel Aviv",
+                            Country = "Israel",
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedBy = ""
+                        },
+                        new
+                        {
+                            CountryCityId = 2,
+                            City = "Jerusalem",
+                            Country = "Israel",
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedBy = ""
+                        },
+                        new
+                        {
+                            CountryCityId = 3,
+                            City = "New York",
+                            Country = "United States",
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedBy = ""
+                        },
+                        new
+                        {
+                            CountryCityId = 4,
+                            City = "San Francisco",
+                            Country = "United States",
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedBy = ""
+                        },
+                        new
+                        {
+                            CountryCityId = 5,
+                            City = "London",
+                            Country = "United Kingdom",
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedBy = ""
+                        },
+                        new
+                        {
+                            CountryCityId = 6,
+                            City = "Berlin",
+                            Country = "Germany",
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedBy = ""
+                        },
+                        new
+                        {
+                            CountryCityId = 7,
+                            City = "Paris",
+                            Country = "France",
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedBy = ""
+                        });
+                });
+
+            modelBuilder.Entity("TravelOperation.Core.Models.Entities.Employee", b =>
+                {
+                    b.Property<int>("EmployeeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CostCenter")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Department")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ManagerEmail")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("MonthlyCreditLimit")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("EmployeeId");
+
+                    b.HasIndex("Department");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("Role");
+
+                    b.ToTable("Employees");
+
+                    b.HasData(
+                        new
+                        {
+                            EmployeeId = 1,
+                            CostCenter = "CC-ENG-001",
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Department = "Engineering",
+                            Email = "john.doe@company.com",
+                            IsActive = true,
+                            ManagerEmail = "sarah.manager@company.com",
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            MonthlyCreditLimit = 5000.00m,
+                            Name = "John Doe",
+                            Role = "Employee",
+                            Title = "Software Engineer"
+                        },
+                        new
+                        {
+                            EmployeeId = 2,
+                            CostCenter = "CC-ENG-001",
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Department = "Engineering",
+                            Email = "sara.manager@company.com",
+                            IsActive = true,
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            MonthlyCreditLimit = 5000.00m,
+                            Name = "Sara Manager",
+                            Role = "Manager",
+                            Title = "Engineering Manager"
+                        },
+                        new
+                        {
+                            EmployeeId = 3,
+                            CostCenter = "CC-FIN-001",
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Department = "Finance",
+                            Email = "finance@company.com",
+                            IsActive = true,
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            MonthlyCreditLimit = 5000.00m,
+                            Name = "Finance Officer",
+                            Role = "Finance",
+                            Title = "Finance Officer"
+                        },
+                        new
+                        {
+                            EmployeeId = 4,
+                            CostCenter = "CC-OPS-001",
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Department = "Operations",
+                            Email = "admin@company.com",
+                            IsActive = true,
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            MonthlyCreditLimit = 5000.00m,
+                            Name = "Admin User",
+                            Role = "Admin",
+                            Title = "System Administrator"
+                        });
+                });
+
+            modelBuilder.Entity("TravelOperation.Core.Models.Entities.Expense", b =>
+                {
+                    b.Property<int>("ExpenseId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<decimal>("AmountUSD")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Comments")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ExpenseDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsReimbursable")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReceiptPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ReimbursedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TripRequestId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("VendorName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ExpenseId");
+
+                    b.HasIndex("Category");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("ExpenseDate");
+
+                    b.HasIndex("TripRequestId");
+
+                    b.ToTable("Expenses");
+                });
+
             modelBuilder.Entity("TravelOperation.Core.Models.Entities.Headcount", b =>
                 {
                     b.Property<int>("HeadcountId")
@@ -208,11 +560,25 @@ namespace TravelOperation.Core.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ManagerEmail")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("ModifiedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
@@ -224,18 +590,209 @@ namespace TravelOperation.Core.Migrations
                         new
                         {
                             OwnerId = 1,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(8227),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "maayan@company.com",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(8489),
+                            IsActive = true,
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Maayan Chesler"
                         },
                         new
                         {
                             OwnerId = 2,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(8740),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "martina@company.com",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(8741),
+                            IsActive = true,
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Martina Poplinsk"
+                        });
+                });
+
+            modelBuilder.Entity("TravelOperation.Core.Models.Entities.Policy", b =>
+                {
+                    b.Property<int>("PolicyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AdditionalRules")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApplicableRegion")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("EffectiveFrom")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("EffectiveTo")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("MaxAmount")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<DateTime>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Period")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("PolicyId");
+
+                    b.HasIndex("Category");
+
+                    b.HasIndex("IsActive");
+
+                    b.ToTable("Policies");
+
+                    b.HasData(
+                        new
+                        {
+                            PolicyId = 1,
+                            ApplicableRegion = "Global",
+                            Category = "Travel",
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Flight bookings",
+                            EffectiveFrom = new DateTime(2025, 10, 9, 9, 37, 51, 691, DateTimeKind.Utc).AddTicks(6071),
+                            IsActive = true,
+                            MaxAmount = 1500.00m,
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Period = "Per Trip"
+                        },
+                        new
+                        {
+                            PolicyId = 2,
+                            ApplicableRegion = "Global",
+                            Category = "Meals",
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Daily meal allowance",
+                            EffectiveFrom = new DateTime(2025, 10, 9, 9, 37, 51, 691, DateTimeKind.Utc).AddTicks(8631),
+                            IsActive = true,
+                            MaxAmount = 75.00m,
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Period = "Daily"
+                        },
+                        new
+                        {
+                            PolicyId = 3,
+                            ApplicableRegion = "Global",
+                            Category = "Accommodation",
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Hotel accommodation",
+                            EffectiveFrom = new DateTime(2025, 10, 9, 9, 37, 51, 691, DateTimeKind.Utc).AddTicks(8637),
+                            IsActive = true,
+                            MaxAmount = 200.00m,
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Period = "Daily"
+                        },
+                        new
+                        {
+                            PolicyId = 4,
+                            ApplicableRegion = "Global",
+                            Category = "Miscellaneous",
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Other travel expenses",
+                            EffectiveFrom = new DateTime(2025, 10, 9, 9, 37, 51, 691, DateTimeKind.Utc).AddTicks(8640),
+                            IsActive = true,
+                            MaxAmount = 100.00m,
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Period = "Daily"
+                        });
+                });
+
+            modelBuilder.Entity("TravelOperation.Core.Models.Entities.SystemSetting", b =>
+                {
+                    b.Property<int>("SystemSettingId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModifiedBy")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("SystemSettingId");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("SystemSettings");
+
+                    b.HasData(
+                        new
+                        {
+                            SystemSettingId = 1,
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Default currency for calculations",
+                            Key = "DefaultCurrency",
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedBy = "",
+                            Value = "USD"
+                        },
+                        new
+                        {
+                            SystemSettingId = 2,
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Date display format",
+                            Key = "DateFormat",
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedBy = "",
+                            Value = "dd/MM/yyyy"
+                        },
+                        new
+                        {
+                            SystemSettingId = 3,
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Threshold for flagging high-value meals",
+                            Key = "HighValueMealThreshold",
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedBy = "",
+                            Value = "80"
+                        },
+                        new
+                        {
+                            SystemSettingId = 4,
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Threshold for flagging low-value lodging",
+                            Key = "LowValueLodgingThreshold",
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            ModifiedBy = "",
+                            Value = "100"
                         });
                 });
 
@@ -342,6 +899,9 @@ namespace TravelOperation.Core.Migrations
                     b.Property<decimal?>("ExchangeRate")
                         .HasColumnType("decimal(18,6)");
 
+                    b.Property<bool>("IsSplit")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsValid")
                         .HasColumnType("INTEGER");
 
@@ -356,6 +916,10 @@ namespace TravelOperation.Core.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Notes")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OriginalTransactionId")
+                        .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Participants")
@@ -408,6 +972,49 @@ namespace TravelOperation.Core.Migrations
                     b.HasIndex("TripId");
 
                     b.ToTable("Transactions");
+                });
+
+            modelBuilder.Entity("TravelOperation.Core.Models.Entities.TransformationRule", b =>
+                {
+                    b.Property<int>("TransformationRuleId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CategoryName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsRegex")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModifiedBy")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PolicyPattern")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("TransformationRuleId");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("Priority")
+                        .IsDescending();
+
+                    b.ToTable("TransformationRules");
                 });
 
             modelBuilder.Entity("TravelOperation.Core.Models.Entities.Trip", b =>
@@ -501,6 +1108,120 @@ namespace TravelOperation.Core.Migrations
                     b.ToTable("Trips");
                 });
 
+            modelBuilder.Entity("TravelOperation.Core.Models.Entities.TripRequest", b =>
+                {
+                    b.Property<int>("TripRequestId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BusinessJustification")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Comments")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Destination")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("EstimatedCost")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<DateTime>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("TripRequestId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("StartDate");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("TripRequests");
+                });
+
+            modelBuilder.Entity("TravelOperation.Core.Models.Entities.User", b =>
+                {
+                    b.Property<int>("UserId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("LastLoginAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("EmployeeId")
+                        .IsUnique();
+
+                    b.HasIndex("Username")
+                        .IsUnique();
+
+                    b.ToTable("Users");
+                });
+
             modelBuilder.Entity("TravelOperation.Core.Models.Lookup.BookingStatus", b =>
                 {
                     b.Property<int>("BookingStatusId")
@@ -534,17 +1255,17 @@ namespace TravelOperation.Core.Migrations
                         new
                         {
                             BookingStatusId = 1,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(5790),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🔴",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(6039),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Canceled"
                         },
                         new
                         {
                             BookingStatusId = 2,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(6287),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🟢",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(6287),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Approved"
                         });
                 });
@@ -582,33 +1303,33 @@ namespace TravelOperation.Core.Migrations
                         new
                         {
                             BookingTypeId = 1,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(3828),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "✈️",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(4084),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Flight"
                         },
                         new
                         {
                             BookingTypeId = 2,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(4331),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🏨",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(4331),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Hotel"
                         },
                         new
                         {
                             BookingTypeId = 3,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(4333),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🚗",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(4333),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Car"
                         },
                         new
                         {
                             BookingTypeId = 4,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(4335),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🚆",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(4335),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Train"
                         });
                 });
@@ -646,33 +1367,33 @@ namespace TravelOperation.Core.Migrations
                         new
                         {
                             CabinClassId = 1,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(3822),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "💺",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(4120),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Economy"
                         },
                         new
                         {
                             CabinClassId = 2,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(4402),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🛫",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(4402),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Premium economy"
                         },
                         new
                         {
                             CabinClassId = 3,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(4404),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🧳",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(4405),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Business"
                         },
                         new
                         {
                             CabinClassId = 4,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(4406),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "👑",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(4407),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "First"
                         });
                 });
@@ -710,65 +1431,65 @@ namespace TravelOperation.Core.Migrations
                         new
                         {
                             CategoryId = 1,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 949, DateTimeKind.Utc).AddTicks(8070),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "✈️",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 949, DateTimeKind.Utc).AddTicks(8407),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Airfare"
                         },
                         new
                         {
                             CategoryId = 2,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 949, DateTimeKind.Utc).AddTicks(8711),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🏨",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 949, DateTimeKind.Utc).AddTicks(8711),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Lodging"
                         },
                         new
                         {
                             CategoryId = 3,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 949, DateTimeKind.Utc).AddTicks(8713),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🚕",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 949, DateTimeKind.Utc).AddTicks(8714),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Transportation"
                         },
                         new
                         {
                             CategoryId = 4,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 949, DateTimeKind.Utc).AddTicks(8715),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "📱",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 949, DateTimeKind.Utc).AddTicks(8716),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Communication"
                         },
                         new
                         {
                             CategoryId = 5,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 949, DateTimeKind.Utc).AddTicks(8717),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🍸",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 949, DateTimeKind.Utc).AddTicks(8718),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Client entertainment"
                         },
                         new
                         {
                             CategoryId = 6,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 949, DateTimeKind.Utc).AddTicks(8720),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🍽️",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 949, DateTimeKind.Utc).AddTicks(8720),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Meals"
                         },
                         new
                         {
                             CategoryId = 7,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 949, DateTimeKind.Utc).AddTicks(8722),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "❔",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 949, DateTimeKind.Utc).AddTicks(8722),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Other"
                         },
                         new
                         {
                             CategoryId = 8,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 949, DateTimeKind.Utc).AddTicks(8724),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "❓",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 949, DateTimeKind.Utc).AddTicks(8724),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Non-travel"
                         });
                 });
@@ -806,33 +1527,33 @@ namespace TravelOperation.Core.Migrations
                         new
                         {
                             PurposeId = 1,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(1365),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "💼",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(1667),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Business trip"
                         },
                         new
                         {
                             PurposeId = 2,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(2014),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🎓",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(2015),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Onboarding"
                         },
                         new
                         {
                             PurposeId = 3,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(2017),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🏖️",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(2018),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Company trip"
                         },
                         new
                         {
                             PurposeId = 4,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(2019),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🛡️",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(2020),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "BCP"
                         });
                 });
@@ -866,25 +1587,25 @@ namespace TravelOperation.Core.Migrations
                         new
                         {
                             SourceId = 1,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 948, DateTimeKind.Utc).AddTicks(8355),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🧳",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 948, DateTimeKind.Utc).AddTicks(8696),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Navan"
                         },
                         new
                         {
                             SourceId = 2,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 948, DateTimeKind.Utc).AddTicks(9000),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "👤",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 948, DateTimeKind.Utc).AddTicks(9001),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Agent"
                         },
                         new
                         {
                             SourceId = 3,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 948, DateTimeKind.Utc).AddTicks(9003),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "✏️",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 948, DateTimeKind.Utc).AddTicks(9004),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Manual"
                         });
                 });
@@ -922,33 +1643,33 @@ namespace TravelOperation.Core.Migrations
                         new
                         {
                             StatusId = 1,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(8693),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🔴",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(8982),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Canceled"
                         },
                         new
                         {
                             StatusId = 2,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(9415),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "⚪",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(9416),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Upcoming"
                         },
                         new
                         {
                             StatusId = 3,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(9418),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🔵",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(9418),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Ongoing"
                         },
                         new
                         {
                             StatusId = 4,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(9420),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🟢",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(9420),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Completed"
                         });
                 });
@@ -986,25 +1707,25 @@ namespace TravelOperation.Core.Migrations
                         new
                         {
                             TripTypeId = 1,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(6387),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🏠",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(6686),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Domestic"
                         },
                         new
                         {
                             TripTypeId = 2,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(6972),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🌍",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(6973),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "International"
                         },
                         new
                         {
                             TripTypeId = 3,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(6975),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "📍",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 950, DateTimeKind.Utc).AddTicks(6976),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Local"
                         });
                 });
@@ -1042,27 +1763,46 @@ namespace TravelOperation.Core.Migrations
                         new
                         {
                             ValidationStatusId = 1,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(1307),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "⚪",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(1606),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Not ready to validate"
                         },
                         new
                         {
                             ValidationStatusId = 2,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(1892),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🟡",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(1893),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Ready to validate"
                         },
                         new
                         {
                             ValidationStatusId = 3,
-                            CreatedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(1894),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Emoji = "🟢",
-                            ModifiedAt = new DateTime(2025, 10, 22, 15, 11, 8, 951, DateTimeKind.Utc).AddTicks(1895),
+                            ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Validated"
                         });
+                });
+
+            modelBuilder.Entity("TravelOperation.Core.Models.Entities.Approval", b =>
+                {
+                    b.HasOne("TravelOperation.Core.Models.Entities.Employee", "ApprovedBy")
+                        .WithMany("ApprovalsGiven")
+                        .HasForeignKey("ApprovedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TravelOperation.Core.Models.Entities.TripRequest", "TripRequest")
+                        .WithMany("Approvals")
+                        .HasForeignKey("TripRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ApprovedBy");
+
+                    b.Navigation("TripRequest");
                 });
 
             modelBuilder.Entity("TravelOperation.Core.Models.Entities.City", b =>
@@ -1074,6 +1814,25 @@ namespace TravelOperation.Core.Migrations
                         .IsRequired();
 
                     b.Navigation("Country");
+                });
+
+            modelBuilder.Entity("TravelOperation.Core.Models.Entities.Expense", b =>
+                {
+                    b.HasOne("TravelOperation.Core.Models.Entities.Employee", "Employee")
+                        .WithMany("Expenses")
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TravelOperation.Core.Models.Entities.TripRequest", "TripRequest")
+                        .WithMany("Expenses")
+                        .HasForeignKey("TripRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("TripRequest");
                 });
 
             modelBuilder.Entity("TravelOperation.Core.Models.Entities.Transaction", b =>
@@ -1166,9 +1925,40 @@ namespace TravelOperation.Core.Migrations
                     b.Navigation("ValidationStatus");
                 });
 
+            modelBuilder.Entity("TravelOperation.Core.Models.Entities.TripRequest", b =>
+                {
+                    b.HasOne("TravelOperation.Core.Models.Entities.Employee", "Employee")
+                        .WithMany("TripRequests")
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("TravelOperation.Core.Models.Entities.User", b =>
+                {
+                    b.HasOne("TravelOperation.Core.Models.Entities.Employee", "Employee")
+                        .WithOne()
+                        .HasForeignKey("TravelOperation.Core.Models.Entities.User", "EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+                });
+
             modelBuilder.Entity("TravelOperation.Core.Models.Entities.Country", b =>
                 {
                     b.Navigation("Cities");
+                });
+
+            modelBuilder.Entity("TravelOperation.Core.Models.Entities.Employee", b =>
+                {
+                    b.Navigation("ApprovalsGiven");
+
+                    b.Navigation("Expenses");
+
+                    b.Navigation("TripRequests");
                 });
 
             modelBuilder.Entity("TravelOperation.Core.Models.Entities.Owner", b =>
@@ -1179,6 +1969,13 @@ namespace TravelOperation.Core.Migrations
             modelBuilder.Entity("TravelOperation.Core.Models.Entities.Trip", b =>
                 {
                     b.Navigation("Transactions");
+                });
+
+            modelBuilder.Entity("TravelOperation.Core.Models.Entities.TripRequest", b =>
+                {
+                    b.Navigation("Approvals");
+
+                    b.Navigation("Expenses");
                 });
 
             modelBuilder.Entity("TravelOperation.Core.Models.Lookup.Category", b =>

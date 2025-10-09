@@ -668,7 +668,7 @@ namespace TravelOperation.Core.Migrations
                             Category = "Travel",
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Flight bookings",
-                            EffectiveFrom = new DateTime(2025, 10, 8, 19, 43, 45, 419, DateTimeKind.Utc).AddTicks(7117),
+                            EffectiveFrom = new DateTime(2025, 10, 9, 9, 37, 51, 691, DateTimeKind.Utc).AddTicks(6071),
                             IsActive = true,
                             MaxAmount = 1500.00m,
                             ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -681,7 +681,7 @@ namespace TravelOperation.Core.Migrations
                             Category = "Meals",
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Daily meal allowance",
-                            EffectiveFrom = new DateTime(2025, 10, 8, 19, 43, 45, 420, DateTimeKind.Utc).AddTicks(4367),
+                            EffectiveFrom = new DateTime(2025, 10, 9, 9, 37, 51, 691, DateTimeKind.Utc).AddTicks(8631),
                             IsActive = true,
                             MaxAmount = 75.00m,
                             ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -694,7 +694,7 @@ namespace TravelOperation.Core.Migrations
                             Category = "Accommodation",
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Hotel accommodation",
-                            EffectiveFrom = new DateTime(2025, 10, 8, 19, 43, 45, 420, DateTimeKind.Utc).AddTicks(4382),
+                            EffectiveFrom = new DateTime(2025, 10, 9, 9, 37, 51, 691, DateTimeKind.Utc).AddTicks(8637),
                             IsActive = true,
                             MaxAmount = 200.00m,
                             ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -707,7 +707,7 @@ namespace TravelOperation.Core.Migrations
                             Category = "Miscellaneous",
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Other travel expenses",
-                            EffectiveFrom = new DateTime(2025, 10, 8, 19, 43, 45, 420, DateTimeKind.Utc).AddTicks(4390),
+                            EffectiveFrom = new DateTime(2025, 10, 9, 9, 37, 51, 691, DateTimeKind.Utc).AddTicks(8640),
                             IsActive = true,
                             MaxAmount = 100.00m,
                             ModifiedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -969,6 +969,49 @@ namespace TravelOperation.Core.Migrations
                     b.HasIndex("TripId");
 
                     b.ToTable("Transactions");
+                });
+
+            modelBuilder.Entity("TravelOperation.Core.Models.Entities.TransformationRule", b =>
+                {
+                    b.Property<int>("TransformationRuleId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CategoryName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsRegex")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModifiedBy")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PolicyPattern")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("TransformationRuleId");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("Priority")
+                        .IsDescending();
+
+                    b.ToTable("TransformationRules");
                 });
 
             modelBuilder.Entity("TravelOperation.Core.Models.Entities.Trip", b =>

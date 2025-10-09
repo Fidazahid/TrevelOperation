@@ -1,0 +1,11 @@
+Transaction ID,Employee Email,Transaction Date,Authorization Date,Transaction Type,Vendor,Merchant Category,Address,Trip ID,Booking ID,Booking Start Date,Booking End Date,Policy,Currency,Amount,Exchange Rate,Participants,Receipt URL,Notes
+TXN001,john.doe@wsc.com,2024-10-15,2024-10-16,Purchase,Delta Airlines,Airlines,ATL Airport,TRIP001,BK001,2024-10-20,2024-10-25,Airfare,USD,850.00,1.00,john.doe@wsc.com,https://receipts.com/001,Business trip to New York
+TXN002,john.doe@wsc.com,2024-10-20,2024-10-20,Purchase,Marriott Hotel,Lodging,New York NY,TRIP001,BK002,2024-10-20,2024-10-25,Lodging,USD,450.00,1.00,john.doe@wsc.com,https://receipts.com/002,5 nights hotel
+TXN003,jane.smith@wsc.com,2024-09-05,2024-09-05,Purchase,Uber,Transportation,San Francisco CA,,,,,,Taxi & rideshare,USD,35.50,1.00,jane.smith@wsc.com,https://receipts.com/003,Airport to hotel
+TXN004,jane.smith@wsc.com,2024-09-06,2024-09-06,Purchase,The French Laundry,Restaurants,Napa Valley CA,,,,,,entertaining clients,USD,425.00,1.00,"jane.smith@wsc.com,client@acme.com",https://receipts.com/004,Client dinner with Acme Corp
+TXN005,mike.jones@wsc.com,2024-08-12,2024-08-12,Purchase,British Airways,Airlines,LHR Airport,TRIP002,BK003,2024-08-15,2024-08-20,Airfare,GBP,650.00,1.25,mike.jones@wsc.com,https://receipts.com/005,London business trip
+TXN006,mike.jones@wsc.com,2024-08-16,2024-08-16,Purchase,Starbucks,Coffee Shop,London UK,,,,,,Meals for myself,GBP,8.50,1.25,mike.jones@wsc.com,https://receipts.com/006,Morning coffee
+TXN007,sarah.wilson@wsc.com,2024-10-01,2024-10-01,Purchase,Airalo,Telecommunications,Online,,,,,,telecommunication_services,USD,25.00,1.00,sarah.wilson@wsc.com,https://receipts.com/007,International data plan
+TXN008,sarah.wilson@wsc.com,2024-10-02,2024-10-02,Purchase,Enterprise Rent-A-Car,Car Rental,LAX Airport,,,,,,Rental cars,USD,250.00,1.00,sarah.wilson@wsc.com,https://receipts.com/008,3-day car rental
+TXN009,tom.brown@wsc.com,2024-09-15,2024-09-15,Purchase,Hilton Hotels,Lodging,Chicago IL,TRIP003,BK004,2024-09-15,2024-09-18,Lodging,USD,75.00,1.00,tom.brown@wsc.com,,Discounted corporate rate
+TXN010,alice.green@wsc.com,2024-10-10,2024-10-10,Purchase,Conference Center,Events,Boston MA,,,,,,Conference attendance,USD,1200.00,1.00,alice.green@wsc.com,https://receipts.com/010,Tech Summit 2024

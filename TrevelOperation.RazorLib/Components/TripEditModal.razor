@@ -5,8 +5,8 @@
 
 @if (IsVisible && Trip != null)
 {
-    <div class="modal modal-open">
-        <div class="modal-box w-11/12 max-w-4xl">
+    <div class="modal modal-open" @onclick="OnBackdropClick">
+        <div class="modal-box w-11/12 max-w-4xl" @onclick:stopPropagation="true">
             <div class="flex justify-between items-center mb-6">
                 <h3 class="font-bold text-xl">@(IsEditMode ? "Edit Trip" : "Create New Trip")</h3>
                 <button class="btn btn-sm btn-circle btn-ghost" @onclick="Close">
@@ -473,11 +473,32 @@
                 Trip.ModifiedBy = "System"; // TODO: Get from current user context
                 
                 await OnSave.InvokeAsync(Trip);
+                
+                // Close modal after successful save
+                await Close();
+                
+                // Show success toast
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("showToast", "success", "Trip saved successfully!");
+                }
+                catch
+                {
+                    Console.WriteLine("Trip saved successfully!");
+                }
             }
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error saving trip: {ex.Message}");
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error saving trip: {ex.Message}");
+            }
+            catch
+            {
+                // Fallback if showToast is not available
+                Console.WriteLine($"Error saving trip: {ex.Message}");
+            }
         }
         finally
         {
@@ -489,5 +510,12 @@
     {
         validationErrors.Clear();
         await OnClose.InvokeAsync();
+    }
+
+    private void OnBackdropClick()
+    {
+        // Close modal when clicking on backdrop (outside the modal box)
+        // The modal-box has @onclick:stopPropagation which prevents this from firing when clicking inside
+        Close();
     }
 }

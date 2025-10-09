@@ -1,0 +1,687 @@
+@using TravelOperation.Core.Services.Interfaces
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Models.Lookup
+@inject ITransactionService TransactionService
+@inject ILookupService LookupService
+@inject IJSRuntime JSRuntime
+
+<!-- Create Transaction Modal -->
+<div class="modal @(isVisible ? "modal-open" : "")" id="transactionCreateModal">
+    <div class="modal-box w-11/12 max-w-6xl max-h-[90vh] overflow-y-auto">
+        <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @onclick="Hide">✕</button>
+        </form>
+        
+        <h3 class="font-bold text-2xl mb-6">➕ Add New Transaction</h3>
+        
+        @if (createForm != null)
+        {
+            <div class="space-y-6">
+                <!-- Basic Information Section -->
+                <div class="card bg-base-200">
+                    <div class="card-body">
+                        <h4 class="font-semibold text-lg mb-4">📋 Basic Information</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Source -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Source *</span>
+                                </label>
+                                <select class="select select-bordered" @bind="createForm.SourceId" required>
+                                    <option value="">Select source...</option>
+                                    @if (sources != null)
+                                    {
+                                        @foreach (var source in sources)
+                                        {
+                                            <option value="@source.SourceId">@source.Emoji @source.Name</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <!-- Employee Email -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Employee Email *</span>
+                                </label>
+                                <input type="email" 
+                                       class="input input-bordered" 
+                                       @bind="createForm.Email" 
+                                       placeholder="employee@company.com"
+                                       required />
+                            </div>
+
+                            <!-- Transaction Date -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Transaction Date *</span>
+                                </label>
+                                <input type="date" 
+                                       class="input input-bordered" 
+                                       @bind="createForm.TransactionDate" 
+                                       required />
+                            </div>
+
+                            <!-- Authorization Date -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Authorization Date</span>
+                                </label>
+                                <input type="date" 
+                                       class="input input-bordered" 
+                                       @bind="createForm.AuthorizationDate" />
+                            </div>
+
+                            <!-- Transaction Type -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Transaction Type *</span>
+                                </label>
+                                <select class="select select-bordered" @bind="createForm.TransactionType" required>
+                                    <option value="">Select type...</option>
+                                    <option value="Purchase">Purchase</option>
+                                    <option value="Refund">Refund</option>
+                                    <option value="Reimbursement">Reimbursement</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vendor Information Section -->
+                <div class="card bg-base-200">
+                    <div class="card-body">
+                        <h4 class="font-semibold text-lg mb-4">🏢 Vendor Information</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Vendor Name -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Vendor Name *</span>
+                                </label>
+                                <input type="text" 
+                                       class="input input-bordered" 
+                                       @bind="createForm.Vendor" 
+                                       placeholder="Vendor or merchant name"
+                                       required />
+                            </div>
+
+                            <!-- Merchant Category -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Merchant Category</span>
+                                </label>
+                                <input type="text" 
+                                       class="input input-bordered" 
+                                       @bind="createForm.MerchantCategory" 
+                                       placeholder="e.g., Airlines, Hotels" />
+                            </div>
+
+                            <!-- Address -->
+                            <div class="form-control md:col-span-2">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Address</span>
+                                </label>
+                                <textarea class="textarea textarea-bordered" 
+                                          @bind="createForm.Address" 
+                                          placeholder="Vendor address or location"
+                                          rows="2"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Amount Information Section -->
+                <div class="card bg-base-200">
+                    <div class="card-body">
+                        <h4 class="font-semibold text-lg mb-4">💰 Amount Information</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <!-- Currency -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Currency *</span>
+                                </label>
+                                <select class="select select-bordered" @bind="createForm.Currency" @bind:after="CalculateUSDAmount" required>
+                                    <option value="">Select...</option>
+                                    <option value="USD">USD - US Dollar</option>
+                                    <option value="EUR">EUR - Euro</option>
+                                    <option value="ILS">ILS - Israeli Shekel</option>
+                                    <option value="GBP">GBP - British Pound</option>
+                                    <option value="JPY">JPY - Japanese Yen</option>
+                                    <option value="CAD">CAD - Canadian Dollar</option>
+                                    <option value="AUD">AUD - Australian Dollar</option>
+                                </select>
+                            </div>
+
+                            <!-- Amount -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Amount *</span>
+                                </label>
+                                <input type="number" 
+                                       step="0.01"
+                                       class="input input-bordered" 
+                                       @bind="createForm.Amount" 
+                                       @bind:after="CalculateUSDAmount"
+                                       placeholder="0.00"
+                                       required />
+                            </div>
+
+                            <!-- Exchange Rate -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Exchange Rate (to USD)</span>
+                                </label>
+                                <input type="number" 
+                                       step="0.0001"
+                                       class="input input-bordered" 
+                                       @bind="createForm.ExchangeRate"
+                                       @bind:after="CalculateUSDAmount"
+                                       placeholder="1.0000" />
+                            </div>
+
+                            <!-- Amount USD (calculated) -->
+                            <div class="form-control md:col-span-3">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Amount (USD)</span>
+                                </label>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" 
+                                           step="0.01"
+                                           class="input input-bordered flex-1 bg-base-300" 
+                                           @bind="createForm.AmountUSD"
+                                           placeholder="0.00" />
+                                    <span class="text-sm text-base-content/60">
+                                        @if (createForm.Currency == "USD")
+                                        {
+                                            <span>Same as amount</span>
+                                        }
+                                        else if (createForm.Amount > 0 && createForm.ExchangeRate > 0)
+                                        {
+                                            <span>Auto-calculated</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Enter exchange rate</span>
+                                        }
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Category & Classification Section -->
+                <div class="card bg-base-200">
+                    <div class="card-body">
+                        <h4 class="font-semibold text-lg mb-4">🏷️ Category & Classification</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Category -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Category *</span>
+                                </label>
+                                <select class="select select-bordered" @bind="createForm.CategoryId" @bind:after="OnCategoryChanged" required>
+                                    <option value="">Select category...</option>
+                                    @if (categories != null)
+                                    {
+                                        @foreach (var category in categories)
+                                        {
+                                            <option value="@category.CategoryId">@category.Emoji @category.Name</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <!-- Cabin Class (only show if Airfare) -->
+                            @if (showCabinClass)
+                            {
+                                <div class="form-control">
+                                    <label class="label">
+                                        <span class="label-text font-semibold">Cabin Class *</span>
+                                    </label>
+                                    <select class="select select-bordered" @bind="createForm.CabinClassId" required>
+                                        <option value="">Select cabin class...</option>
+                                        @if (cabinClasses != null)
+                                        {
+                                            @foreach (var cabin in cabinClasses)
+                                            {
+                                                <option value="@cabin.CabinClassId">@cabin.Emoji @cabin.Name</option>
+                                            }
+                                        }
+                                    </select>
+                                </div>
+                            }
+
+                            <!-- Policy -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Policy</span>
+                                </label>
+                                <input type="text" 
+                                       class="input input-bordered" 
+                                       @bind="createForm.Policy" 
+                                       placeholder="Policy name or code" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Booking Information Section (Optional) -->
+                <div class="card bg-base-200">
+                    <div class="card-body">
+                        <h4 class="font-semibold text-lg mb-4">📅 Booking Information (Optional)</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Booking Type -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Booking Type</span>
+                                </label>
+                                <select class="select select-bordered" @bind="createForm.BookingTypeId">
+                                    <option value="">Not a booking</option>
+                                    @if (bookingTypes != null)
+                                    {
+                                        @foreach (var type in bookingTypes)
+                                        {
+                                            <option value="@type.BookingTypeId">@type.Emoji @type.Name</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <!-- Booking Status -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Booking Status</span>
+                                </label>
+                                <select class="select select-bordered" @bind="createForm.BookingStatusId">
+                                    <option value="">Select status...</option>
+                                    @if (bookingStatuses != null)
+                                    {
+                                        @foreach (var status in bookingStatuses)
+                                        {
+                                            <option value="@status.BookingStatusId">@status.Emoji @status.Name</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <!-- Booking Start Date -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Booking Start Date</span>
+                                </label>
+                                <input type="date" 
+                                       class="input input-bordered" 
+                                       @bind="createForm.BookingStartDate" />
+                            </div>
+
+                            <!-- Booking End Date -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Booking End Date</span>
+                                </label>
+                                <input type="date" 
+                                       class="input input-bordered" 
+                                       @bind="createForm.BookingEndDate" />
+                            </div>
+
+                            <!-- Booking ID -->
+                            <div class="form-control md:col-span-2">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Booking ID</span>
+                                </label>
+                                <input type="text" 
+                                       class="input input-bordered" 
+                                       @bind="createForm.BookingId" 
+                                       placeholder="External booking reference" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional Information Section -->
+                <div class="card bg-base-200">
+                    <div class="card-body">
+                        <h4 class="font-semibold text-lg mb-4">📝 Additional Information</h4>
+                        <div class="grid grid-cols-1 gap-4">
+                            <!-- Participants -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Participants</span>
+                                    <span class="label-text-alt">Comma-separated emails</span>
+                                </label>
+                                <input type="text" 
+                                       class="input input-bordered" 
+                                       @bind="createForm.Participants" 
+                                       placeholder="email1@company.com, email2@company.com" />
+                            </div>
+
+                            <!-- Document URL -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Document URL</span>
+                                </label>
+                                <input type="url" 
+                                       class="input input-bordered" 
+                                       @bind="createForm.DocumentUrl" 
+                                       placeholder="https://link-to-receipt.com" />
+                            </div>
+
+                            <!-- Notes -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Notes</span>
+                                </label>
+                                <textarea class="textarea textarea-bordered" 
+                                          @bind="createForm.Notes" 
+                                          placeholder="Additional notes or comments"
+                                          rows="3"></textarea>
+                            </div>
+
+                            <!-- Trip ID (optional link) -->
+                            <div class="form-control">
+                                <label class="label">
+                                    <span class="label-text font-semibold">Source Trip ID</span>
+                                    <span class="label-text-alt">From external system (e.g., Navan)</span>
+                                </label>
+                                <input type="text" 
+                                       class="input input-bordered" 
+                                       @bind="createForm.SourceTripId" 
+                                       placeholder="External trip reference" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Validation Flags Section -->
+                <div class="card bg-base-200">
+                    <div class="card-body">
+                        <h4 class="font-semibold text-lg mb-4">✅ Validation Settings</h4>
+                        <div class="flex flex-col gap-3">
+                            <div class="form-control">
+                                <label class="label cursor-pointer justify-start gap-3">
+                                    <input type="checkbox" class="checkbox" @bind="createForm.IsValid" />
+                                    <div>
+                                        <span class="label-text font-semibold">Mark as Valid</span>
+                                        <p class="text-xs text-base-content/60">Transaction has been reviewed and validated</p>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="form-control">
+                                <label class="label cursor-pointer justify-start gap-3">
+                                    <input type="checkbox" class="checkbox checkbox-warning" @bind="createForm.DataValidation" />
+                                    <div>
+                                        <span class="label-text font-semibold">Requires Data Validation</span>
+                                        <p class="text-xs text-base-content/60">Flag for additional review</p>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="form-control">
+                                <label class="label cursor-pointer justify-start gap-3">
+                                    <input type="checkbox" class="checkbox checkbox-info" @bind="createForm.ParticipantsValidated" />
+                                    <div>
+                                        <span class="label-text font-semibold">Participants Validated</span>
+                                        <p class="text-xs text-base-content/60">Participant list has been confirmed</p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex justify-end gap-3 pt-4">
+                    <button type="button" class="btn btn-ghost" @onclick="Hide">
+                        Cancel
+                    </button>
+                    <button type="button" 
+                            class="btn btn-primary" 
+                            @onclick="SaveTransaction"
+                            disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="loading loading-spinner loading-sm"></span>
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <span>💾 Save Transaction</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnTransactionCreated { get; set; }
+
+    private bool isVisible = false;
+    private bool isSaving = false;
+    private bool showCabinClass = false;
+
+    private TransactionCreateForm? createForm;
+
+    // Lookup data
+    private List<Source>? sources;
+    private List<Category>? categories;
+    private List<CabinClass>? cabinClasses;
+    private List<BookingType>? bookingTypes;
+    private List<BookingStatus>? bookingStatuses;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookupData();
+    }
+
+    private async Task LoadLookupData()
+    {
+        try
+        {
+            sources = (await LookupService.GetSourcesAsync()).ToList();
+            categories = (await LookupService.GetCategoriesAsync()).ToList();
+            cabinClasses = (await LookupService.GetCabinClassesAsync()).ToList();
+            bookingTypes = (await LookupService.GetBookingTypesAsync()).ToList();
+            bookingStatuses = (await LookupService.GetBookingStatusesAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", "Failed to load lookup data:", ex.Message);
+        }
+    }
+
+    public void Show()
+    {
+        // Initialize new form
+        createForm = new TransactionCreateForm
+        {
+            TransactionDate = DateTime.Now,
+            AuthorizationDate = DateTime.Now,
+            TransactionType = "Purchase",
+            Currency = "USD",
+            Amount = 0,
+            AmountUSD = 0,
+            ExchangeRate = 1.0m,
+            IsValid = false,
+            DataValidation = false,
+            ParticipantsValidated = false
+        };
+
+        isVisible = true;
+        showCabinClass = false;
+        StateHasChanged();
+    }
+
+    public void Hide()
+    {
+        isVisible = false;
+        createForm = null;
+        StateHasChanged();
+    }
+
+    private void OnCategoryChanged()
+    {
+        if (createForm == null || categories == null) return;
+
+        if (createForm.CategoryId.HasValue)
+        {
+            var category = categories.FirstOrDefault(c => c.CategoryId == createForm.CategoryId.Value);
+            showCabinClass = category?.Name?.Contains("Airfare", StringComparison.OrdinalIgnoreCase) == true;
+            
+            if (!showCabinClass)
+            {
+                createForm.CabinClassId = null;
+            }
+        }
+        else
+        {
+            showCabinClass = false;
+        }
+    }
+
+    private void CalculateUSDAmount()
+    {
+        if (createForm == null) return;
+
+        if (createForm.Currency == "USD")
+        {
+            createForm.AmountUSD = createForm.Amount;
+            createForm.ExchangeRate = 1.0m;
+        }
+        else if (createForm.Amount > 0 && createForm.ExchangeRate > 0)
+        {
+            createForm.AmountUSD = createForm.Amount * createForm.ExchangeRate;
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task SaveTransaction()
+    {
+        if (createForm == null) return;
+
+        // Validate required fields
+        if (string.IsNullOrWhiteSpace(createForm.Email))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Employee Email is required");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(createForm.Vendor))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Vendor Name is required");
+            return;
+        }
+
+        if (createForm.Amount <= 0)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Amount must be greater than 0");
+            return;
+        }
+
+        if (!createForm.CategoryId.HasValue)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Category is required");
+            return;
+        }
+
+        if (showCabinClass && !createForm.CabinClassId.HasValue)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Cabin Class is required for Airfare transactions");
+            return;
+        }
+
+        try
+        {
+            isSaving = true;
+
+            // Create a clean transaction object without navigation properties
+            var newTransaction = new Transaction
+            {
+                TransactionId = Guid.NewGuid().ToString(),
+                SourceId = createForm.SourceId ?? 0,
+                Email = createForm.Email,
+                TransactionDate = createForm.TransactionDate,
+                AuthorizationDate = createForm.AuthorizationDate,
+                TransactionType = createForm.TransactionType,
+                CategoryId = createForm.CategoryId ?? 0,
+                Vendor = createForm.Vendor,
+                MerchantCategory = createForm.MerchantCategory,
+                Address = createForm.Address,
+                SourceTripId = createForm.SourceTripId,
+                BookingId = createForm.BookingId,
+                BookingStatusId = createForm.BookingStatusId,
+                BookingStartDate = createForm.BookingStartDate,
+                BookingEndDate = createForm.BookingEndDate,
+                BookingTypeId = createForm.BookingTypeId,
+                Policy = createForm.Policy,
+                Currency = createForm.Currency,
+                Amount = createForm.Amount,
+                AmountUSD = createForm.AmountUSD,
+                ExchangeRate = createForm.ExchangeRate,
+                CabinClassId = createForm.CabinClassId,
+                Participants = createForm.Participants,
+                DocumentUrl = createForm.DocumentUrl,
+                Notes = createForm.Notes,
+                IsValid = createForm.IsValid,
+                DataValidation = createForm.DataValidation,
+                ParticipantsValidated = createForm.ParticipantsValidated,
+                CreatedAt = DateTime.UtcNow,
+                ModifiedAt = DateTime.UtcNow,
+                ModifiedBy = createForm.Email
+            };
+
+            await TransactionService.CreateTransactionAsync(newTransaction);
+
+            await JSRuntime.InvokeVoidAsync("alert", "✅ Transaction created successfully!");
+
+            // Notify parent component
+            await OnTransactionCreated.InvokeAsync();
+
+            // Hide modal
+            Hide();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"❌ Failed to create transaction: {ex.Message}");
+            await JSRuntime.InvokeVoidAsync("console.error", "Failed to create transaction:", ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    // Form model
+    private class TransactionCreateForm
+    {
+        public int? SourceId { get; set; }
+        public string Email { get; set; } = "";
+        public DateTime TransactionDate { get; set; }
+        public DateTime? AuthorizationDate { get; set; }
+        public string TransactionType { get; set; } = "Purchase";
+        public int? CategoryId { get; set; }
+        public string Vendor { get; set; } = "";
+        public string? MerchantCategory { get; set; }
+        public string? Address { get; set; }
+        public string? SourceTripId { get; set; }
+        public string? BookingId { get; set; }
+        public int? BookingStatusId { get; set; }
+        public DateTime? BookingStartDate { get; set; }
+        public DateTime? BookingEndDate { get; set; }
+        public int? BookingTypeId { get; set; }
+        public string? Policy { get; set; }
+        public string Currency { get; set; } = "USD";
+        public decimal Amount { get; set; }
+        public decimal? AmountUSD { get; set; }
+        public decimal? ExchangeRate { get; set; }
+        public int? CabinClassId { get; set; }
+        public string? Participants { get; set; }
+        public string? DocumentUrl { get; set; }
+        public string? Notes { get; set; }
+        public bool IsValid { get; set; }
+        public bool DataValidation { get; set; }
+        public bool ParticipantsValidated { get; set; }
+    }
+}

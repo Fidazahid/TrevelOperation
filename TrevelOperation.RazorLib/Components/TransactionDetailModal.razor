@@ -1,0 +1,447 @@
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Services.Interfaces
+@using TrevelOperation.Service
+@inject ITransactionService TransactionService
+@inject IAuditService AuditService
+@inject IMessageTemplateService MessageTemplateService
+@inject IJSRuntime JSRuntime
+
+@if (IsVisible && Transaction != null)
+{
+    <div class="modal modal-open">
+        <div class="modal-box max-w-5xl">
+            <!-- Header -->
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h3 class="font-bold text-2xl mb-1">Transaction details</h3>
+                    <p class="text-sm text-gray-600">@Transaction.TransactionId</p>
+                </div>
+                <button class="btn btn-sm btn-circle btn-ghost" @onclick="Close">✕</button>
+            </div>
+
+            <!-- Status and Validation Badges -->
+            <div class="flex gap-2 mb-6">
+                @if (Transaction.IsValid)
+                {
+                    <span class="badge badge-success gap-2">
+                        ✅ Validated
+                    </span>
+                }
+                else
+                {
+                    <span class="badge badge-warning gap-2">
+                        ⚠️ Needs review
+                    </span>
+                }
+
+                @if (Transaction.TripId != null)
+                {
+                    <span class="badge badge-info gap-2">
+                        🧳 Linked to trip
+                    </span>
+                }
+                else
+                {
+                    <span class="badge badge-ghost gap-2">
+                        Unlinked
+                    </span>
+                }
+
+                @if (Transaction.DataValidation)
+                {
+                    <span class="badge badge-error gap-2">
+                        ⚠️ Data validation required
+                    </span>
+                }
+            </div>
+
+            <!-- Main Content - Two Column Layout -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <!-- Left Column - Transaction Info -->
+                <div class="space-y-4">
+                    <!-- Basic Information -->
+                    <div class="card bg-base-200">
+                        <div class="card-body p-4">
+                            <h4 class="font-semibold text-lg mb-3">Basic information</h4>
+                            
+                            <div class="space-y-2">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Source:</span>
+                                    <span class="font-medium">@(Transaction.Source?.Name ?? "N/A")</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Email:</span>
+                                    <span class="font-medium">@Transaction.Email</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Transaction date:</span>
+                                    <span class="font-medium">@Transaction.TransactionDate.ToString("dd/MM/yyyy")</span>
+                                </div>
+                                @if (Transaction.AuthorizationDate != null)
+                                {
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Authorization date:</span>
+                                        <span class="font-medium">@Transaction.AuthorizationDate.Value.ToString("dd/MM/yyyy")</span>
+                                    </div>
+                                }
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Type:</span>
+                                    <span class="font-medium">@(Transaction.TransactionType ?? "N/A")</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vendor Information -->
+                    <div class="card bg-base-200">
+                        <div class="card-body p-4">
+                            <h4 class="font-semibold text-lg mb-3">Vendor information</h4>
+                            
+                            <div class="space-y-2">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Vendor:</span>
+                                    <span class="font-medium">@(Transaction.Vendor ?? "N/A")</span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(Transaction.MerchantCategory))
+                                {
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Merchant category:</span>
+                                        <span class="font-medium">@Transaction.MerchantCategory</span>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(Transaction.Address))
+                                {
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Address:</span>
+                                        <span class="font-medium text-sm">@Transaction.Address</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Amount Information -->
+                    <div class="card bg-base-200">
+                        <div class="card-body p-4">
+                            <h4 class="font-semibold text-lg mb-3">Amount information</h4>
+                            
+                            <div class="space-y-2">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-600">Amount:</span>
+                                    <span class="font-bold text-xl">@Transaction.Currency @Transaction.Amount.ToString("N2")</span>
+                                </div>
+                                @if (Transaction.AmountUSD != null)
+                                {
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-gray-600">Amount (USD):</span>
+                                        <span class="font-bold text-xl text-primary">${Transaction.AmountUSD.Value:N2}</span>
+                                    </div>
+                                }
+                                @if (Transaction.ExchangeRate != null)
+                                {
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Exchange rate:</span>
+                                        <span class="font-medium">@Transaction.ExchangeRate.Value.ToString("N6")</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column - Category and Trip Info -->
+                <div class="space-y-4">
+                    <!-- Category Information -->
+                    <div class="card bg-base-200">
+                        <div class="card-body p-4">
+                            <h4 class="font-semibold text-lg mb-3">Category & classification</h4>
+                            
+                            <div class="space-y-2">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Category:</span>
+                                    <span class="font-medium">@(Transaction.Category?.Name ?? "Uncategorized")</span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(Transaction.Policy))
+                                {
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Policy:</span>
+                                        <span class="font-medium text-sm">@Transaction.Policy</span>
+                                    </div>
+                                }
+                                @if (Transaction.CabinClass != null)
+                                {
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Cabin class:</span>
+                                        <span class="font-medium">@Transaction.CabinClass.Name</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Trip Information -->
+                    @if (Transaction.TripId != null && Transaction.Trip != null)
+                    {
+                        <div class="card bg-base-200">
+                            <div class="card-body p-4">
+                                <h4 class="font-semibold text-lg mb-3">🧳 Linked trip</h4>
+                                
+                                <div class="space-y-2">
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Trip name:</span>
+                                        <span class="font-medium">@Transaction.Trip.TripName</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Dates:</span>
+                                        <span class="font-medium">
+                                            @Transaction.Trip.StartDate.ToString("dd/MM/yyyy") - @Transaction.Trip.EndDate.ToString("dd/MM/yyyy")
+                                        </span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Destination:</span>
+                                        <span class="font-medium">@Transaction.Trip.Country1</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Booking Information -->
+                    @if (!string.IsNullOrEmpty(Transaction.BookingId) || !string.IsNullOrEmpty(Transaction.SourceTripId))
+                    {
+                        <div class="card bg-base-200">
+                            <div class="card-body p-4">
+                                <h4 class="font-semibold text-lg mb-3">Booking information</h4>
+                                
+                                <div class="space-y-2">
+                                    @if (!string.IsNullOrEmpty(Transaction.BookingId))
+                                    {
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Booking ID:</span>
+                                            <span class="font-medium">@Transaction.BookingId</span>
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(Transaction.SourceTripId))
+                                    {
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Source trip ID:</span>
+                                            <span class="font-medium">@Transaction.SourceTripId</span>
+                                        </div>
+                                    }
+                                    @if (Transaction.BookingStartDate != null)
+                                    {
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Booking dates:</span>
+                                            <span class="font-medium">
+                                                @Transaction.BookingStartDate.Value.ToString("dd/MM/yyyy")
+                                                @if (Transaction.BookingEndDate != null)
+                                                {
+                                                    <text> - @Transaction.BookingEndDate.Value.ToString("dd/MM/yyyy")</text>
+                                                }
+                                            </span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Participants -->
+                    @if (!string.IsNullOrEmpty(Transaction.Participants))
+                    {
+                        <div class="card bg-base-200">
+                            <div class="card-body p-4">
+                                <h4 class="font-semibold text-lg mb-3">👥 Participants</h4>
+                                <p class="text-sm">@Transaction.Participants</p>
+                                @if (Transaction.ParticipantsValidated)
+                                {
+                                    <span class="badge badge-success badge-sm mt-2">✅ Validated</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-warning badge-sm mt-2">⚠️ Not validated</span>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Document -->
+                    @if (!string.IsNullOrEmpty(Transaction.DocumentUrl))
+                    {
+                        <div class="card bg-base-200">
+                            <div class="card-body p-4">
+                                <h4 class="font-semibold text-lg mb-3">📎 Documentation</h4>
+                                <a href="@Transaction.DocumentUrl" target="_blank" class="btn btn-sm btn-outline btn-primary">
+                                    View document
+                                </a>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Notes -->
+            @if (!string.IsNullOrEmpty(Transaction.Notes))
+            {
+                <div class="card bg-base-200 mb-6">
+                    <div class="card-body p-4">
+                        <h4 class="font-semibold text-lg mb-2">📝 Notes</h4>
+                        <p class="text-sm">@Transaction.Notes</p>
+                    </div>
+                </div>
+            }
+
+            <!-- System Information -->
+            <div class="card bg-base-200 mb-6">
+                <div class="card-body p-4">
+                    <h4 class="font-semibold text-lg mb-3">🔧 System information</h4>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                            <span class="text-gray-600">Created:</span>
+                            <p class="font-medium">@Transaction.CreatedAt.ToString("dd/MM/yyyy HH:mm:ss")</p>
+                        </div>
+                        <div>
+                            <span class="text-gray-600">Last modified:</span>
+                            <p class="font-medium">@Transaction.ModifiedAt.ToString("dd/MM/yyyy HH:mm:ss")</p>
+                        </div>
+                        <div>
+                            <span class="text-gray-600">Modified by:</span>
+                            <p class="font-medium">@(Transaction.ModifiedBy ?? "System")</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="modal-action flex flex-wrap gap-2">
+                @if (OnEdit.HasDelegate)
+                {
+                    <button class="btn btn-primary" @onclick="HandleEdit">
+                        ✏️ Edit
+                    </button>
+                }
+                
+                @if (OnDelete.HasDelegate && !Transaction.IsValid)
+                {
+                    <button class="btn btn-error" @onclick="HandleDelete">
+                        🗑️ Delete
+                    </button>
+                }
+
+                @if (OnLinkToTrip.HasDelegate && Transaction.TripId == null)
+                {
+                    <button class="btn btn-info" @onclick="HandleLinkToTrip">
+                        🔗 Link to trip
+                    </button>
+                }
+
+                @if (OnSplit.HasDelegate)
+                {
+                    <button class="btn btn-accent" @onclick="HandleSplit">
+                        ✂️ Split transaction
+                    </button>
+                }
+
+                @if (OnGenerateMessage.HasDelegate)
+                {
+                    <button class="btn btn-outline" @onclick="HandleGenerateMessage">
+                        📧 Generate message
+                    </button>
+                }
+
+                @if (!Transaction.IsValid)
+                {
+                    <button class="btn btn-success" @onclick="HandleMarkValid">
+                        ✅ Mark as valid
+                    </button>
+                }
+
+                <button class="btn btn-ghost ml-auto" @onclick="Close">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public Transaction? Transaction { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<Transaction> OnEdit { get; set; }
+    [Parameter] public EventCallback<Transaction> OnDelete { get; set; }
+    [Parameter] public EventCallback<Transaction> OnLinkToTrip { get; set; }
+    [Parameter] public EventCallback<Transaction> OnSplit { get; set; }
+    [Parameter] public EventCallback<Transaction> OnGenerateMessage { get; set; }
+
+    private async Task Close()
+    {
+        IsVisible = false;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleEdit()
+    {
+        if (Transaction != null)
+        {
+            await OnEdit.InvokeAsync(Transaction);
+        }
+    }
+
+    private async Task HandleDelete()
+    {
+        if (Transaction != null)
+        {
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+                $"Are you sure you want to delete transaction {Transaction.TransactionId}?");
+            
+            if (confirmed)
+            {
+                await OnDelete.InvokeAsync(Transaction);
+                await Close();
+            }
+        }
+    }
+
+    private async Task HandleLinkToTrip()
+    {
+        if (Transaction != null)
+        {
+            await OnLinkToTrip.InvokeAsync(Transaction);
+        }
+    }
+
+    private async Task HandleSplit()
+    {
+        if (Transaction != null)
+        {
+            await OnSplit.InvokeAsync(Transaction);
+        }
+    }
+
+    private async Task HandleGenerateMessage()
+    {
+        if (Transaction != null)
+        {
+            await OnGenerateMessage.InvokeAsync(Transaction);
+        }
+    }
+
+    private async Task HandleMarkValid()
+    {
+        if (Transaction != null)
+        {
+            try
+            {
+                await TransactionService.MarkAsValidAsync(Transaction.TransactionId);
+                Transaction.IsValid = true;
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", $"Error marking transaction as valid: {ex.Message}");
+            }
+        }
+    }
+}

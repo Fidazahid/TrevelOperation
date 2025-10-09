@@ -102,9 +102,96 @@ main {
     background: oklch(90% 0 0);
 }
 
+/* Modal styles - Fix backdrop and z-index issues */
+.modal {
+    pointer-events: auto;
+    display: none; /* Hidden by default */
+}
 
+.modal-open {
+    pointer-events: auto;
+    display: flex !important; /* Show when open */
+}
 
+.modal::backdrop {
+    background-color: rgba(0, 0, 0, 0.5);
+}
 
+/* Ensure modal has proper backdrop overlay */
+.modal:not(dialog:not(.modal-open)),
+.modal.modal-open {
+    background-color: rgba(0, 0, 0, 0.5);
+    pointer-events: auto;
+    z-index: 999;
+    position: fixed;
+    inset: 0;
+}
+
+/* Ensure modal box is on top and clickable */
+.modal-box {
+    pointer-events: auto;
+    z-index: 1000;
+    position: relative;
+    background-color: oklch(100% 0 0) !important;
+}
+
+/* Checkbox fixes - ensure checkboxes display properly */
+.checkbox {
+    flex-shrink: 0;
+    appearance: none;
+    height: 1.5rem;
+    width: 1.5rem;
+    cursor: pointer;
+    border-width: 1px;
+    border-color: oklch(75% 0.01 180);
+    border-radius: 0.5rem;
+    background-color: oklch(100% 0 0);
+}
+
+.checkbox:checked {
+    background-color: oklch(43% 0.232 292.759);
+    border-color: oklch(43% 0.232 292.759);
+    background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 0.75rem;
+}
+
+.checkbox-sm {
+    height: 1.25rem;
+    width: 1.25rem;
+}
+
+/* Toast animations */
+@keyframes fade-in {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes fade-out {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+}
+
+.animate-fade-in {
+    animation: fade-in 0.3s ease-out;
+}
+
+.animate-fade-out {
+    animation: fade-out 0.3s ease-in;
+}
 
 .validation-message {
     @apply text-red-500 text-sm mt-1;

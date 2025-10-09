@@ -1,0 +1,9 @@
+TransactionID,Email,Date,Merchant,Location,Category,Currency,Amount,Receipt
+AGT001,david.miller@wsc.com,15/10/2024,Lufthansa,Frankfurt Airport,Airfare,EUR,780.00,https://agent.com/r001
+AGT002,david.miller@wsc.com,16/10/2024,Hilton Frankfurt,Frankfurt Germany,Lodging,EUR,320.00,https://agent.com/r002
+AGT003,emma.davis@wsc.com,05/09/2024,Lyft,Seattle WA,Taxi & rideshare,USD,28.50,https://agent.com/r003
+AGT004,emma.davis@wsc.com,06/09/2024,Pike Place Market,Seattle WA,Meals for myself,USD,45.00,https://agent.com/r004
+AGT005,robert.taylor@wsc.com,12/08/2024,Air France,CDG Airport,Airfare,EUR,890.00,https://agent.com/r005
+AGT006,robert.taylor@wsc.com,13/08/2024,Paris Metro,Paris France,public transport, tolls & parking,EUR,15.00,https://agent.com/r006
+AGT007,lisa.anderson@wsc.com,20/09/2024,AT&T,Online,Internet access,USD,35.00,https://agent.com/r007
+AGT008,chris.martin@wsc.com,25/09/2024,Shell Gas,Highway 101,Fuel,USD,65.00,https://agent.com/r008
