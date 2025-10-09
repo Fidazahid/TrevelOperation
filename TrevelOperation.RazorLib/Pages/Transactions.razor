@@ -8,6 +8,7 @@
 @inject ILookupService LookupService
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
+@inject TrevelOperation.Service.IMessageTemplateService MessageTemplateService
 
 <PageTitle>Transactions - Travel Expense Management</PageTitle>
 
@@ -139,38 +140,38 @@
             {
                 <div class="overflow-x-auto">
                     <table class="table table-zebra table-pin-rows">
-                        <thead>
-                            <tr class="bg-base-200">
-                                <th>
+                        <thead class="bg-base-300">
+                            <tr class="bg-base-300">
+                                <th class="bg-base-300">
                                     <input type="checkbox" class="checkbox checkbox-sm" 
                                            @onchange="ToggleSelectAll" 
                                            checked="@(selectedTransactions.Count == filteredTransactions.Count())" />
                                 </th>
-                                <th class="cursor-pointer" @onclick="() => SortBy(nameof(Transaction.TransactionId))">
+                                <th class="bg-base-300 cursor-pointer hover:bg-base-200" @onclick="() => SortBy(nameof(Transaction.TransactionId))">
                                     Transaction ID @GetSortIcon(nameof(Transaction.TransactionId))
                                 </th>
-                                <th class="cursor-pointer" @onclick="() => SortBy(nameof(Transaction.TransactionDate))">
+                                <th class="bg-base-300 cursor-pointer hover:bg-base-200" @onclick="() => SortBy(nameof(Transaction.TransactionDate))">
                                     Date @GetSortIcon(nameof(Transaction.TransactionDate))
                                 </th>
-                                <th>Source</th>
-                                <th>Email</th>
-                                <th>Vendor</th>
-                                <th class="cursor-pointer" @onclick="() => SortBy(nameof(Transaction.CategoryId))">
+                                <th class="bg-base-300">Source</th>
+                                <th class="bg-base-300">Email</th>
+                                <th class="bg-base-300">Vendor</th>
+                                <th class="bg-base-300 cursor-pointer hover:bg-base-200" @onclick="() => SortBy(nameof(Transaction.CategoryId))">
                                     Category @GetSortIcon(nameof(Transaction.CategoryId))
                                 </th>
-                                <th class="cursor-pointer" @onclick="() => SortBy(nameof(Transaction.AmountUSD))">
+                                <th class="bg-base-300 cursor-pointer hover:bg-base-200" @onclick="() => SortBy(nameof(Transaction.AmountUSD))">
                                     Amount (USD) @GetSortIcon(nameof(Transaction.AmountUSD))
                                 </th>
-                                <th>Cabin Class</th>
-                                <th>Trip</th>
-                                <th>Status</th>
-                                <th>Actions</th>
+                                <th class="bg-base-300">Cabin Class</th>
+                                <th class="bg-base-300">Trip</th>
+                                <th class="bg-base-300">Status</th>
+                                <th class="bg-base-300">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var transaction in filteredTransactions)
                             {
-                                <tr class="@(selectedTransactions.Contains(transaction.TransactionId) ? "bg-primary/10" : "")">
+                                <tr class="hover:bg-base-200 transition-colors @(selectedTransactions.Contains(transaction.TransactionId) ? "bg-primary/10" : "")">
                                     <td>
                                         <input type="checkbox" class="checkbox checkbox-sm" 
                                                checked="@selectedTransactions.Contains(transaction.TransactionId)"
@@ -247,17 +248,17 @@
                                         </div>
                                     </td>
                                     <td>
-                                        <div class="dropdown dropdown-end" >
+                                        <div class="dropdown dropdown-end">
                                             <label tabindex="0" class="btn btn-ghost btn-sm">⋮</label>
                                             <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow-lg bg-white border border-base-300 rounded-box w-52">
-                                                <li><a @onclick="() => EditTransaction(transaction)">✏️ Edit</a></li>
-                                                <li><a @onclick="() => LinkToTrip(transaction)">🔗 Link to Trip</a></li>
-                                                <li><a @onclick="() => SplitTransaction(transaction)">✂️ Split</a></li>
-                                                <li><a @onclick="() => GenerateMessage(transaction)">💬 Generate Message</a></li>
-                                                <li><a @onclick="() => ViewDocuments(transaction)">📄 Documents</a></li>
+                                                <li><a @onclick="async () => { await CloseDropdown(); await EditTransaction(transaction); }">✏️ Edit</a></li>
+                                                <li><a @onclick="async () => { await CloseDropdown(); await LinkToTrip(transaction); }">🔗 Link to Trip</a></li>
+                                                <li><a @onclick="async () => { await CloseDropdown(); await SplitTransaction(transaction); }">✂️ Split</a></li>
+                                                <li><a @onclick="async () => { await CloseDropdown(); await GenerateMessage(transaction); }">💬 Generate Message</a></li>
+                                                <li><a @onclick="async () => { await CloseDropdown(); await ViewDocuments(transaction); }">📄 Documents</a></li>
                                                 <li class="divider"></li>
-                                                <li><a @onclick="() => MarkAsValid(transaction)" class="text-success">✅ Mark Valid</a></li>
-                                                <li><a @onclick="() => DeleteTransaction(transaction)" class="text-error">🗑️ Delete</a></li>
+                                                <li><a @onclick="async () => { await CloseDropdown(); await MarkAsValid(transaction); }" class="text-success">✅ Mark Valid</a></li>
+                                                <li><a @onclick="async () => { await CloseDropdown(); await DeleteTransaction(transaction); }" class="text-error">🗑️ Delete</a></li>
                                             </ul>
                                         </div>
                                     </td>
@@ -599,20 +600,84 @@
 
     private async Task LinkToTrip(Transaction transaction)
     {
-        // TODO: Implement link to trip modal
-        await JSRuntime.InvokeVoidAsync("alert", $"Link transaction {transaction.TransactionId} to trip");
+        // TODO: Implement link to trip modal - Need to create TripLinkModal component
+        await JSRuntime.InvokeVoidAsync("alert", $"Link transaction {transaction.TransactionId} to trip\n\nFeature coming soon! This will allow you to:\n• Select a trip from available trips\n• Link this transaction to that trip\n• Group expenses by trip for reporting");
     }
 
     private async Task SplitTransaction(Transaction transaction)
     {
-        // TODO: Implement split transaction modal
-        await JSRuntime.InvokeVoidAsync("alert", $"Split transaction {transaction.TransactionId}");
+        // The TransactionSplitModal uses parameters, not a Show method
+        // For now, navigate to Split Engine page or show info
+        await JSRuntime.InvokeVoidAsync("alert", $"Split Transaction: {transaction.TransactionId}\n\n" +
+            $"This feature allows you to divide one transaction into multiple parts.\n\n" +
+            $"Options:\n" +
+            $"• Equal Split: Divide amount equally\n" +
+            $"• Custom Split: Specify exact amounts\n" +
+            $"• Percentage Split: Assign percentages\n\n" +
+            $"To use this feature, go to:\nData Integrity → Split Engine");
     }
 
     private async Task GenerateMessage(Transaction transaction)
     {
-        // TODO: Implement message generation
-        await JSRuntime.InvokeVoidAsync("alert", $"Generate message for {transaction.TransactionId}");
+        try
+        {
+            string message = "";
+            
+            // Generate message based on transaction category and issues
+            if (transaction.Category?.Name == "Meals" && transaction.AmountUSD >= 80)
+            {
+                // Parse participants if available
+                List<string>? participants = null;
+                if (!string.IsNullOrEmpty(transaction.Participants))
+                {
+                    participants = transaction.Participants.Split(',')
+                        .Select(p => p.Trim())
+                        .Where(p => !string.IsNullOrEmpty(p))
+                        .ToList();
+                }
+                message = MessageTemplateService.GenerateMealsMessage(transaction, participants);
+            }
+            else if (transaction.Category?.Name == "Client entertainment")
+            {
+                // Parse participants
+                List<string> participants = new();
+                if (!string.IsNullOrEmpty(transaction.Participants))
+                {
+                    participants = transaction.Participants.Split(',')
+                        .Select(p => p.Trim())
+                        .Where(p => !string.IsNullOrEmpty(p))
+                        .ToList();
+                }
+                message = MessageTemplateService.GenerateClientEntertainmentMessage(transaction, participants);
+            }
+            else if (transaction.Category?.Name == "Other" || transaction.Category == null)
+            {
+                message = MessageTemplateService.GenerateOtherCategoryMessage(transaction, transaction.Trip);
+            }
+            else if (string.IsNullOrEmpty(transaction.DocumentUrl))
+            {
+                message = MessageTemplateService.GenerateDocumentationMessage(transaction);
+            }
+            else
+            {
+                // Default message for other cases
+                message = $"Hi {transaction.Email?.Split('@')[0] ?? "User"},\n\n" +
+                         $"Regarding transaction {transaction.TransactionId}:\n" +
+                         $"Date: {transaction.TransactionDate:dd/MM/yyyy}\n" +
+                         $"Vendor: {transaction.Vendor}\n" +
+                         $"Amount: {transaction.Currency} {transaction.Amount:N2}\n\n" +
+                         $"Please provide any additional information needed for this transaction.\n\n" +
+                         $"Thank you!";
+            }
+            
+            // Copy to clipboard
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", message);
+            await JSRuntime.InvokeVoidAsync("alert", "✅ Message copied to clipboard!\n\nYou can now paste it into your email client.");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Failed to generate message: {ex.Message}");
+        }
     }
 
     private async Task ViewDocuments(Transaction transaction)
@@ -711,6 +776,13 @@
     private async Task BulkExport()
     {
         // TODO: Implement bulk export
-        await JSRuntime.InvokeVoidAsync("alert", $"Export {selectedTransactions.Count} transactions");
+        await JSRuntime.InvokeVoidAsync("alert", $"Export {selectedTransactions.Count} transactions");  
+    }
+
+    // Helper method to close dropdown menus
+    private async Task CloseDropdown()
+    {
+        // Remove focus from active element to close dropdown
+        await JSRuntime.InvokeVoidAsync("eval", "document.activeElement?.blur()");
     }
 }
