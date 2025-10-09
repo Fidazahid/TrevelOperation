@@ -4,8 +4,10 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TravelOperation.Core.Data;
-using TravelOperation.Core.Models.Entities;
 using TravelOperation.Core.Models.Lookup;
+using TravelOperation.Core.Models.Entities;
+using TransformationRuleEntity = TravelOperation.Core.Models.Entities.TransformationRule;
+using TransformationRuleDto = TrevelOperation.Service.TransformationRule;
 
 namespace TrevelOperation.Service;
 
@@ -13,7 +15,7 @@ public class CsvImportService : ICsvImportService
 {
     private readonly TravelDbContext _context;
     private readonly ILogger<CsvImportService> _logger;
-    private static readonly List<TransformationRule> DefaultRules = GetDefaultTransformationRules();
+    private static readonly List<TransformationRuleDto> DefaultRules = GetDefaultTransformationRules();
 
     public CsvImportService(TravelDbContext context, ILogger<CsvImportService> logger)
     {
@@ -39,16 +41,88 @@ public class CsvImportService : ICsvImportService
         return await ProcessCsvImportAsync(csvStream, fileName, mapping, "Manual");
     }
 
-    public async Task<List<TransformationRule>> GetTransformationRulesAsync()
+    public async Task<List<TransformationRuleDto>> GetTransformationRulesAsync()
     {
-        // For now, return default rules. In a full implementation, this would come from database
-        return await Task.FromResult(DefaultRules);
+        try
+        {
+            // Get rules from database
+            var dbRules = await _context.TransformationRules
+                .Where(r => r.IsActive)
+                .OrderByDescending(r => r.Priority)
+                .ToListAsync();
+
+            // If no rules in database, return default rules
+            if (!dbRules.Any())
+            {
+                _logger.LogInformation("No transformation rules found in database, returning default rules");
+                // Convert default rules to match the DTO structure expected by the UI
+                return DefaultRules.Select(r => new TransformationRuleDto
+                {
+                    RuleId = r.RuleId,
+                    PolicyPattern = r.PolicyPattern,
+                    CategoryName = r.CategoryName,
+                    Priority = r.Priority,
+                    IsRegex = r.IsRegex,
+                    IsActive = r.IsActive,
+                    CreatedAt = r.CreatedAt,
+                    ModifiedAt = r.ModifiedAt,
+                    CreatedBy = r.CreatedBy
+                }).ToList();
+            }
+
+            // Convert entity to DTO
+            return dbRules.Select(e => new TransformationRuleDto
+            {
+                RuleId = e.TransformationRuleId,
+                PolicyPattern = e.PolicyPattern,
+                CategoryName = e.CategoryName,
+                Priority = e.Priority,
+                IsRegex = e.IsRegex,
+                IsActive = e.IsActive,
+                CreatedAt = e.CreatedAt,
+                ModifiedAt = e.ModifiedAt,
+                CreatedBy = e.ModifiedBy
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading transformation rules from database");
+            return DefaultRules;
+        }
     }
 
-    public async Task SaveTransformationRulesAsync(List<TransformationRule> rules)
+    public async Task SaveTransformationRulesAsync(List<TransformationRuleDto> rules)
     {
-        // For now, just log. In a full implementation, this would save to database
-        _logger.LogInformation("Saving {Count} transformation rules", rules.Count);
+        try
+        {
+            // Clear existing rules
+            var existingRules = await _context.TransformationRules.ToListAsync();
+            _context.TransformationRules.RemoveRange(existingRules);
+
+            // Add new rules
+            var now = DateTime.UtcNow;
+            var entities = rules.Select(r => new TransformationRuleEntity
+            {
+                PolicyPattern = r.PolicyPattern,
+                CategoryName = r.CategoryName,
+                Priority = r.Priority,
+                IsRegex = r.IsRegex,
+                IsActive = r.IsActive,
+                CreatedAt = r.CreatedAt == default ? now : r.CreatedAt,
+                ModifiedAt = now,
+                ModifiedBy = "System" // TODO: Get from current user context
+            }).ToList();
+
+            await _context.TransformationRules.AddRangeAsync(entities);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Successfully saved {Count} transformation rules", rules.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error saving transformation rules to database");
+            throw;
+        }
         await Task.CompletedTask;
     }
 
@@ -470,9 +544,9 @@ public class CsvImportService : ICsvImportService
         };
     }
 
-    private static List<TransformationRule> GetDefaultTransformationRules()
+    private static List<TransformationRuleDto> GetDefaultTransformationRules()
     {
-        return new List<TransformationRule>
+        return new List<TransformationRuleDto>
         {
             new() { RuleId = 1, PolicyPattern = "tripactions_fees", CategoryName = "Trip fee", Priority = 100 },
             new() { RuleId = 2, PolicyPattern = "Airalo", CategoryName = "Communication", Priority = 90 },

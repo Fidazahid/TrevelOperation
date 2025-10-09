@@ -1,7 +1,9 @@
 @page "/settings/countries-cities"
 @using TravelOperation.Core.Models.Entities
 @using Microsoft.AspNetCore.Components.Forms
+@using TrevelOperation.Service
 @inject IJSRuntime JSRuntime
+@inject ISettingsService SettingsService
 
 <PageTitle>Countries & Cities - Travel Expense Management</PageTitle>
 
@@ -67,8 +69,6 @@
                                 <span class="ml-2">@(sortAscending ? "↑" : "↓")</span>
                             }
                         </th>
-                        <th>Usage Count</th>
-                        <th>Last Used</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -80,19 +80,6 @@
                             <tr class="hover">
                                 <td class="font-semibold">@item.Country</td>
                                 <td>@item.City</td>
-                                <td>
-                                    <span class="badge badge-neutral">@item.UsageCount trips</span>
-                                </td>
-                                <td>
-                                    @if (item.LastUsed.HasValue)
-                                    {
-                                        <span class="text-sm">@item.LastUsed.Value.ToString("dd/MM/yyyy")</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-base-content/50">Never used</span>
-                                    }
-                                </td>
                                 <td>
                                     <div class="dropdown dropdown-end">
                                         <label tabindex="0" class="btn btn-ghost btn-sm">⋮</label>
@@ -236,6 +223,10 @@
     private bool showImportModal = false;
     private IBrowserFile? selectedFile;
     private string importPreview = "";
+    
+    // Loading state
+    private bool isLoading = false;
+    private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
@@ -244,9 +235,22 @@
 
     private async Task LoadCountries()
     {
-        // Generate mock data - replace with actual service call
-        countries = GenerateMockCountriesData();
-        FilterCountries();
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            countries = await SettingsService.GetCountriesCitiesAsync();
+            FilterCountries();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading countries and cities: {ex.Message}";
+            Console.WriteLine($"Error: {ex}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 
     private void FilterCountries()
@@ -326,11 +330,9 @@
     {
         editingItem = new CountryCity
         {
-            Id = item.Id,
+            CountryCityId = item.CountryCityId,
             Country = item.Country,
-            City = item.City,
-            UsageCount = item.UsageCount,
-            LastUsed = item.LastUsed
+            City = item.City
         };
         isEditing = true;
         showModal = true;
@@ -341,32 +343,30 @@
         if (string.IsNullOrWhiteSpace(editingItem.Country) || string.IsNullOrWhiteSpace(editingItem.City))
             return;
 
-        if (isEditing)
+        try
         {
-            var existing = countries.FirstOrDefault(c => c.Id == editingItem.Id);
-            if (existing != null)
+            if (isEditing)
             {
-                existing.Country = editingItem.Country.Trim();
-                existing.City = editingItem.City.Trim();
+                await SettingsService.UpdateCountryCityAsync(
+                    editingItem.CountryCityId,
+                    editingItem.Country.Trim(),
+                    editingItem.City.Trim());
             }
-        }
-        else
-        {
-            var newItem = new CountryCity
+            else
             {
-                Id = countries.Count > 0 ? countries.Max(c => c.Id) + 1 : 1,
-                Country = editingItem.Country.Trim(),
-                City = editingItem.City.Trim(),
-                UsageCount = 0,
-                LastUsed = null
-            };
-            countries.Add(newItem);
-        }
+                await SettingsService.CreateCountryCityAsync(
+                    editingItem.Country.Trim(),
+                    editingItem.City.Trim());
+            }
 
-        HideModal();
-        FilterCountries();
-        
-        await JSRuntime.InvokeVoidAsync("alert", $"Country/City {(isEditing ? "updated" : "added")} successfully!");
+            HideModal();
+            await LoadCountries();
+            await JSRuntime.InvokeVoidAsync("alert", $"Country/City {(isEditing ? "updated" : "added")} successfully!");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error saving country/city: {ex.Message}");
+        }
     }
 
     private async Task DeleteCountryCity(CountryCity item)
@@ -376,9 +376,16 @@
         
         if (confirmed)
         {
-            countries.Remove(item);
-            FilterCountries();
-            await JSRuntime.InvokeVoidAsync("alert", "Country/City deleted successfully!");
+            try
+            {
+                await SettingsService.DeleteCountryCityAsync(item.CountryCityId);
+                await LoadCountries();
+                await JSRuntime.InvokeVoidAsync("alert", "Country/City deleted successfully!");
+            }
+            catch (Exception ex)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", $"Error deleting country/city: {ex.Message}");
+            }
         }
     }
 
@@ -456,14 +463,7 @@
                         if (!countries.Any(c => c.Country.Equals(country, StringComparison.OrdinalIgnoreCase) && 
                                                c.City.Equals(city, StringComparison.OrdinalIgnoreCase)))
                         {
-                            countries.Add(new CountryCity
-                            {
-                                Id = countries.Count > 0 ? countries.Max(c => c.Id) + 1 : 1,
-                                Country = country,
-                                City = city,
-                                UsageCount = 0,
-                                LastUsed = null
-                            });
+                            await SettingsService.CreateCountryCityAsync(country, city);
                             importedCount++;
                         }
                     }
@@ -471,7 +471,7 @@
             }
             
             HideImportModal();
-            FilterCountries();
+            await LoadCountries();
             await JSRuntime.InvokeVoidAsync("alert", $"Successfully imported {importedCount} countries/cities!");
         }
         catch (Exception ex)
@@ -482,38 +482,12 @@
 
     private async Task ExportToCSV()
     {
-        var csv = "Country,City,UsageCount,LastUsed\n";
+        var csv = "Country,City\n";
         foreach (var item in filteredCountries)
         {
-            csv += $"{item.Country},{item.City},{item.UsageCount},{item.LastUsed?.ToString("dd/MM/yyyy") ?? ""}\n";
+            csv += $"{item.Country},{item.City}\n";
         }
         
         await JSRuntime.InvokeVoidAsync("downloadFile", "countries-cities.csv", "text/csv", csv);
-    }
-
-    private List<CountryCity> GenerateMockCountriesData()
-    {
-        return new List<CountryCity>
-        {
-            new CountryCity { Id = 1, Country = "United States", City = "New York", UsageCount = 15, LastUsed = DateTime.Today.AddDays(-5) },
-            new CountryCity { Id = 2, Country = "United States", City = "Los Angeles", UsageCount = 8, LastUsed = DateTime.Today.AddDays(-12) },
-            new CountryCity { Id = 3, Country = "United Kingdom", City = "London", UsageCount = 22, LastUsed = DateTime.Today.AddDays(-3) },
-            new CountryCity { Id = 4, Country = "France", City = "Paris", UsageCount = 18, LastUsed = DateTime.Today.AddDays(-7) },
-            new CountryCity { Id = 5, Country = "Germany", City = "Berlin", UsageCount = 6, LastUsed = DateTime.Today.AddDays(-20) },
-            new CountryCity { Id = 6, Country = "Japan", City = "Tokyo", UsageCount = 11, LastUsed = DateTime.Today.AddDays(-15) },
-            new CountryCity { Id = 7, Country = "Netherlands", City = "Amsterdam", UsageCount = 9, LastUsed = DateTime.Today.AddDays(-8) },
-            new CountryCity { Id = 8, Country = "Spain", City = "Barcelona", UsageCount = 4, LastUsed = DateTime.Today.AddDays(-30) },
-            new CountryCity { Id = 9, Country = "Italy", City = "Rome", UsageCount = 3, LastUsed = DateTime.Today.AddDays(-45) },
-            new CountryCity { Id = 10, Country = "Canada", City = "Toronto", UsageCount = 7, LastUsed = DateTime.Today.AddDays(-18) }
-        };
-    }
-
-    public class CountryCity
-    {
-        public int Id { get; set; }
-        public string Country { get; set; } = "";
-        public string City { get; set; } = "";
-        public int UsageCount { get; set; }
-        public DateTime? LastUsed { get; set; }
     }
 }

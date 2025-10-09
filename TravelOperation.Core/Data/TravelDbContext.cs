@@ -30,6 +30,7 @@ public class TravelDbContext : DbContext
     public DbSet<CountryCity> CountriesCities { get; set; }
     public DbSet<SystemSetting> SystemSettings { get; set; }
     public DbSet<AuditLog> AuditLogs { get; set; }
+    public DbSet<TransformationRule> TransformationRules { get; set; }
     
     // Approval Workflow entities
     public DbSet<Employee> Employees { get; set; }
@@ -296,6 +297,13 @@ public class TravelDbContext : DbContext
         {
             entity.HasKey(e => e.SystemSettingId);
             entity.HasIndex(e => e.Key).IsUnique();
+        });
+
+        modelBuilder.Entity<TransformationRule>(entity =>
+        {
+            entity.HasKey(e => e.TransformationRuleId);
+            entity.HasIndex(e => e.Priority).IsDescending();
+            entity.HasIndex(e => e.IsActive);
         });
 
         modelBuilder.Entity<CountryCity>().HasData(
