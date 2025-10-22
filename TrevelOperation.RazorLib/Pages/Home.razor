@@ -1,0 +1,48 @@
+﻿@page "/"
+
+<PageTitle>Dashboard - Home</PageTitle>
+
+<div class="prose lg:prose-xl">
+    <h1>Welcome to your Dashboard</h1>
+    <p>This is a desktop-optimized layout using daisyUI components with Blazor.</p>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
+    <div class="card bg-base-200 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title">Card 1</h2>
+            <p>Some content for card 1.</p>
+            <div class="card-actions justify-end">
+                <button class="btn btn-primary">Action</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-base-200 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title">Card 2</h2>
+            <p>Some content for card 2.</p>
+            <div class="card-actions justify-end">
+                <button class="btn btn-secondary">Action</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-base-200 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title">Card 3</h2>
+            <p>Some content for card 3.</p>
+            <div class="card-actions justify-end">
+                <button class="btn btn-accent">Action</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        // You can dynamically set the page title in the header
+        // by using a cascading parameter or EventCallback
+    }
+}

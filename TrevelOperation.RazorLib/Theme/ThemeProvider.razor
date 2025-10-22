@@ -1,0 +1,59 @@
+﻿@using Microsoft.JSInterop
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+<CascadingValue Value="this">
+
+@ChildContent
+</CascadingValue>
+
+@code {
+    [Parameter]
+    public RenderFragment ChildContent { get; set; }
+
+    [Parameter]
+    public string DefaultTheme { get; set; } = "dark";
+
+    [Parameter]
+    public EventCallback<string> OnThemeChanged { get; set; }
+
+    private DotNetObjectReference<ThemeProvider> _objRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _objRef = DotNetObjectReference.Create(this);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("themeManager.initialize", _objRef, DefaultTheme);
+        }
+    }
+
+    [JSInvokable]
+    public async Task NotifyThemeChanged(string theme)
+    {
+        await OnThemeChanged.InvokeAsync(theme);
+    }
+
+    public async Task SetTheme(string theme)
+    {
+        await JSRuntime.InvokeVoidAsync("themeManager.setTheme", theme);
+    }
+
+    public async Task<string> GetCurrentTheme()
+    {
+        return await JSRuntime.InvokeAsync<string>("themeManager.getCurrentTheme");
+    }
+
+    public async Task ToggleTheme()
+    {
+        await JSRuntime.InvokeVoidAsync("themeManager.toggleTheme");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _objRef?.Dispose();
+    }
+}

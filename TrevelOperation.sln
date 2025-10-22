@@ -1,0 +1,49 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35806.99
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrevelOperation", "TrevelOperation\TrevelOperation.csproj", "{F17A21D5-C64F-472D-B47F-81324DD42F3F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrevelOperation.RazorLib", "TrevelOperation.RazorLib\TrevelOperation.RazorLib.csproj", "{39B4CDFA-813D-4422-90E9-E82869185670}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TravelOperation.Core", "TravelOperation.Core\TravelOperation.Core.csproj", "{9DF4DF16-ACA4-4D71-8CC5-18FD8C32A414}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrevelOperation.Data", "TrevelOperation.Data\TrevelOperation.Data.csproj", "{BCBAE89E-A372-4C9D-B30F-6507D1F22B6D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrevelOperation.Service", "TrevelOperation.Service\TrevelOperation.Service.csproj", "{1D176576-544F-42EE-9C2C-71CEF2C7E51B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F17A21D5-C64F-472D-B47F-81324DD42F3F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F17A21D5-C64F-472D-B47F-81324DD42F3F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F17A21D5-C64F-472D-B47F-81324DD42F3F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F17A21D5-C64F-472D-B47F-81324DD42F3F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{39B4CDFA-813D-4422-90E9-E82869185670}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{39B4CDFA-813D-4422-90E9-E82869185670}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{39B4CDFA-813D-4422-90E9-E82869185670}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{39B4CDFA-813D-4422-90E9-E82869185670}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9DF4DF16-ACA4-4D71-8CC5-18FD8C32A414}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9DF4DF16-ACA4-4D71-8CC5-18FD8C32A414}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9DF4DF16-ACA4-4D71-8CC5-18FD8C32A414}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9DF4DF16-ACA4-4D71-8CC5-18FD8C32A414}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BCBAE89E-A372-4C9D-B30F-6507D1F22B6D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BCBAE89E-A372-4C9D-B30F-6507D1F22B6D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BCBAE89E-A372-4C9D-B30F-6507D1F22B6D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BCBAE89E-A372-4C9D-B30F-6507D1F22B6D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1D176576-544F-42EE-9C2C-71CEF2C7E51B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1D176576-544F-42EE-9C2C-71CEF2C7E51B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1D176576-544F-42EE-9C2C-71CEF2C7E51B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1D176576-544F-42EE-9C2C-71CEF2C7E51B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {3E109691-9A45-4C15-A4ED-C87293DF1DC5}
+	EndGlobalSection
+EndGlobal

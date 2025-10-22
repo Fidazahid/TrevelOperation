@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+
+        <!-- Project Options -->
+        <Nullable>enable</Nullable>
+        <LangVersion>latest</LangVersion>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>TrevelOperation.RazorLib</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <SupportedPlatform Include="browser" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
+    </ItemGroup>
+	<Target Name="InstallWebDependencies" BeforeTargets="Build" Condition=" !Exists('node_modules') ">
+		<Exec Command="npm install" />
+	</Target>
+
+	<!-- Build web assets based on configuration -->
+	<Target Name="BuildWebAssets" BeforeTargets="Build">
+		<Exec Command="npx vite build" />
+	</Target>
+</Project>

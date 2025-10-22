@@ -1,0 +1,33 @@
+﻿@using TrevelOperation.RazorLib.Theme
+@inherits LayoutComponentBase
+
+<ThemeProvider DefaultTheme="light" OnThemeChanged="HandleThemeChange">
+    <div class="drawer lg:drawer-open">
+        <input id="sidebar-drawer" type="checkbox" class="drawer-toggle" />
+        <div class="drawer-content flex flex-col h-screen bg-base-100 text-base-content">
+            <header class="sticky top-0 z-[50] print:hidden">
+                <Header />
+            </header>
+
+            <main class="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-8">
+                @Body
+            </main>
+
+            <Footer></Footer>
+        </div>
+        <aside class="drawer-side z-[60] print:hidden lg:shadow-xl">
+            <label for="sidebar-drawer" class="drawer-overlay"></label>
+            <NavMenu />
+        </aside>
+    </div>
+</ThemeProvider>
+
+@code {
+    private string _currentTheme = "light";
+
+    private void HandleThemeChange(string theme)
+    {
+        _currentTheme = theme;
+        StateHasChanged();
+    }
+}
