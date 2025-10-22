@@ -1,0 +1,239 @@
+@page "/settings"
+@page "/settings/lists"
+@using TrevelOperation.Service
+@inject ISettingsService SettingsService
+
+<div class="container mx-auto p-6">
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
+        <p class="text-gray-600 dark:text-gray-400">Manage system configuration and lookup lists</p>
+    </div>
+
+    <!-- Settings Categories Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        
+        <!-- Lookup Lists -->
+        <div class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow">
+            <div class="card-body">
+                <div class="flex items-center mb-4">
+                    <div class="text-3xl mr-3">📝</div>
+                    <h3 class="text-xl font-semibold">Lookup Lists</h3>
+                </div>
+                <p class="text-gray-600 dark:text-gray-400 mb-4">
+                    Manage categories, sources, purposes, and other dropdown options
+                </p>
+                <div class="grid grid-cols-2 gap-2 text-sm mb-4">
+                    <div class="badge badge-outline">Categories</div>
+                    <div class="badge badge-outline">Sources</div>
+                    <div class="badge badge-outline">Purposes</div>
+                    <div class="badge badge-outline">Cabin Classes</div>
+                    <div class="badge badge-outline">Trip Types</div>
+                    <div class="badge badge-outline">Status</div>
+                </div>
+                <button class="btn btn-primary w-full" @onclick="() => _selectedCategory = SettingsCategory.LookupLists">
+                    Manage Lists
+                </button>
+            </div>
+        </div>
+
+        <!-- Owners -->
+        <div class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow">
+            <div class="card-body">
+                <div class="flex items-center mb-4">
+                    <div class="text-3xl mr-3">👥</div>
+                    <h3 class="text-xl font-semibold">Owners</h3>
+                </div>
+                <p class="text-gray-600 dark:text-gray-400 mb-4">
+                    Manage project owners and their details
+                </p>
+                <div class="stat bg-base-200 rounded mb-4">
+                    <div class="stat-title text-xs">Total Owners</div>
+                    <div class="stat-value text-lg">@_ownersCount</div>
+                </div>
+                <button class="btn btn-primary w-full" @onclick="() => _selectedCategory = SettingsCategory.Owners">
+                    Manage Owners
+                </button>
+            </div>
+        </div>
+
+        <!-- Tax Settings -->
+        <div class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow">
+            <div class="card-body">
+                <div class="flex items-center mb-4">
+                    <div class="text-3xl mr-3">💼</div>
+                    <h3 class="text-xl font-semibold">Tax Settings</h3>
+                </div>
+                <p class="text-gray-600 dark:text-gray-400 mb-4">
+                    Configure tax caps and shields by country and year
+                </p>
+                <div class="stat bg-base-200 rounded mb-4">
+                    <div class="stat-title text-xs">Tax Rules</div>
+                    <div class="stat-value text-lg">@_taxSettingsCount</div>
+                </div>
+                <button class="btn btn-primary w-full" @onclick="() => _selectedCategory = SettingsCategory.TaxSettings">
+                    Manage Tax Settings
+                </button>
+            </div>
+        </div>
+
+        <!-- Countries & Cities -->
+        <div class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow">
+            <div class="card-body">
+                <div class="flex items-center mb-4">
+                    <div class="text-3xl mr-3">🌍</div>
+                    <h3 class="text-xl font-semibold">Countries & Cities</h3>
+                </div>
+                <p class="text-gray-600 dark:text-gray-400 mb-4">
+                    Manage available countries and cities for trips
+                </p>
+                <div class="grid grid-cols-2 gap-2 mb-4">
+                    <div class="stat bg-base-200 rounded">
+                        <div class="stat-title text-xs">Countries</div>
+                        <div class="stat-value text-sm">@_countriesCount</div>
+                    </div>
+                    <div class="stat bg-base-200 rounded">
+                        <div class="stat-title text-xs">Cities</div>
+                        <div class="stat-value text-sm">@_citiesCount</div>
+                    </div>
+                </div>
+                <button class="btn btn-primary w-full" @onclick="() => _selectedCategory = SettingsCategory.CountriesCities">
+                    Manage Locations
+                </button>
+            </div>
+        </div>
+
+        <!-- Headcount -->
+        <div class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow">
+            <div class="card-body">
+                <div class="flex items-center mb-4">
+                    <div class="text-3xl mr-3">📊</div>
+                    <h3 class="text-xl font-semibold">Headcount</h3>
+                </div>
+                <p class="text-gray-600 dark:text-gray-400 mb-4">
+                    Manage employee data and organizational structure
+                </p>
+                <div class="stat bg-base-200 rounded mb-4">
+                    <div class="stat-title text-xs">Employees</div>
+                    <div class="stat-value text-lg">@_headcountCount</div>
+                </div>
+                <button class="btn btn-primary w-full" @onclick="() => _selectedCategory = SettingsCategory.Headcount">
+                    Manage Headcount
+                </button>
+            </div>
+        </div>
+
+        <!-- System Settings -->
+        <div class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow">
+            <div class="card-body">
+                <div class="flex items-center mb-4">
+                    <div class="text-3xl mr-3">⚙️</div>
+                    <h3 class="text-xl font-semibold">System Settings</h3>
+                </div>
+                <p class="text-gray-600 dark:text-gray-400 mb-4">
+                    Configure system-wide preferences and defaults
+                </p>
+                <div class="text-sm space-y-1 mb-4">
+                    <div class="flex justify-between">
+                        <span>Currency:</span>
+                        <span class="font-medium">@_defaultCurrency</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Date Format:</span>
+                        <span class="font-medium">@_dateFormat</span>
+                    </div>
+                </div>
+                <button class="btn btn-primary w-full" @onclick="() => _selectedCategory = SettingsCategory.SystemSettings">
+                    System Settings
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Detail Views -->
+    @if (_selectedCategory != SettingsCategory.None)
+    {
+        <div class="divider my-8"></div>
+        
+        @switch (_selectedCategory)
+        {
+            case SettingsCategory.LookupLists:
+                <LookupListsManager />
+                break;
+            case SettingsCategory.Owners:
+                <OwnersManager />
+                break;
+            case SettingsCategory.TaxSettings:
+                <TaxSettingsManager />
+                break;
+            case SettingsCategory.CountriesCities:
+                <CountriesCitiesManager />
+                break;
+            case SettingsCategory.Headcount:
+                <HeadcountManager />
+                break;
+            case SettingsCategory.SystemSettings:
+                <SystemSettingsManager />
+                break;
+        }
+        
+        <div class="mt-6">
+            <button class="btn btn-ghost" @onclick="() => _selectedCategory = SettingsCategory.None">
+                ← Back to Settings Overview
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private SettingsCategory _selectedCategory = SettingsCategory.None;
+    private int _ownersCount = 0;
+    private int _taxSettingsCount = 0;
+    private int _countriesCount = 0;
+    private int _citiesCount = 0;
+    private int _headcountCount = 0;
+    private string _defaultCurrency = "USD";
+    private string _dateFormat = "dd/MM/yyyy";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStatistics();
+    }
+
+    private async Task LoadStatistics()
+    {
+        try
+        {
+            var owners = await SettingsService.GetOwnersAsync();
+            _ownersCount = owners.Count;
+
+            var taxSettings = await SettingsService.GetTaxSettingsAsync();
+            _taxSettingsCount = taxSettings.Count;
+
+            var countries = await SettingsService.GetCountriesAsync();
+            _countriesCount = countries.Count;
+            _citiesCount = countries.Sum(c => c.Cities.Count);
+
+            var headcount = await SettingsService.GetHeadcountAsync();
+            _headcountCount = headcount.Count;
+
+            var systemSettings = await SettingsService.GetSystemSettingsAsync();
+            _defaultCurrency = systemSettings.GetValueOrDefault("DefaultCurrency", "USD");
+            _dateFormat = systemSettings.GetValueOrDefault("DateFormat", "dd/MM/yyyy");
+        }
+        catch (Exception ex)
+        {
+            // Handle errors silently for now
+        }
+    }
+
+    private enum SettingsCategory
+    {
+        None,
+        LookupLists,
+        Owners,
+        TaxSettings,
+        CountriesCities,
+        Headcount,
+        SystemSettings
+    }
+}

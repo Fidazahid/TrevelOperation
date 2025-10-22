@@ -1,0 +1,611 @@
+@using TrevelOperation.Service
+@using TravelOperation.Core.Models.Entities
+@inject ISettingsService SettingsService
+
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h2 class="text-xl font-bold">Headcount Management</h2>
+        <div class="flex gap-2">
+            <button class="btn btn-outline" @onclick="ShowImportModal">
+                <span class="mr-1">📥</span>
+                Import CSV
+            </button>
+            <button class="btn btn-primary" @onclick="ShowAddModal">
+                <span class="mr-1">➕</span>
+                Add Employee
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="stat bg-base-100 shadow rounded-lg">
+            <div class="stat-title">Total Employees</div>
+            <div class="stat-value text-primary">@_headcount.Count</div>
+        </div>
+        <div class="stat bg-base-100 shadow rounded-lg">
+            <div class="stat-title">Active Periods</div>
+            <div class="stat-value text-secondary">@_uniquePeriods.Count</div>
+        </div>
+        <div class="stat bg-base-100 shadow rounded-lg">
+            <div class="stat-title">Departments</div>
+            <div class="stat-value text-accent">@_uniqueDepartments.Count</div>
+        </div>
+        <div class="stat bg-base-100 shadow rounded-lg">
+            <div class="stat-title">Subsidiaries</div>
+            <div class="stat-value text-info">@_uniqueSubsidiaries.Count</div>
+        </div>
+    </div>
+
+    <!-- Search and Filter -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-body p-4">
+            <div class="flex flex-wrap gap-4">
+                <div class="form-control flex-1 min-w-64">
+                    <input type="text" @bind="_searchTerm" @oninput="OnSearchChanged" 
+                           class="input input-bordered w-full" placeholder="Search employees..." />
+                </div>
+                <div class="form-control">
+                    <select value="@_selectedPeriodFilter" @onchange="@(e => OnPeriodFilterChanged(e))" class="select select-bordered">
+                        <option value="">All Periods</option>
+                        @foreach (var period in _uniquePeriods.OrderByDescending(p => p))
+                        {
+                            <option value="@period.ToString("yyyy-MM-dd")">@period.ToString("MMM yyyy")</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-control">
+                    <select value="@_selectedDepartmentFilter" @onchange="@(e => OnDepartmentFilterChanged(e))" class="select select-bordered">
+                        <option value="">All Departments</option>
+                        @foreach (var dept in _uniqueDepartments)
+                        {
+                            <option value="@dept">@dept</option>
+                        }
+                    </select>
+                </div>
+                <button class="btn btn-outline" @onclick="ClearFilters">
+                    Clear Filters
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Headcount List -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-body">
+            @if (_isLoading)
+            {
+                <div class="flex justify-center py-8">
+                    <span class="loading loading-spinner loading-lg"></span>
+                </div>
+            }
+            else if (!_filteredHeadcount.Any())
+            {
+                <div class="text-center py-8 text-gray-500">
+                    @if (!string.IsNullOrEmpty(_searchTerm) || !string.IsNullOrEmpty(_selectedPeriodFilter) || !string.IsNullOrEmpty(_selectedDepartmentFilter))
+                    {
+                        <div class="text-4xl mb-2">🔍</div>
+                        <p>No results found</p>
+                        <p class="text-sm">Try adjusting your search or filters</p>
+                    }
+                    else
+                    {
+                        <div class="text-4xl mb-2">👥</div>
+                        <p>No employees in headcount</p>
+                        <p class="text-sm">Add your first employee to get started</p>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="mb-4 text-sm text-gray-600">
+                    Showing @_filteredHeadcount.Count of @_headcount.Count employees
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="table w-full">
+                        <thead>
+                            <tr>
+                                <th>Period</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Department</th>
+                                <th>Domain</th>
+                                <th>Subsidiary</th>
+                                <th>Site</th>
+                                <th>Cost Center</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var employee in _paginatedHeadcount)
+                            {
+                                <tr>
+                                    <td class="font-medium">@employee.Period.ToString("MMM yyyy")</td>
+                                    <td>
+                                        <div class="font-medium">@employee.FirstName @employee.LastName</div>
+                                        <div class="text-sm text-gray-500">@employee.UserId</div>
+                                    </td>
+                                    <td>@employee.Email</td>
+                                    <td>@employee.Department</td>
+                                    <td>@employee.Domain</td>
+                                    <td>@employee.Subsidiary</td>
+                                    <td>@employee.Site</td>
+                                    <td>@employee.CostCenter</td>
+                                    <td>
+                                        <div class="flex gap-2">
+                                            <button class="btn btn-ghost btn-sm" @onclick="() => ShowEditModal(employee)">
+                                                ✏️ Edit
+                                            </button>
+                                            <button class="btn btn-ghost btn-sm text-error" @onclick="() => ShowDeleteModal(employee)">
+                                                🗑️ Delete
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                @if (_totalPages > 1)
+                {
+                    <div class="flex justify-center mt-4">
+                        <div class="btn-group">
+                            <button class="btn @(_currentPage == 1 ? "btn-disabled" : "")" @onclick="() => ChangePage(1)">
+                                «
+                            </button>
+                            <button class="btn @(_currentPage == 1 ? "btn-disabled" : "")" @onclick="() => ChangePage(_currentPage - 1)">
+                                ‹
+                            </button>
+                            <button class="btn btn-active">
+                                Page @_currentPage of @_totalPages
+                            </button>
+                            <button class="btn @(_currentPage == _totalPages ? "btn-disabled" : "")" @onclick="() => ChangePage(_currentPage + 1)">
+                                ›
+                            </button>
+                            <button class="btn @(_currentPage == _totalPages ? "btn-disabled" : "")" @onclick="() => ChangePage(_totalPages)">
+                                »
+                            </button>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+@if (_showModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box max-w-4xl">
+            <h3 class="font-bold text-lg mb-4">
+                @(_editingEmployee == null ? "Add New Employee" : "Edit Employee")
+            </h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Period *</span>
+                    </label>
+                    <input type="month" value="@_modalPeriod" @onchange="@(e => _modalPeriod = e.Value?.ToString() ?? "")" class="input input-bordered w-full" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">User ID *</span>
+                    </label>
+                    <input type="text" @bind="_modalUserId" class="input input-bordered w-full" 
+                           placeholder="employee123" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Email *</span>
+                    </label>
+                    <input type="email" @bind="_modalEmail" class="input input-bordered w-full" 
+                           placeholder="employee@company.com" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">First Name *</span>
+                    </label>
+                    <input type="text" @bind="_modalFirstName" class="input input-bordered w-full" 
+                           placeholder="John" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Last Name *</span>
+                    </label>
+                    <input type="text" @bind="_modalLastName" class="input input-bordered w-full" 
+                           placeholder="Doe" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Subsidiary *</span>
+                    </label>
+                    <select @bind="_modalSubsidiary" class="select select-bordered w-full">
+                        <option value="">Select Subsidiary</option>
+                        <option value="WSC IL">WSC IL</option>
+                        <option value="WSC US">WSC US</option>
+                        <option value="WSC UK">WSC UK</option>
+                        <option value="WSC DE">WSC DE</option>
+                        <option value="WSC FR">WSC FR</option>
+                        <option value="WSC CA">WSC CA</option>
+                        <option value="WSC AU">WSC AU</option>
+                        <option value="WSC JP">WSC JP</option>
+                    </select>
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Site</span>
+                    </label>
+                    <input type="text" @bind="_modalSite" class="input input-bordered w-full" 
+                           placeholder="Tel Aviv" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Department</span>
+                    </label>
+                    <input type="text" @bind="_modalDepartment" class="input input-bordered w-full" 
+                           placeholder="Engineering" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Domain</span>
+                    </label>
+                    <input type="text" @bind="_modalDomain" class="input input-bordered w-full" 
+                           placeholder="Technology" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Cost Center</span>
+                    </label>
+                    <input type="text" @bind="_modalCostCenter" class="input input-bordered w-full" 
+                           placeholder="CC-001" />
+                </div>
+            </div>
+
+            <div class="modal-action">
+                <button class="btn btn-primary" @onclick="SaveEmployee" 
+                        disabled="@(!IsValidEmployee())">
+                    @(_editingEmployee == null ? "Add Employee" : "Update Employee")
+                </button>
+                <button class="btn" @onclick="CloseModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Import CSV Modal -->
+@if (_showImportModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box max-w-2xl">
+            <h3 class="font-bold text-lg mb-4">Import Headcount CSV</h3>
+            
+            <div class="space-y-4">
+                <div class="alert alert-info">
+                    <span class="text-sm">
+                        💡 CSV should contain columns: Period, UserId, Email, FirstName, LastName, Subsidiary, Site, Department, Domain, CostCenter
+                    </span>
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Select CSV File</span>
+                    </label>
+                    <input type="file" accept=".csv" class="file-input file-input-bordered w-full" />
+                </div>
+
+                <div class="form-control">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" class="checkbox" />
+                        <span class="label-text">Clear existing data before import</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="modal-action">
+                <button class="btn btn-primary" disabled>
+                    Import CSV
+                </button>
+                <button class="btn" @onclick="CloseImportModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (_showDeleteModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">Confirm Delete</h3>
+            
+            <p class="mb-4">
+                Are you sure you want to delete 
+                <strong>@_deletingEmployee?.FirstName @_deletingEmployee?.LastName</strong> 
+                from @_deletingEmployee?.Period.ToString("MMM yyyy")?
+            </p>
+
+            <div class="modal-action">
+                <button class="btn btn-error" @onclick="ConfirmDelete">
+                    Delete
+                </button>
+                <button class="btn" @onclick="CloseDeleteModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Headcount> _headcount = new();
+    private List<Headcount> _filteredHeadcount = new();
+    private List<Headcount> _paginatedHeadcount = new();
+    private List<DateTime> _uniquePeriods = new();
+    private List<string> _uniqueDepartments = new();
+    private List<string> _uniqueSubsidiaries = new();
+    private bool _isLoading = false;
+    
+    private string _searchTerm = "";
+    private string _selectedPeriodFilter = "";
+    private string _selectedDepartmentFilter = "";
+    private int _currentPage = 1;
+    private int _pageSize = 20;
+    private int _totalPages = 1;
+    
+    private bool _showModal = false;
+    private Headcount? _editingEmployee = null;
+    private string _modalPeriod = DateTime.Now.ToString("yyyy-MM");
+    private string _modalUserId = "";
+    private string _modalEmail = "";
+    private string _modalFirstName = "";
+    private string _modalLastName = "";
+    private string _modalSubsidiary = "";
+    private string _modalSite = "";
+    private string _modalDepartment = "";
+    private string _modalDomain = "";
+    private string _modalCostCenter = "";
+    
+    private bool _showImportModal = false;
+    private bool _showDeleteModal = false;
+    private Headcount? _deletingEmployee = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadHeadcount();
+    }
+
+    private async Task LoadHeadcount()
+    {
+        _isLoading = true;
+        try
+        {
+            _headcount = await SettingsService.GetHeadcountAsync();
+            _uniquePeriods = _headcount.Select(h => h.Period).Distinct().ToList();
+            _uniqueDepartments = _headcount.Select(h => h.Department).Where(d => !string.IsNullOrEmpty(d)).Distinct().OrderBy(d => d).ToList();
+            _uniqueSubsidiaries = _headcount.Select(h => h.Subsidiary).Where(s => !string.IsNullOrEmpty(s)).Distinct().OrderBy(s => s).ToList();
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OnSearchChanged(ChangeEventArgs e)
+    {
+        _searchTerm = e.Value?.ToString() ?? "";
+        _currentPage = 1;
+        ApplyFilters();
+    }
+
+    private void OnPeriodFilterChanged(ChangeEventArgs e)
+    {
+        _selectedPeriodFilter = e.Value?.ToString() ?? "";
+        _currentPage = 1;
+        ApplyFilters();
+    }
+
+    private void OnDepartmentFilterChanged(ChangeEventArgs e)
+    {
+        _selectedDepartmentFilter = e.Value?.ToString() ?? "";
+        _currentPage = 1;
+        ApplyFilters();
+    }
+
+    private void ClearFilters()
+    {
+        _searchTerm = "";
+        _selectedPeriodFilter = "";
+        _selectedDepartmentFilter = "";
+        _currentPage = 1;
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        var query = _headcount.AsQueryable();
+
+        if (!string.IsNullOrEmpty(_searchTerm))
+        {
+            query = query.Where(h => 
+                h.FirstName.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                h.LastName.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                h.Email.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                h.UserId.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrEmpty(_selectedPeriodFilter) && DateTime.TryParse(_selectedPeriodFilter, out var filterPeriod))
+        {
+            query = query.Where(h => h.Period.Date == filterPeriod.Date);
+        }
+
+        if (!string.IsNullOrEmpty(_selectedDepartmentFilter))
+        {
+            query = query.Where(h => h.Department == _selectedDepartmentFilter);
+        }
+
+        _filteredHeadcount = query.OrderByDescending(h => h.Period).ThenBy(h => h.LastName).ThenBy(h => h.FirstName).ToList();
+
+        _totalPages = (int)Math.Ceiling((double)_filteredHeadcount.Count / _pageSize);
+        if (_currentPage > _totalPages) _currentPage = 1;
+
+        var skip = (_currentPage - 1) * _pageSize;
+        _paginatedHeadcount = _filteredHeadcount.Skip(skip).Take(_pageSize).ToList();
+    }
+
+    private void ChangePage(int page)
+    {
+        if (page < 1 || page > _totalPages) return;
+        _currentPage = page;
+        ApplyFilters();
+    }
+
+    private void ShowAddModal()
+    {
+        _editingEmployee = null;
+        _modalPeriod = DateTime.Now.ToString("yyyy-MM");
+        _modalUserId = "";
+        _modalEmail = "";
+        _modalFirstName = "";
+        _modalLastName = "";
+        _modalSubsidiary = "";
+        _modalSite = "";
+        _modalDepartment = "";
+        _modalDomain = "";
+        _modalCostCenter = "";
+        _showModal = true;
+    }
+
+    private void ShowEditModal(Headcount employee)
+    {
+        _editingEmployee = employee;
+        _modalPeriod = employee.Period.ToString("yyyy-MM");
+        _modalUserId = employee.UserId;
+        _modalEmail = employee.Email;
+        _modalFirstName = employee.FirstName;
+        _modalLastName = employee.LastName;
+        _modalSubsidiary = employee.Subsidiary;
+        _modalSite = employee.Site;
+        _modalDepartment = employee.Department;
+        _modalDomain = employee.Domain;
+        _modalCostCenter = employee.CostCenter;
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _editingEmployee = null;
+    }
+
+    private void ShowImportModal()
+    {
+        _showImportModal = true;
+    }
+
+    private void CloseImportModal()
+    {
+        _showImportModal = false;
+    }
+
+    private bool IsValidEmployee()
+    {
+        return DateTime.TryParse($"{_modalPeriod}-01", out _) &&
+               !string.IsNullOrWhiteSpace(_modalUserId) &&
+               !string.IsNullOrWhiteSpace(_modalEmail) &&
+               !string.IsNullOrWhiteSpace(_modalFirstName) &&
+               !string.IsNullOrWhiteSpace(_modalLastName) &&
+               !string.IsNullOrWhiteSpace(_modalSubsidiary);
+    }
+
+    private async Task SaveEmployee()
+    {
+        try
+        {
+            var period = DateTime.Parse($"{_modalPeriod}-01");
+
+            if (_editingEmployee == null)
+            {
+                await SettingsService.CreateHeadcountAsync(
+                    period,
+                    _modalUserId.Trim(),
+                    _modalEmail.Trim(),
+                    _modalFirstName.Trim(),
+                    _modalLastName.Trim(),
+                    _modalSubsidiary.Trim(),
+                    _modalSite?.Trim() ?? "",
+                    _modalDepartment?.Trim() ?? "",
+                    _modalDomain?.Trim() ?? "",
+                    _modalCostCenter?.Trim() ?? ""
+                );
+            }
+            else
+            {
+                await SettingsService.UpdateHeadcountAsync(
+                    _editingEmployee.HeadcountId,
+                    period,
+                    _modalUserId.Trim(),
+                    _modalEmail.Trim(),
+                    _modalFirstName.Trim(),
+                    _modalLastName.Trim(),
+                    _modalSubsidiary.Trim(),
+                    _modalSite?.Trim() ?? "",
+                    _modalDepartment?.Trim() ?? "",
+                    _modalDomain?.Trim() ?? "",
+                    _modalCostCenter?.Trim() ?? ""
+                );
+            }
+
+            CloseModal();
+            await LoadHeadcount();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+    }
+
+    private void ShowDeleteModal(Headcount employee)
+    {
+        _deletingEmployee = employee;
+        _showDeleteModal = true;
+    }
+
+    private void CloseDeleteModal()
+    {
+        _showDeleteModal = false;
+        _deletingEmployee = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_deletingEmployee == null) return;
+
+        try
+        {
+            await SettingsService.DeleteHeadcountAsync(_deletingEmployee.HeadcountId);
+            CloseDeleteModal();
+            await LoadHeadcount();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+    }
+}

@@ -1,0 +1,249 @@
+@page "/audit-log"
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Services.Interfaces
+@inject IAuditService AuditService
+@inject IJSRuntime JSRuntime
+
+<div class="container mx-auto p-6">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold text-gray-900">Audit Log</h1>
+        <div class="flex gap-2">
+            <button class="btn btn-outline btn-sm" @onclick="ExportToCsv">
+                📊 Export CSV
+            </button>
+            <button class="btn btn-outline btn-sm" @onclick="RefreshData">
+                🔄 Refresh
+            </button>
+        </div>
+    </div>
+
+    @if (stats != null)
+    {
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="stat bg-base-200 rounded-lg">
+                <div class="stat-title">Total Entries</div>
+                <div class="stat-value text-primary">@stats.GetValueOrDefault("TotalEntries", 0)</div>
+            </div>
+            <div class="stat bg-base-200 rounded-lg">
+                <div class="stat-title">Today</div>
+                <div class="stat-value text-secondary">@stats.GetValueOrDefault("TodayEntries", 0)</div>
+            </div>
+            <div class="stat bg-base-200 rounded-lg">
+                <div class="stat-title">This Week</div>
+                <div class="stat-value text-accent">@stats.GetValueOrDefault("WeekEntries", 0)</div>
+            </div>
+            <div class="stat bg-base-200 rounded-lg">
+                <div class="stat-title">This Month</div>
+                <div class="stat-value text-warning">@stats.GetValueOrDefault("MonthEntries", 0)</div>
+            </div>
+        </div>
+    }
+
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+                <input type="text" placeholder="Search..." class="input input-bordered" @bind="searchTerm" @onkeypress="OnSearchKeyPress" />
+                
+                <select class="select select-bordered" @bind="selectedAction">
+                    <option value="">All Actions</option>
+                    @if (distinctActions != null)
+                    {
+                        @foreach (var action in distinctActions)
+                        {
+                            <option value="@action">@action</option>
+                        }
+                    }
+                </select>
+
+                <select class="select select-bordered" @bind="selectedTable">
+                    <option value="">All Tables</option>
+                    @if (distinctTables != null)
+                    {
+                        @foreach (var table in distinctTables)
+                        {
+                            <option value="@table">@table</option>
+                        }
+                    }
+                </select>
+
+                <select class="select select-bordered" @bind="selectedUser">
+                    <option value="">All Users</option>
+                    @if (distinctUsers != null)
+                    {
+                        @foreach (var user in distinctUsers)
+                        {
+                            <option value="@user">@user</option>
+                        }
+                    }
+                </select>
+
+                <button class="btn btn-primary" @onclick="ApplyFilters">🔍 Filter</button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="label">Start Date</label>
+                    <input type="date" class="input input-bordered w-full" @bind="startDate" />
+                </div>
+                <div>
+                    <label class="label">End Date</label>
+                    <input type="date" class="input input-bordered w-full" @bind="endDate" />
+                </div>
+            </div>
+
+            @if (loading)
+            {
+                <div class="flex justify-center items-center py-8">
+                    <span class="loading loading-spinner loading-lg"></span>
+                </div>
+            }
+            else if (auditLogs != null && auditLogs.Any())
+            {
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra w-full">
+                        <thead>
+                            <tr>
+                                <th class="cursor-pointer" @onclick='() => SortBy("Timestamp")'>
+                                    Timestamp @GetSortIcon("Timestamp")
+                                </th>
+                                <th class="cursor-pointer" @onclick='() => SortBy("UserId")'>
+                                    User @GetSortIcon("UserId")
+                                </th>
+                                <th class="cursor-pointer" @onclick='() => SortBy("Action")'>
+                                    Action @GetSortIcon("Action")
+                                </th>
+                                <th class="cursor-pointer" @onclick='() => SortBy("LinkedTable")'>
+                                    Table @GetSortIcon("LinkedTable")
+                                </th>
+                                <th>Record ID</th>
+                                <th>Comments</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var log in pagedAuditLogs)
+                            {
+                                <tr class="hover">
+                                    <td>@log.Timestamp.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                                    <td>
+                                        <div class="badge badge-outline">@log.UserId</div>
+                                    </td>
+                                    <td>
+                                        <div class="badge @GetActionBadgeClass(log.Action)">@log.Action</div>
+                                    </td>
+                                    <td>
+                                        <div class="badge badge-accent">@log.LinkedTable</div>
+                                    </td>
+                                    <td class="font-mono text-sm">@log.LinkedRecordId</td>
+                                    <td class="max-w-xs truncate">@log.Comments</td>
+                                    <td>
+                                        <div class="flex gap-1">
+                                            <button class="btn btn-xs btn-info" @onclick="() => ViewDetails(log)">
+                                                👁️ View
+                                            </button>
+                                            @if (log.OldValue != null && log.Action != "Create")
+                                            {
+                                                <button class="btn btn-xs btn-warning" @onclick="() => RestoreRecord(log)">
+                                                    ↶ Restore
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="flex justify-between items-center mt-4">
+                    <div class="text-sm text-gray-600">
+                        Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, auditLogs.Count()) of @auditLogs.Count() entries
+                    </div>
+                    <div class="join">
+                        <button class="join-item btn btn-sm" disabled="@(currentPage <= 1)" @onclick="() => ChangePage(currentPage - 1)">
+                            « Previous
+                        </button>
+                        <button class="join-item btn btn-sm btn-active">
+                            Page @currentPage
+                        </button>
+                        <button class="join-item btn btn-sm" disabled="@(currentPage >= totalPages)" @onclick="() => ChangePage(currentPage + 1)">
+                            Next »
+                        </button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-8">
+                    <div class="text-6xl mb-4">📝</div>
+                    <h3 class="text-xl font-semibold text-gray-600 mb-2">No audit logs found</h3>
+                    <p class="text-gray-500">Try adjusting your filters or check back later.</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (showDetailsModal && selectedLog != null)
+{
+    <div class="modal modal-open">
+        <div class="modal-box w-11/12 max-w-4xl">
+            <h3 class="font-bold text-lg mb-4">Audit Log Details</h3>
+            
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <strong>Audit ID:</strong> @selectedLog.AuditId
+                </div>
+                <div>
+                    <strong>Timestamp:</strong> @selectedLog.Timestamp.ToString("dd/MM/yyyy HH:mm:ss")
+                </div>
+                <div>
+                    <strong>User:</strong> @selectedLog.UserId
+                </div>
+                <div>
+                    <strong>Action:</strong> <span class="badge @GetActionBadgeClass(selectedLog.Action)">@selectedLog.Action</span>
+                </div>
+                <div>
+                    <strong>Table:</strong> @selectedLog.LinkedTable
+                </div>
+                <div>
+                    <strong>Record ID:</strong> @selectedLog.LinkedRecordId
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(selectedLog.Comments))
+            {
+                <div class="mb-4">
+                    <strong>Comments:</strong>
+                    <div class="bg-base-200 p-3 rounded">@selectedLog.Comments</div>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(selectedLog.OldValue))
+            {
+                <div class="mb-4">
+                    <strong>Old Value:</strong>
+                    <pre class="bg-base-200 p-3 rounded text-sm overflow-auto max-h-48">@FormatJson(selectedLog.OldValue)</pre>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(selectedLog.NewValue))
+            {
+                <div class="mb-4">
+                    <strong>New Value:</strong>
+                    <pre class="bg-base-200 p-3 rounded text-sm overflow-auto max-h-48">@FormatJson(selectedLog.NewValue)</pre>
+                </div>
+            }
+
+            <div class="modal-action">
+                @if (selectedLog.OldValue != null && selectedLog.Action != "Create")
+                {
+                    <button class="btn btn-warning" @onclick="() => RestoreRecord(selectedLog)">
+                        ↶ Restore to This Version
+                    </button>
+                }
+                <button class="btn" @onclick="CloseDetailsModal">Close</button>
+            </div>
+        </div>
+    </div>
+}

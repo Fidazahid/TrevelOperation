@@ -1,0 +1,360 @@
+@page "/settings/csv-import"
+@using TrevelOperation.Service
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Text.Json
+@inject ICsvImportService ImportService
+@inject IJSRuntime JSRuntime
+
+<div class="container mx-auto p-6">
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">CSV Import</h1>
+        <p class="text-gray-600 dark:text-gray-400">Import transaction data from various sources</p>
+    </div>
+
+    <!-- Import Type Selection -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow @(_selectedImportType == "Navan" ? "ring-2 ring-primary" : "")"
+             @onclick="@(() => SelectImportType("Navan"))">
+            <div class="card-body text-center cursor-pointer">
+                <div class="text-4xl mb-2">✈️</div>
+                <h3 class="font-semibold">Navan Import</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400">Import from Navan expense system</p>
+            </div>
+        </div>
+
+        <div class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow @(_selectedImportType == "Agent" ? "ring-2 ring-primary" : "")"
+             @onclick="@(() => SelectImportType("Agent"))">
+            <div class="card-body text-center cursor-pointer">
+                <div class="text-4xl mb-2">🏢</div>
+                <h3 class="font-semibold">Agent Import</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400">Import from travel agent data</p>
+            </div>
+        </div>
+
+        <div class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow @(_selectedImportType == "Manual" ? "ring-2 ring-primary" : "")"
+             @onclick="@(() => SelectImportType("Manual"))">
+            <div class="card-body text-center cursor-pointer">
+                <div class="text-4xl mb-2">📝</div>
+                <h3 class="font-semibold">Manual Import</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400">Import from manual CSV file</p>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_selectedImportType))
+    {
+        <!-- File Upload Section -->
+        <div class="card bg-base-100 shadow-md mb-6">
+            <div class="card-body">
+                <h3 class="text-lg font-semibold mb-4">Upload @_selectedImportType CSV File</h3>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Select CSV File</span>
+                    </label>
+                    <InputFile OnChange="OnFileSelected" class="file-input file-input-bordered w-full" accept=".csv" />
+                </div>
+
+                @if (_selectedFile != null)
+                {
+                    <div class="mt-4 p-4 bg-base-200 rounded-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="font-medium">@_selectedFile.Name</p>
+                                <p class="text-sm text-gray-600">@FormatFileSize(_selectedFile.Size)</p>
+                            </div>
+                            <button class="btn btn-primary" @onclick="StartImport" disabled="@_isImporting">
+                                @if (_isImporting)
+                                {
+                                    <span class="loading loading-spinner loading-sm"></span>
+                                    <span>Importing...</span>
+                                }
+                                else
+                                {
+                                    <span>Import</span>
+                                }
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Field Mapping Information -->
+        <div class="card bg-base-100 shadow-md mb-6">
+            <div class="card-body">
+                <h3 class="text-lg font-semibold mb-4">Expected CSV Format for @_selectedImportType</h3>
+                
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra w-full">
+                        <thead>
+                            <tr>
+                                <th>Field</th>
+                                <th>Column Name</th>
+                                <th>Required</th>
+                                <th>Format</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var field in GetExpectedFields())
+                            {
+                                <tr>
+                                    <td class="font-medium">@field.FieldName</td>
+                                    <td><code class="text-sm">@field.ColumnName</code></td>
+                                    <td>
+                                        @if (field.IsRequired)
+                                        {
+                                            <span class="badge badge-error badge-sm">Required</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-ghost badge-sm">Optional</span>
+                                        }
+                                    </td>
+                                    <td class="text-sm text-gray-600">@field.Format</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Import Results -->
+    @if (_importResult != null)
+    {
+        <div class="card bg-base-100 shadow-md">
+            <div class="card-body">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    @if (_importResult.Success)
+                    {
+                        <span class="text-success mr-2">✅</span>
+                        <span>Import Completed Successfully</span>
+                    }
+                    else
+                    {
+                        <span class="text-error mr-2">❌</span>
+                        <span>Import Failed</span>
+                    }
+                </h3>
+
+                <!-- Import Statistics -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="stat bg-base-200 rounded-lg">
+                        <div class="stat-title">Processed</div>
+                        <div class="stat-value text-primary">@_importResult.RecordsProcessed</div>
+                    </div>
+                    <div class="stat bg-base-200 rounded-lg">
+                        <div class="stat-title">Imported</div>
+                        <div class="stat-value text-success">@_importResult.RecordsImported</div>
+                    </div>
+                    <div class="stat bg-base-200 rounded-lg">
+                        <div class="stat-title">Skipped</div>
+                        <div class="stat-value text-warning">@_importResult.RecordsSkipped</div>
+                    </div>
+                    <div class="stat bg-base-200 rounded-lg">
+                        <div class="stat-title">Errors</div>
+                        <div class="stat-value text-error">@_importResult.RecordsWithErrors</div>
+                    </div>
+                </div>
+
+                <!-- Warnings -->
+                @if (_importResult.Warnings.Any())
+                {
+                    <div class="mb-4">
+                        <h4 class="font-semibold text-warning mb-2">⚠️ Warnings (@_importResult.Warnings.Count)</h4>
+                        <div class="max-h-32 overflow-y-auto">
+                            @foreach (var warning in _importResult.Warnings)
+                            {
+                                <div class="alert alert-warning alert-sm mb-1">
+                                    <span>@warning</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Errors -->
+                @if (_importResult.Errors.Any())
+                {
+                    <div class="mb-4">
+                        <h4 class="font-semibold text-error mb-2">❌ Errors (@_importResult.Errors.Count)</h4>
+                        <div class="max-h-40 overflow-y-auto">
+                            @foreach (var error in _importResult.Errors)
+                            {
+                                <div class="alert alert-error alert-sm mb-1">
+                                    <span>@error</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Actions -->
+                <div class="flex gap-2">
+                    <button class="btn btn-primary" @onclick="NavigateToTransactions">
+                        View Imported Transactions
+                    </button>
+                    <button class="btn btn-ghost" @onclick="ResetImport">
+                        Import Another File
+                    </button>
+                    @if (_importResult.Errors.Any() || _importResult.Warnings.Any())
+                    {
+                        <button class="btn btn-outline" @onclick="ExportLog">
+                            Export Log
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string _selectedImportType = "";
+    private IBrowserFile? _selectedFile;
+    private bool _isImporting = false;
+    private ImportResult? _importResult;
+
+    private void SelectImportType(string importType)
+    {
+        _selectedImportType = importType;
+        _selectedFile = null;
+        _importResult = null;
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedFile = e.File;
+        _importResult = null;
+    }
+
+    private async Task StartImport()
+    {
+        if (_selectedFile == null || string.IsNullOrEmpty(_selectedImportType))
+            return;
+
+        _isImporting = true;
+        _importResult = null;
+
+        try
+        {
+            using var stream = _selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024); // 10MB limit
+
+            _importResult = _selectedImportType switch
+            {
+                "Navan" => await ImportService.ImportNavanCsvAsync(stream, _selectedFile.Name),
+                "Agent" => await ImportService.ImportAgentCsvAsync(stream, _selectedFile.Name),
+                "Manual" => await ImportService.ImportManualCsvAsync(stream, _selectedFile.Name),
+                _ => throw new InvalidOperationException($"Unknown import type: {_selectedImportType}")
+            };
+        }
+        catch (Exception ex)
+        {
+            _importResult = new ImportResult
+            {
+                FileName = _selectedFile.Name,
+                ImportDate = DateTime.UtcNow,
+                Success = false,
+                Errors = new List<string> { $"Import failed: {ex.Message}" }
+            };
+        }
+        finally
+        {
+            _isImporting = false;
+        }
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024:F1} KB";
+        if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024 * 1024):F1} MB";
+        return $"{bytes / (1024 * 1024 * 1024):F1} GB";
+    }
+
+    private List<FieldMapping> GetExpectedFields()
+    {
+        return _selectedImportType switch
+        {
+            "Navan" => new List<FieldMapping>
+            {
+                new("Transaction ID", "Transaction ID", true, "Unique identifier"),
+                new("Employee Email", "Employee Email", true, "email@example.com"),
+                new("Transaction Date", "Transaction Date", true, "yyyy-MM-dd"),
+                new("Vendor", "Vendor", true, "Merchant name"),
+                new("Amount", "Amount", true, "Decimal number"),
+                new("Currency", "Currency", true, "3-letter code (USD, EUR)"),
+                new("Policy", "Policy", false, "Expense category"),
+                new("Receipt URL", "Receipt URL", false, "Document link"),
+                new("Trip ID", "Trip ID", false, "External trip reference"),
+                new("Participants", "Participants", false, "Comma-separated emails")
+            },
+            "Agent" => new List<FieldMapping>
+            {
+                new("Transaction ID", "TransactionID", true, "Unique identifier"),
+                new("Email", "Email", true, "email@example.com"),
+                new("Date", "Date", true, "dd/MM/yyyy"),
+                new("Merchant", "Merchant", true, "Vendor name"),
+                new("Amount", "Amount", true, "Decimal number"),
+                new("Currency", "Currency", true, "3-letter code"),
+                new("Category", "Category", false, "Expense type"),
+                new("Location", "Location", false, "Address"),
+                new("Receipt", "Receipt", false, "Document link")
+            },
+            "Manual" => new List<FieldMapping>
+            {
+                new("ID", "ID", true, "Unique identifier"),
+                new("Email", "Email", true, "email@example.com"),
+                new("Date", "Date", true, "dd/MM/yyyy"),
+                new("Vendor", "Vendor", true, "Merchant name"),
+                new("Amount", "Amount", true, "Decimal number"),
+                new("Currency", "Currency", true, "3-letter code"),
+                new("Category", "Category", false, "Expense type")
+            },
+            _ => new List<FieldMapping>()
+        };
+    }
+
+    private void NavigateToTransactions()
+    {
+        // Navigate to transactions page with filter for recently imported
+        // Implementation depends on navigation service
+    }
+
+    private void ResetImport()
+    {
+        _selectedFile = null;
+        _importResult = null;
+        _isImporting = false;
+    }
+
+    private async Task ExportLog()
+    {
+        if (_importResult == null) return;
+
+        var logData = new
+        {
+            ImportDate = _importResult.ImportDate,
+            FileName = _importResult.FileName,
+            Success = _importResult.Success,
+            Statistics = new
+            {
+                Processed = _importResult.RecordsProcessed,
+                Imported = _importResult.RecordsImported,
+                Skipped = _importResult.RecordsSkipped,
+                Errors = _importResult.RecordsWithErrors
+            },
+            Warnings = _importResult.Warnings,
+            Errors = _importResult.Errors
+        };
+
+        var json = JsonSerializer.Serialize(logData, new JsonSerializerOptions { WriteIndented = true });
+        var fileName = $"import-log-{_importResult.ImportDate:yyyyMMdd-HHmmss}.json";
+
+        await JSRuntime.InvokeVoidAsync("downloadFile", fileName, "application/json", json);
+    }
+
+    private record FieldMapping(string FieldName, string ColumnName, bool IsRequired, string Format);
+}

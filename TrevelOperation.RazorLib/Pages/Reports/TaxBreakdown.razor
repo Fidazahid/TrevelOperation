@@ -1,0 +1,275 @@
+@page "/tax-breakdown/{TripId:int}"
+@using TrevelOperation.Service
+@using TravelOperation.Core.Models.Entities
+@inject ITaxCalculationService TaxCalculationService
+@inject NavigationManager Navigation
+
+<div class="container mx-auto p-6">
+    <!-- Header -->
+    <div class="flex items-center gap-4 mb-6">
+        <button @onclick="GoBack" class="btn btn-ghost btn-sm">
+            ← Back
+        </button>
+        <h1 class="text-3xl font-bold">Tax Breakdown</h1>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="flex justify-center items-center h-64">
+            <span class="loading loading-spinner loading-lg"></span>
+        </div>
+    }
+    else if (breakdown != null)
+    {
+        <!-- Trip Information -->
+        <div class="card bg-base-100 shadow-xl mb-6">
+            <div class="card-body">
+                <h2 class="card-title text-xl">📊 Trip: @breakdown.Summary.TripName</h2>
+                
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                    <div class="stat bg-base-200 rounded-lg">
+                        <div class="stat-figure text-primary">🍽</div>
+                        <div class="stat-title">Meals Exposure</div>
+                        <div class="stat-value text-lg">$@breakdown.Summary.MealsExposure.ToString("N2")</div>
+                    </div>
+                    
+                    <div class="stat bg-base-200 rounded-lg">
+                        <div class="stat-figure text-secondary">🏨</div>
+                        <div class="stat-title">Lodging Exposure</div>
+                        <div class="stat-value text-lg">$@breakdown.Summary.LodgingExposure.ToString("N2")</div>
+                    </div>
+                    
+                    <div class="stat bg-base-200 rounded-lg">
+                        <div class="stat-figure text-accent">💰</div>
+                        <div class="stat-title">Total Tax Exposure</div>
+                        <div class="stat-value text-lg text-accent">$@breakdown.Summary.TotalTaxExposure.ToString("N2")</div>
+                    </div>
+                </div>
+                
+                <!-- Premium Airfare Alert -->
+                @if (breakdown.Summary.HasPremiumAirfare)
+                {
+                    <div class="alert alert-warning mt-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                        <div>
+                            <h3 class="font-bold">Premium Airfare Detected!</h3>
+                            <div class="text-xs">Cabin classes: @string.Join(", ", breakdown.Summary.PremiumCabinClasses)</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Detailed Breakdown -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Meals Calculation -->
+            <div class="card bg-base-100 shadow-xl">
+                <div class="card-body">
+                    <h3 class="card-title">🍽 Meals Calculation</h3>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="table table-sm">
+                            <tbody>
+                                <tr>
+                                    <td class="font-semibold">Total Meals Spent</td>
+                                    <td class="text-right">$@breakdown.MealsCalculation.TotalMealsSpent.ToString("N2")</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-semibold">Trip Duration</td>
+                                    <td class="text-right">@breakdown.MealsCalculation.TripDuration days</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-semibold">Meals per Day</td>
+                                    <td class="text-right">$@breakdown.MealsCalculation.MealsPerDay.ToString("N2")</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-semibold">Tax Cap per Day</td>
+                                    <td class="text-right">$@breakdown.MealsCalculation.MealsCap.ToString("N2")</td>
+                                </tr>
+                                <tr class="border-t-2">
+                                    <td class="font-semibold">Exposure per Day</td>
+                                    <td class="text-right font-bold text-warning">$@breakdown.MealsCalculation.ExposurePerDay.ToString("N2")</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-semibold">Total Exposure</td>
+                                    <td class="text-right font-bold text-error">$@breakdown.MealsCalculation.TotalExposure.ToString("N2")</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lodging Calculation -->
+            <div class="card bg-base-100 shadow-xl">
+                <div class="card-body">
+                    <h3 class="card-title">🏨 Lodging Calculation</h3>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="table table-sm">
+                            <tbody>
+                                <tr>
+                                    <td class="font-semibold">Total Lodging Spent</td>
+                                    <td class="text-right">$@breakdown.LodgingCalculation.TotalLodgingSpent.ToString("N2")</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-semibold">Trip Nights</td>
+                                    <td class="text-right">@breakdown.LodgingCalculation.TripNights nights</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-semibold">Lodging per Night</td>
+                                    <td class="text-right">$@breakdown.LodgingCalculation.LodgingPerNight.ToString("N2")</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-semibold">Tax Cap per Night</td>
+                                    <td class="text-right">$@breakdown.LodgingCalculation.LodgingCap.ToString("N2")</td>
+                                </tr>
+                                <tr class="border-t-2">
+                                    <td class="font-semibold">Exposure per Night</td>
+                                    <td class="text-right font-bold text-warning">$@breakdown.LodgingCalculation.ExposurePerNight.ToString("N2")</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-semibold">Total Exposure</td>
+                                    <td class="text-right font-bold text-error">$@breakdown.LodgingCalculation.TotalExposure.ToString("N2")</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Airfare Analysis -->
+        @if (breakdown.AirfareAnalysis.AirfareTransactions.Any())
+        {
+            <div class="card bg-base-100 shadow-xl mt-6">
+                <div class="card-body">
+                    <h3 class="card-title">✈ Airfare Analysis</h3>
+                    
+                    <div class="stat bg-base-200 rounded-lg mb-4 w-fit">
+                        <div class="stat-figure text-primary">✈</div>
+                        <div class="stat-title">Total Airfare Spent</div>
+                        <div class="stat-value text-lg">$@breakdown.AirfareAnalysis.TotalAirfareSpent.ToString("N2")</div>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="table table-zebra table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Vendor</th>
+                                    <th>Amount</th>
+                                    <th>Cabin Class</th>
+                                    <th>Premium</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var airfare in breakdown.AirfareAnalysis.AirfareTransactions)
+                                {
+                                    <tr>
+                                        <td>@airfare.Date.ToString("dd/MM/yyyy")</td>
+                                        <td>@airfare.Vendor</td>
+                                        <td class="text-right">$@airfare.Amount.ToString("N2")</td>
+                                        <td>@(airfare.CabinClass ?? "Not specified")</td>
+                                        <td>
+                                            @if (airfare.IsPremium)
+                                            {
+                                                <span class="badge badge-warning">⭐ Premium</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-ghost">Economy</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Tax Settings Applied -->
+        @if (breakdown.Summary.AppliedTaxSettings != null)
+        {
+            <div class="card bg-base-100 shadow-xl mt-6">
+                <div class="card-body">
+                    <h3 class="card-title">⚖ Applied Tax Settings</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="stat bg-base-200 rounded-lg">
+                            <div class="stat-title">Fiscal Year</div>
+                            <div class="stat-value text-lg">@breakdown.Summary.AppliedTaxSettings.FiscalYear</div>
+                        </div>
+                        
+                        <div class="stat bg-base-200 rounded-lg">
+                            <div class="stat-title">Country</div>
+                            <div class="stat-value text-lg">@breakdown.Summary.AppliedTaxSettings.Country</div>
+                        </div>
+                        
+                        <div class="stat bg-base-200 rounded-lg">
+                            <div class="stat-title">Meals Cap</div>
+                            <div class="stat-value text-lg">$@(breakdown.Summary.AppliedTaxSettings.MealsCap?.ToString("N2") ?? "N/A")</div>
+                        </div>
+                        
+                        <div class="stat bg-base-200 rounded-lg">
+                            <div class="stat-title">Lodging Cap</div>
+                            <div class="stat-value text-lg">$@(breakdown.Summary.AppliedTaxSettings.LodgingCap?.ToString("N2") ?? "N/A")</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(breakdown.Summary.TaxNote))
+        {
+            <div class="alert alert-info mt-6">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>@breakdown.Summary.TaxNote</span>
+            </div>
+        }
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-error">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>@errorMessage</span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int TripId { get; set; }
+
+    private TrevelOperation.Service.TaxBreakdown? breakdown;
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            breakdown = await TaxCalculationService.GetTaxBreakdownAsync(TripId);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading tax breakdown: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/travel-spend");
+    }
+}

@@ -1,0 +1,598 @@
+@page "/other-control"
+@using TravelOperation.Core.Models
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Services
+@using TrevelOperation.Service
+@inject ITransactionService TransactionService
+@inject IMessageTemplateService MessageTemplateService
+@inject IJSRuntime JSRuntime
+
+<div class="container mx-auto p-6">
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">❔ Other Control</h1>
+            <p class="text-gray-600">Categorize "Other" transactions properly</p>
+        </div>
+        <div class="flex gap-2">
+            <button class="btn btn-secondary" @onclick="RefreshData">
+                🔄 Refresh
+            </button>
+            <button class="btn btn-primary" @onclick="ValidateAll">
+                ✅ Validate All
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+        <div class="card bg-gray-50 border-l-4 border-gray-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">❔</div>
+                    <div>
+                        <div class="text-2xl font-bold text-gray-700">@uncategorizedCount</div>
+                        <div class="text-gray-600">Uncategorized</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card bg-blue-50 border-l-4 border-blue-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">📊</div>
+                    <div>
+                        <div class="text-2xl font-bold text-blue-700">@totalOtherTransactions</div>
+                        <div class="text-blue-600">Total Other</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card bg-green-50 border-l-4 border-green-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">💰</div>
+                    <div>
+                        <div class="text-2xl font-bold text-green-700">$@averageAmount.ToString("N0")</div>
+                        <div class="text-green-600">Average Amount</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card bg-purple-50 border-l-4 border-purple-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">📈</div>
+                    <div>
+                        <div class="text-2xl font-bold text-purple-700">$@totalAmount.ToString("N0")</div>
+                        <div class="text-purple-600">Total Amount</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card bg-base-100 shadow-md mb-6">
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Owner</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="selectedOwner" @bind:after="FilterTransactions">
+                        <option value="">All Owners</option>
+                        @foreach (var owner in availableOwners)
+                        {
+                            <option value="@owner">@owner</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Trip Status</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="selectedTripStatus" @bind:after="FilterTransactions">
+                        <option value="">All</option>
+                        <option value="linked">Linked to Trip</option>
+                        <option value="unlinked">Not Linked</option>
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Amount Range</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="selectedAmountRange" @bind:after="FilterTransactions">
+                        <option value="">All Amounts</option>
+                        <option value="low">≤ $50</option>
+                        <option value="medium">$50 - $200</option>
+                        <option value="high">≥ $200</option>
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Search</span>
+                    </label>
+                    <input type="text" class="input input-bordered w-full" placeholder="Search vendor..." @bind="searchText" @bind:after="FilterTransactions">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transactions Table -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-body">
+            <div class="overflow-x-auto">
+                <table class="table table-zebra w-full">
+                    <thead>
+                        <tr>
+                            <th>
+                                <input type="checkbox" class="checkbox" @onchange="ToggleSelectAll" checked="@allSelected">
+                            </th>
+                            <th>Document</th>
+                            <th>Transaction ID</th>
+                            <th>Email</th>
+                            <th>Date</th>
+                            <th>Vendor</th>
+                            <th>Address</th>
+                            <th>Currency</th>
+                            <th>Amount</th>
+                            <th>Amount (USD)</th>
+                            <th>Trip Info</th>
+                            <th>Category</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var transaction in filteredTransactions.Skip((currentPage - 1) * pageSize).Take(pageSize))
+                        {
+                            <tr class="hover @(GetRowHighlight(transaction))">
+                                <td>
+                                    <input type="checkbox" class="checkbox" @onchange="(e) => ToggleSelect(transaction.TransactionId, e)" checked="@selectedTransactions.Contains(transaction.TransactionId)">
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(transaction.DocumentUrl))
+                                    {
+                                        <a href="@transaction.DocumentUrl" target="_blank" class="btn btn-ghost btn-sm">📄</a>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-red-400 text-xs">Missing</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="font-mono text-sm">@transaction.TransactionId</div>
+                                </td>
+                                <td>@transaction.Email</td>
+                                <td>@transaction.TransactionDate.ToString("dd/MM/yyyy")</td>
+                                <td>@transaction.Vendor</td>
+                                <td>
+                                    <div class="text-sm text-gray-600">@transaction.Address</div>
+                                </td>
+                                <td>@transaction.Currency</td>
+                                <td>@transaction.Amount.ToString("N2")</td>
+                                <td>
+                                    <div class="font-bold @(GetAmountColorClass(transaction.AmountUSD))">
+                                        $@transaction.AmountUSD.ToString("N2")
+                                    </div>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(transaction.TripName))
+                                    {
+                                        <div class="text-sm">
+                                            <div class="font-medium text-blue-600">@transaction.TripName</div>
+                                            <div class="text-xs text-gray-500">@transaction.TripDates</div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-warning badge-sm">Not Linked</span>
+                                    }
+                                </td>
+                                <td>
+                                    <select class="select select-bordered select-sm @(transaction.Category == "Other" ? "bg-red-100 border-red-400" : "bg-green-50")" 
+                                            @onchange="(e) => UpdateCategory(transaction.TransactionId, e.Value?.ToString())">
+                                        <option value="Other" selected="@(transaction.Category == "Other")">❔ Other</option>
+                                        <option value="Airfare" selected="@(transaction.Category == "Airfare")">✈ Airfare</option>
+                                        <option value="Lodging" selected="@(transaction.Category == "Lodging")">🏨 Lodging</option>
+                                        <option value="Transportation" selected="@(transaction.Category == "Transportation")">🚕 Transportation</option>
+                                        <option value="Meals" selected="@(transaction.Category == "Meals")">🍽 Meals</option>
+                                        <option value="Client entertainment" selected="@(transaction.Category == "Client entertainment")">🍸 Client entertainment</option>
+                                        <option value="Communication" selected="@(transaction.Category == "Communication")">📱 Communication</option>
+                                        <option value="Non-travel" selected="@(transaction.Category == "Non-travel")">❓ Non-travel</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <div class="dropdown dropdown-end">
+                                        <label tabindex="0" class="btn btn-ghost btn-sm">⋮</label>
+                                        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52">
+                                            <li><a @onclick="() => ViewDetails(transaction.TransactionId)">👁️ View Details</a></li>
+                                            <li><a @onclick="() => GenerateMessage(transaction.TransactionId)">📧 Generate Message</a></li>
+                                            <li><a @onclick="() => SuggestCategory(transaction.TransactionId)">🤖 Suggest Category</a></li>
+                                            <li><hr /></li>
+                                            <li><a @onclick="() => LinkToTrip(transaction.TransactionId)">🔗 Link to Trip</a></li>
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Bulk Actions -->
+            @if (selectedTransactions.Any())
+            {
+                <div class="alert alert-info mt-4">
+                    <div class="flex justify-between items-center w-full">
+                        <span>@selectedTransactions.Count transaction(s) selected</span>
+                        <div class="flex gap-2">
+                            <div class="dropdown">
+                                <label tabindex="0" class="btn btn-sm btn-primary">Bulk Categorize</label>
+                                <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52">
+                                    <li><a @onclick="@(() => BulkUpdateCategory("Airfare"))">✈ Airfare</a></li>
+                                    <li><a @onclick="@(() => BulkUpdateCategory("Lodging"))">🏨 Lodging</a></li>
+                                    <li><a @onclick="@(() => BulkUpdateCategory("Transportation"))">🚕 Transportation</a></li>
+                                    <li><a @onclick="@(() => BulkUpdateCategory("Meals"))">🍽 Meals</a></li>
+                                    <li><a @onclick="@(() => BulkUpdateCategory("Communication"))">📱 Communication</a></li>
+                                    <li><a @onclick="@(() => BulkUpdateCategory("Non-travel"))">❓ Non-travel</a></li>
+                                </ul>
+                            </div>
+                            <button class="btn btn-sm btn-secondary" @onclick="ClearSelection">
+                                ❌ Clear Selection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Pagination -->
+            <div class="flex justify-between items-center mt-4">
+                <div class="text-sm text-gray-500">
+                    Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, filteredTransactions.Count) of @filteredTransactions.Count transactions
+                </div>
+                <div class="join">
+                    <button class="join-item btn btn-sm" disabled="@(currentPage <= 1)" @onclick="() => ChangePage(currentPage - 1)">«</button>
+                    @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                    {
+                        <button class="join-item btn btn-sm @(i == currentPage ? "btn-active" : "")" @onclick="() => ChangePage(i)">@i</button>
+                    }
+                    <button class="join-item btn btn-sm" disabled="@(currentPage >= totalPages)" @onclick="() => ChangePage(currentPage + 1)">»</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<OtherTransactionData> transactions = new();
+    private List<OtherTransactionData> filteredTransactions = new();
+    private List<string> availableOwners = new();
+    private HashSet<string> selectedTransactions = new();
+    
+    // Filters
+    private string selectedOwner = "";
+    private string selectedTripStatus = "";
+    private string selectedAmountRange = "";
+    private string searchText = "";
+    
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 15;
+    private int totalPages => (int)Math.Ceiling((double)filteredTransactions.Count / pageSize);
+    
+    // Summary data
+    private int uncategorizedCount = 0;
+    private int totalOtherTransactions = 0;
+    private decimal averageAmount = 0;
+    private decimal totalAmount = 0;
+    private bool allSelected = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOtherTransactions();
+        CalculateSummary();
+        FilterTransactions();
+    }
+
+    private async Task LoadOtherTransactions()
+    {
+        transactions = GenerateMockOtherData();
+        availableOwners = transactions.Select(t => t.Owner).Where(o => !string.IsNullOrEmpty(o)).Distinct().ToList()!;
+    }
+
+    private void CalculateSummary()
+    {
+        uncategorizedCount = filteredTransactions.Count(t => t.Category == "Other");
+        totalOtherTransactions = filteredTransactions.Count;
+        averageAmount = filteredTransactions.Any() ? filteredTransactions.Average(t => t.AmountUSD) : 0;
+        totalAmount = filteredTransactions.Sum(t => t.AmountUSD);
+    }
+
+    private void FilterTransactions()
+    {
+        filteredTransactions = transactions.Where(t =>
+            (string.IsNullOrEmpty(selectedOwner) || t.Owner == selectedOwner) &&
+            (string.IsNullOrEmpty(searchText) || 
+             t.Vendor.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+             t.TransactionId.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
+            FilterByTripStatus(t) &&
+            FilterByAmountRange(t)
+        ).OrderByDescending(t => t.TransactionDate).ToList();
+        
+        CalculateSummary();
+        currentPage = 1;
+        selectedTransactions.Clear();
+        StateHasChanged();
+    }
+
+    private bool FilterByTripStatus(OtherTransactionData transaction)
+    {
+        return selectedTripStatus switch
+        {
+            "linked" => !string.IsNullOrEmpty(transaction.TripName),
+            "unlinked" => string.IsNullOrEmpty(transaction.TripName),
+            _ => true
+        };
+    }
+
+    private bool FilterByAmountRange(OtherTransactionData transaction)
+    {
+        return selectedAmountRange switch
+        {
+            "low" => transaction.AmountUSD <= 50,
+            "medium" => transaction.AmountUSD > 50 && transaction.AmountUSD <= 200,
+            "high" => transaction.AmountUSD > 200,
+            _ => true
+        };
+    }
+
+    private string GetRowHighlight(OtherTransactionData transaction)
+    {
+        if (transaction.Category == "Other")
+            return "bg-red-50";
+        if (string.IsNullOrEmpty(transaction.TripName))
+            return "bg-yellow-50";
+        return "";
+    }
+
+    private string GetAmountColorClass(decimal amount)
+    {
+        if (amount <= 50) return "text-green-600";
+        if (amount <= 200) return "text-blue-600";
+        return "text-purple-600";
+    }
+
+    private void ChangePage(int page)
+    {
+        if (page >= 1 && page <= totalPages)
+        {
+            currentPage = page;
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        var isChecked = (bool)(e.Value ?? false);
+        if (isChecked)
+        {
+            foreach (var transaction in filteredTransactions.Skip((currentPage - 1) * pageSize).Take(pageSize))
+            {
+                selectedTransactions.Add(transaction.TransactionId);
+            }
+        }
+        else
+        {
+            selectedTransactions.Clear();
+        }
+        allSelected = isChecked;
+        StateHasChanged();
+    }
+
+    private void ToggleSelect(string transactionId, ChangeEventArgs e)
+    {
+        var isChecked = (bool)(e.Value ?? false);
+        if (isChecked)
+        {
+            selectedTransactions.Add(transactionId);
+        }
+        else
+        {
+            selectedTransactions.Remove(transactionId);
+        }
+        StateHasChanged();
+    }
+
+    private async Task UpdateCategory(string transactionId, string? category)
+    {
+        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+        if (transaction != null)
+        {
+            transaction.Category = category ?? "";
+            CalculateSummary();
+            StateHasChanged();
+        }
+    }
+
+    private async Task BulkUpdateCategory(string category)
+    {
+        var count = 0;
+        foreach (var transactionId in selectedTransactions)
+        {
+            var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+            if (transaction != null)
+            {
+                transaction.Category = category;
+                count++;
+            }
+        }
+        selectedTransactions.Clear();
+        await JSRuntime.InvokeVoidAsync("alert", $"Updated {count} transactions to category: {category}");
+        CalculateSummary();
+        StateHasChanged();
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadOtherTransactions();
+        FilterTransactions();
+    }
+
+    private async Task ValidateAll()
+    {
+        var result = await JSRuntime.InvokeAsync<bool>("confirm", "This will mark all 'Other' transactions as requiring manual review. Continue?");
+        if (result)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Flagged {filteredTransactions.Count(t => t.Category == "Other")} transactions for manual review");
+        }
+    }
+
+    private async Task ViewDetails(string transactionId)
+    {
+        await JSRuntime.InvokeVoidAsync("alert", $"View details for transaction {transactionId} - Navigation pending");
+    }
+
+    private async Task GenerateMessage(string transactionId)
+    {
+        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+        if (transaction != null)
+        {
+            var message = GenerateOtherMessage(transaction);
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", message);
+            await JSRuntime.InvokeVoidAsync("alert", "Message copied to clipboard!");
+        }
+    }
+
+    private async Task SuggestCategory(string transactionId)
+    {
+        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+        if (transaction != null)
+        {
+            var suggestion = GetCategorySuggestion(transaction);
+            var result = await JSRuntime.InvokeAsync<bool>("confirm", $"Suggested category for '{transaction.Vendor}': {suggestion}\n\nApply this suggestion?");
+            if (result)
+            {
+                await UpdateCategory(transactionId, suggestion);
+            }
+        }
+    }
+
+    private async Task LinkToTrip(string transactionId)
+    {
+        await JSRuntime.InvokeVoidAsync("alert", $"Link transaction {transactionId} to trip - Navigation pending");
+    }
+
+    private void ClearSelection()
+    {
+        selectedTransactions.Clear();
+        allSelected = false;
+        StateHasChanged();
+    }
+
+    private string GenerateOtherMessage(OtherTransactionData transaction)
+    {
+        var tripInfo = string.IsNullOrEmpty(transaction.TripName) ? "Not linked to a trip" : $"{transaction.TripName}, {transaction.TripDates}";
+        
+        return $@"Hi {GetFirstName(transaction.Email)},
+
+I have a question about the following travel-related transaction:
+
+Transaction ID: {transaction.TransactionId}
+Date: {transaction.TransactionDate:dd/MM/yyyy}
+Trip: {tripInfo}
+Category: Other
+Vendor: {transaction.Vendor}
+Address: {transaction.Address}
+Amount: {transaction.Currency} {transaction.Amount:N2}
+Documentation: {transaction.DocumentUrl}
+
+The system wasn't able to categorize this transaction and we need to select a proper category for tax purposes.
+
+What is the nature of this transaction?
+
+Thank you!";
+    }
+
+    private string GetFirstName(string email)
+    {
+        return email.Split('@')[0].Split('.')[0];
+    }
+
+    private string GetCategorySuggestion(OtherTransactionData transaction)
+    {
+        var vendor = transaction.Vendor.ToLower();
+        
+        if (vendor.Contains("uber") || vendor.Contains("taxi") || vendor.Contains("bus") || vendor.Contains("metro"))
+            return "Transportation";
+        if (vendor.Contains("hotel") || vendor.Contains("airbnb") || vendor.Contains("stay"))
+            return "Lodging";
+        if (vendor.Contains("restaurant") || vendor.Contains("cafe") || vendor.Contains("food"))
+            return "Meals";
+        if (vendor.Contains("airline") || vendor.Contains("airport") || vendor.Contains("flight"))
+            return "Airfare";
+        if (vendor.Contains("wifi") || vendor.Contains("internet") || vendor.Contains("phone"))
+            return "Communication";
+        if (vendor.Contains("software") || vendor.Contains("conference") || vendor.Contains("training"))
+            return "Other";
+        
+        return "Non-travel";
+    }
+
+    private List<OtherTransactionData> GenerateMockOtherData()
+    {
+        var random = new Random();
+        var transactions = new List<OtherTransactionData>();
+        var emails = new[] { "john.doe@company.com", "jane.smith@company.com", "mike.johnson@company.com", "sarah.wilson@company.com" };
+        var vendors = new[] { "Unknown Vendor", "Misc Services", "Conference Fee", "Software License", "Training Course", "Equipment Rental", "Local Transport", "WiFi Service" };
+        var owners = new[] { "Maayan Chesler", "Martina Poplinsk" };
+        var tripNames = new[] { "", "Trip to London", "Business Visit NYC", "Conference Berlin" };
+        var categories = new[] { "Other", "Communication", "Transportation", "Non-travel" };
+
+        for (int i = 1; i <= 22; i++)
+        {
+            var hasDocumentation = random.NextDouble() > 0.2;
+            var amount = random.Next(15, 350);
+            var tripName = tripNames[random.Next(tripNames.Length)];
+            var category = categories[random.Next(categories.Length)];
+            
+            transactions.Add(new OtherTransactionData
+            {
+                TransactionId = $"TXN-OTH-{i:000}",
+                Email = emails[random.Next(emails.Length)],
+                TransactionDate = DateTime.Today.AddDays(random.Next(-120, -1)),
+                Vendor = vendors[random.Next(vendors.Length)],
+                Address = "Unknown Location",
+                Currency = "USD",
+                Amount = amount,
+                AmountUSD = amount,
+                Category = category,
+                DocumentUrl = hasDocumentation ? $"https://docs.company.com/receipt-{i}" : "",
+                Owner = owners[random.Next(owners.Length)],
+                TripName = tripName,
+                TripDates = !string.IsNullOrEmpty(tripName) ? "15/10/2025 - 18/10/2025" : ""
+            });
+        }
+
+        return transactions.OrderByDescending(t => t.TransactionDate).ToList();
+    }
+
+    public class OtherTransactionData
+    {
+        public string TransactionId { get; set; } = "";
+        public string Email { get; set; } = "";
+        public DateTime TransactionDate { get; set; }
+        public string Vendor { get; set; } = "";
+        public string Address { get; set; } = "";
+        public string Currency { get; set; } = "";
+        public decimal Amount { get; set; }
+        public decimal AmountUSD { get; set; }
+        public string Category { get; set; } = "";
+        public string DocumentUrl { get; set; } = "";
+        public string Owner { get; set; } = "";
+        public string TripName { get; set; } = "";
+        public string TripDates { get; set; } = "";
+    }
+}

@@ -1,48 +1,145 @@
 ﻿@page "/"
 
-<PageTitle>Dashboard - Home</PageTitle>
+<PageTitle>Dashboard - Travel Expense Management</PageTitle>
 
-<div class="prose lg:prose-xl">
-    <h1>Welcome to your Dashboard</h1>
-    <p>This is a desktop-optimized layout using daisyUI components with Blazor.</p>
-</div>
+<div class="p-6">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-base-content mb-2">Travel expense dashboard</h1>
+        <p class="text-base-content/70">Overview of travel expenses, trips, and compliance status</p>
+    </div>
 
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
-    <div class="card bg-base-200 shadow-xl">
-        <div class="card-body">
-            <h2 class="card-title">Card 1</h2>
-            <p>Some content for card 1.</p>
-            <div class="card-actions justify-end">
-                <button class="btn btn-primary">Action</button>
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="stat bg-primary text-primary-content rounded-xl shadow-lg">
+            <div class="stat-figure text-2xl opacity-80">💳</div>
+            <div class="stat-title text-primary-content/80">Total transactions</div>
+            <div class="stat-value">@totalTransactions</div>
+            <div class="stat-desc text-primary-content/60">@unlinkedTransactions unlinked</div>
+        </div>
+
+        <div class="stat bg-secondary text-secondary-content rounded-xl shadow-lg">
+            <div class="stat-figure text-2xl opacity-80">🧳</div>
+            <div class="stat-title text-secondary-content/80">Active trips</div>
+            <div class="stat-value">@activeTrips</div>
+            <div class="stat-desc text-secondary-content/60">@tripsNeedingValidation need validation</div>
+        </div>
+
+        <div class="stat bg-accent text-accent-content rounded-xl shadow-lg">
+            <div class="stat-figure text-2xl opacity-80">💰</div>
+            <div class="stat-title text-accent-content/80">Total spend (USD)</div>
+            <div class="stat-value">$@totalSpend.ToString("N0")</div>
+            <div class="stat-desc text-accent-content/60">This fiscal year</div>
+        </div>
+
+        <div class="stat bg-warning text-warning-content rounded-xl shadow-lg">
+            <div class="stat-figure text-2xl opacity-80">⚠️</div>
+            <div class="stat-title text-warning-content/80">Issues requiring attention</div>
+            <div class="stat-value">@issuesCount</div>
+            <div class="stat-desc text-warning-content/60">Validation needed</div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div class="card bg-base-200 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">📊 Quick actions</h2>
+                <div class="grid grid-cols-2 gap-4 mt-4">
+                    <a href="/transactions" class="btn btn-outline btn-primary">
+                        💳 View transactions
+                    </a>
+                    <a href="/trips/create" class="btn btn-outline btn-secondary">
+                        ➕ Create trip
+                    </a>
+                    <a href="/controls/airfare" class="btn btn-outline btn-accent">
+                        ✈️ Airfare control
+                    </a>
+                    <a href="/controls/meals" class="btn btn-outline btn-warning">
+                        🍽️ Meals control
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="card bg-base-200 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">🚨 Issues requiring attention</h2>
+                <div class="space-y-3 mt-4">
+                    <div class="alert alert-warning">
+                        <span class="text-sm">
+                            <strong>@highValueMeals</strong> high-value meals need review
+                        </span>
+                    </div>
+                    <div class="alert alert-info">
+                        <span class="text-sm">
+                            <strong>@airfareWithoutCabin</strong> airfare transactions missing cabin class
+                        </span>
+                    </div>
+                    <div class="alert alert-error">
+                        <span class="text-sm">
+                            <strong>@missingDocuments</strong> transactions missing documentation
+                        </span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- Recent Activity -->
     <div class="card bg-base-200 shadow-xl">
         <div class="card-body">
-            <h2 class="card-title">Card 2</h2>
-            <p>Some content for card 2.</p>
-            <div class="card-actions justify-end">
-                <button class="btn btn-secondary">Action</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="card bg-base-200 shadow-xl">
-        <div class="card-body">
-            <h2 class="card-title">Card 3</h2>
-            <p>Some content for card 3.</p>
-            <div class="card-actions justify-end">
-                <button class="btn btn-accent">Action</button>
+            <h2 class="card-title">📅 Recent activity</h2>
+            <div class="overflow-x-auto">
+                <table class="table table-zebra w-full">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Action</th>
+                            <th>Description</th>
+                            <th>User</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>@DateTime.Now.ToString("dd/MM/yyyy")</td>
+                            <td><span class="badge badge-primary">Created</span></td>
+                            <td>New transaction imported from Navan</td>
+                            <td>System</td>
+                        </tr>
+                        <tr>
+                            <td>@DateTime.Now.AddDays(-1).ToString("dd/MM/yyyy")</td>
+                            <td><span class="badge badge-secondary">Validated</span></td>
+                            <td>Trip to London validated</td>
+                            <td>Admin User</td>
+                        </tr>
+                        <tr>
+                            <td>@DateTime.Now.AddDays(-2).ToString("dd/MM/yyyy")</td>
+                            <td><span class="badge badge-accent">Linked</span></td>
+                            <td>5 transactions linked to Paris trip</td>
+                            <td>Admin User</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 </div>
 
 @code {
-    protected override void OnInitialized()
+    private int totalTransactions = 1247;
+    private int unlinkedTransactions = 23;
+    private int activeTrips = 45;
+    private int tripsNeedingValidation = 8;
+    private decimal totalSpend = 245670;
+    private int issuesCount = 31;
+    private int highValueMeals = 12;
+    private int airfareWithoutCabin = 7;
+    private int missingDocuments = 12;
+
+    protected override async Task OnInitializedAsync()
     {
-        // You can dynamically set the page title in the header
-        // by using a cascading parameter or EventCallback
+        // In a real application, these would be loaded from the database
+        // For now, using mock data to show the UI structure
+        await Task.CompletedTask;
     }
 }

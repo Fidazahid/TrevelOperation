@@ -1,0 +1,348 @@
+@page "/settings/transformation-rules"
+@using TrevelOperation.Service
+@inject ICsvImportService ImportService
+
+<div class="container mx-auto p-6">
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Transformation Rules</h1>
+        <p class="text-gray-600 dark:text-gray-400">Manage automatic category mapping rules for imported transactions</p>
+    </div>
+
+    <!-- Add New Rule -->
+    <div class="card bg-base-100 shadow-md mb-6">
+        <div class="card-body">
+            <h3 class="text-lg font-semibold mb-4">Add New Rule</h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Policy Pattern</span>
+                    </label>
+                    <input type="text" @bind="_newRule.PolicyPattern" class="input input-bordered w-full" 
+                           placeholder="e.g., Airfare" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Category</span>
+                    </label>
+                    <select @bind="_newRule.CategoryName" class="select select-bordered w-full">
+                        <option value="">Select Category</option>
+                        <option value="Airfare">✈ Airfare</option>
+                        <option value="Lodging">🏨 Lodging</option>
+                        <option value="Transportation">🚕 Transportation</option>
+                        <option value="Communication">📱 Communication</option>
+                        <option value="Client entertainment">🍸 Client entertainment</option>
+                        <option value="Meals">🍽 Meals</option>
+                        <option value="Other">❔ Other</option>
+                        <option value="Non-travel">❓ Non-travel</option>
+                    </select>
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Priority</span>
+                    </label>
+                    <input type="number" @bind="_newRule.Priority" class="input input-bordered w-full" 
+                           placeholder="100" min="1" max="999" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Options</span>
+                    </label>
+                    <div class="flex items-center space-x-4">
+                        <label class="cursor-pointer label">
+                            <input type="checkbox" @bind="_newRule.IsRegex" class="checkbox checkbox-sm" />
+                            <span class="label-text ml-1">Regex</span>
+                        </label>
+                        <label class="cursor-pointer label">
+                            <input type="checkbox" @bind="_newRule.IsActive" class="checkbox checkbox-sm" />
+                            <span class="label-text ml-1">Active</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end">
+                <button class="btn btn-primary" @onclick="AddRule" disabled="@(!IsNewRuleValid())">
+                    <span class="mr-2">➕</span>
+                    Add Rule
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rules List -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-body">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">Current Rules</h3>
+                <div class="flex gap-2">
+                    <button class="btn btn-outline btn-sm" @onclick="LoadRules">
+                        <span class="mr-1">🔄</span>
+                        Refresh
+                    </button>
+                    <button class="btn btn-success btn-sm" @onclick="SaveRules" disabled="@(!_hasChanges)">
+                        <span class="mr-1">💾</span>
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+
+            @if (_isLoading)
+            {
+                <div class="flex justify-center py-8">
+                    <span class="loading loading-spinner loading-lg"></span>
+                </div>
+            }
+            else if (!_rules.Any())
+            {
+                <div class="text-center py-8 text-gray-500">
+                    <div class="text-4xl mb-2">📋</div>
+                    <p>No transformation rules configured</p>
+                    <p class="text-sm">Add your first rule above to get started</p>
+                </div>
+            }
+            else
+            {
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra w-full">
+                        <thead>
+                            <tr>
+                                <th>Priority</th>
+                                <th>Policy Pattern</th>
+                                <th>Category</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var rule in _rules.OrderByDescending(r => r.Priority))
+                            {
+                                <tr class="@(!rule.IsActive ? "opacity-50" : "")">
+                                    <td>
+                                        <input type="number" @bind="rule.Priority" 
+                                               class="input input-bordered input-xs w-16" min="1" max="999" />
+                                    </td>
+                                    <td>
+                                        <input type="text" @bind="rule.PolicyPattern" 
+                                               class="input input-bordered input-sm w-full max-w-xs" />
+                                    </td>
+                                    <td>
+                                        <select @bind="rule.CategoryName" 
+                                                class="select select-bordered select-sm w-full max-w-xs">
+                                            <option value="Airfare">✈ Airfare</option>
+                                            <option value="Lodging">🏨 Lodging</option>
+                                            <option value="Transportation">🚕 Transportation</option>
+                                            <option value="Communication">📱 Communication</option>
+                                            <option value="Client entertainment">🍸 Client entertainment</option>
+                                            <option value="Meals">🍽 Meals</option>
+                                            <option value="Other">❔ Other</option>
+                                            <option value="Non-travel">❓ Non-travel</option>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <span class="badge @(rule.IsRegex ? "badge-info" : "badge-ghost") badge-sm">
+                                            @(rule.IsRegex ? "Regex" : "Text")
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <input type="checkbox" @bind="rule.IsActive" 
+                                               class="toggle toggle-success toggle-sm" />
+                                    </td>
+                                    <td>
+                                        <div class="flex gap-1">
+                                            <button class="btn btn-ghost btn-xs" @onclick="() => TestRule(rule)">
+                                                🧪 Test
+                                            </button>
+                                            <button class="btn btn-ghost btn-xs text-error" @onclick="() => DeleteRule(rule)">
+                                                🗑️ Delete
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Test Rule Modal -->
+    @if (_testingRule != null)
+    {
+        <div class="modal modal-open">
+            <div class="modal-box">
+                <h3 class="font-bold text-lg mb-4">Test Rule: @_testingRule.PolicyPattern</h3>
+                
+                <div class="form-control mb-4">
+                    <label class="label">
+                        <span class="label-text">Test Policy Text</span>
+                    </label>
+                    <input type="text" @bind="_testPolicyText" class="input input-bordered w-full" 
+                           placeholder="Enter policy text to test..." />
+                </div>
+
+                <div class="mb-4">
+                    <h4 class="font-semibold mb-2">Rule Details</h4>
+                    <div class="bg-base-200 p-3 rounded">
+                        <p><strong>Pattern:</strong> @_testingRule.PolicyPattern</p>
+                        <p><strong>Category:</strong> @_testingRule.CategoryName</p>
+                        <p><strong>Priority:</strong> @_testingRule.Priority</p>
+                        <p><strong>Type:</strong> @(_testingRule.IsRegex ? "Regular Expression" : "Text Contains")</p>
+                        <p><strong>Active:</strong> @(_testingRule.IsActive ? "Yes" : "No")</p>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_testPolicyText))
+                {
+                    <div class="alert @(_testResult ? "alert-success" : "alert-error") mb-4">
+                        <span>
+                            @if (_testResult)
+                            {
+                                <span>✅ Rule matches! Category would be: <strong>@_testingRule.CategoryName</strong></span>
+                            }
+                            else
+                            {
+                                <span>❌ Rule does not match</span>
+                            }
+                        </span>
+                    </div>
+                }
+
+                <div class="modal-action">
+                    <button class="btn btn-primary" @onclick="RunTest" disabled="@string.IsNullOrWhiteSpace(_testPolicyText)">
+                        Run Test
+                    </button>
+                    <button class="btn" @onclick="CloseTestModal">Close</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<TransformationRule> _rules = new();
+    private TransformationRule _newRule = new() { IsActive = true, Priority = 50 };
+    private bool _isLoading = false;
+    private bool _hasChanges = false;
+    private TransformationRule? _testingRule;
+    private string _testPolicyText = "";
+    private bool _testResult = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRules();
+    }
+
+    private async Task LoadRules()
+    {
+        _isLoading = true;
+        try
+        {
+            _rules = await ImportService.GetTransformationRulesAsync();
+            _hasChanges = false;
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void AddRule()
+    {
+        if (!IsNewRuleValid()) return;
+
+        var rule = new TransformationRule
+        {
+            RuleId = _rules.Any() ? _rules.Max(r => r.RuleId) + 1 : 1,
+            PolicyPattern = _newRule.PolicyPattern,
+            CategoryName = _newRule.CategoryName,
+            Priority = _newRule.Priority,
+            IsRegex = _newRule.IsRegex,
+            IsActive = _newRule.IsActive
+        };
+
+        _rules.Add(rule);
+        _newRule = new() { IsActive = true, Priority = 50 };
+        MarkChanged();
+    }
+
+    private void DeleteRule(TransformationRule rule)
+    {
+        _rules.Remove(rule);
+        MarkChanged();
+    }
+
+    private async Task SaveRules()
+    {
+        try
+        {
+            await ImportService.SaveTransformationRulesAsync(_rules);
+            _hasChanges = false;
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+    }
+
+    private void MarkChanged()
+    {
+        _hasChanges = true;
+        StateHasChanged();
+    }
+
+    private bool IsNewRuleValid()
+    {
+        return !string.IsNullOrWhiteSpace(_newRule.PolicyPattern) &&
+               !string.IsNullOrWhiteSpace(_newRule.CategoryName) &&
+               _newRule.Priority > 0;
+    }
+
+    private void TestRule(TransformationRule rule)
+    {
+        _testingRule = rule;
+        _testPolicyText = "";
+        _testResult = false;
+    }
+
+    private void RunTest()
+    {
+        if (_testingRule == null || string.IsNullOrWhiteSpace(_testPolicyText))
+            return;
+
+        try
+        {
+            if (_testingRule.IsRegex)
+            {
+                _testResult = System.Text.RegularExpressions.Regex.IsMatch(
+                    _testPolicyText, 
+                    _testingRule.PolicyPattern, 
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            }
+            else
+            {
+                _testResult = _testPolicyText.Contains(_testingRule.PolicyPattern, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        catch (Exception)
+        {
+            _testResult = false;
+        }
+    }
+
+    private void CloseTestModal()
+    {
+        _testingRule = null;
+        _testPolicyText = "";
+        _testResult = false;
+    }
+}

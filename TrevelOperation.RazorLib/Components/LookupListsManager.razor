@@ -1,0 +1,427 @@
+@using TrevelOperation.Service
+@using TravelOperation.Core.Models.Lookup
+@inject ISettingsService SettingsService
+
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h2 class="text-xl font-bold">Lookup Lists Management</h2>
+        <div class="flex gap-2">
+            <select @bind="_selectedListType" class="select select-bordered">
+                <option value="Categories">📝 Categories</option>
+                <option value="Sources">📤 Sources</option>
+                <option value="Purposes">💼 Purposes</option>
+                <option value="CabinClasses">💺 Cabin Classes</option>
+                <option value="TripTypes">🌍 Trip Types</option>
+                <option value="Statuses">⚪ Statuses</option>
+                <option value="ValidationStatuses">🟡 Validation Statuses</option>
+                <option value="BookingTypes">✈ Booking Types</option>
+                <option value="BookingStatuses">🟢 Booking Statuses</option>
+            </select>
+            <button class="btn btn-primary" @onclick="ShowAddModal">
+                <span class="mr-1">➕</span>
+                Add New
+            </button>
+        </div>
+    </div>
+
+    <!-- Current List Display -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-body">
+            <h3 class="font-semibold mb-4">@_selectedListType</h3>
+            
+            @if (_isLoading)
+            {
+                <div class="flex justify-center py-8">
+                    <span class="loading loading-spinner loading-lg"></span>
+                </div>
+            }
+            else if (!_currentItems.Any())
+            {
+                <div class="text-center py-8 text-gray-500">
+                    <div class="text-4xl mb-2">📋</div>
+                    <p>No @_selectedListType.ToLower() configured</p>
+                    <p class="text-sm">Add your first item to get started</p>
+                </div>
+            }
+            else
+            {
+                <div class="overflow-x-auto">
+                    <table class="table w-full">
+                        <thead>
+                            <tr>
+                                <th>Emoji</th>
+                                <th>Name</th>
+                                <th>Usage Count</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _currentItems)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="text-lg">@GetItemEmoji(item)</span>
+                                    </td>
+                                    <td class="font-medium">@GetItemName(item)</td>
+                                    <td>
+                                        <span class="badge badge-ghost">@GetUsageCount(item)</span>
+                                    </td>
+                                    <td>
+                                        <div class="flex gap-2">
+                                            <button class="btn btn-ghost btn-sm" @onclick="() => ShowEditModal(item)">
+                                                ✏️ Edit
+                                            </button>
+                                            <button class="btn btn-ghost btn-sm text-error" @onclick="() => ShowDeleteModal(item)">
+                                                🗑️ Delete
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+@if (_showModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">
+                @(_editingItem == null ? "Add New" : "Edit") @_selectedListType.TrimEnd('s')
+            </h3>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Name</span>
+                </label>
+                <input type="text" @bind="_modalName" class="input input-bordered w-full" 
+                       placeholder="Enter name..." />
+            </div>
+
+            @if (SupportsEmoji(_selectedListType))
+            {
+                <div class="form-control mb-4">
+                    <label class="label">
+                        <span class="label-text">Emoji (optional)</span>
+                    </label>
+                    <input type="text" @bind="_modalEmoji" class="input input-bordered w-full" 
+                           placeholder="Enter emoji..." maxlength="2" />
+                </div>
+            }
+
+            <div class="modal-action">
+                <button class="btn btn-primary" @onclick="SaveItem" disabled="@string.IsNullOrWhiteSpace(_modalName)">
+                    @(_editingItem == null ? "Add" : "Update")
+                </button>
+                <button class="btn" @onclick="CloseModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (_showDeleteModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">Confirm Delete</h3>
+            
+            <p class="mb-4">
+                Are you sure you want to delete <strong>@GetItemName(_deletingItem)</strong>?
+            </p>
+
+            @if (_deleteUsageCount > 0)
+            {
+                <div class="alert alert-warning mb-4">
+                    <span>⚠️ This item is used by @_deleteUsageCount records and cannot be deleted.</span>
+                </div>
+            }
+
+            <div class="modal-action">
+                <button class="btn btn-error" @onclick="ConfirmDelete" disabled="@(_deleteUsageCount > 0)">
+                    Delete
+                </button>
+                <button class="btn" @onclick="CloseDeleteModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string _selectedListType = "Categories";
+    private List<object> _currentItems = new();
+    private bool _isLoading = false;
+    
+    private bool _showModal = false;
+    private object? _editingItem = null;
+    private string _modalName = "";
+    private string _modalEmoji = "";
+    
+    private bool _showDeleteModal = false;
+    private object? _deletingItem = null;
+    private int _deleteUsageCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCurrentList();
+    }
+
+    private async Task LoadCurrentList()
+    {
+        _isLoading = true;
+        try
+        {
+            _currentItems = _selectedListType switch
+            {
+                "Categories" => (await SettingsService.GetCategoriesAsync()).Cast<object>().ToList(),
+                "Sources" => (await SettingsService.GetSourcesAsync()).Cast<object>().ToList(),
+                "Purposes" => (await SettingsService.GetPurposesAsync()).Cast<object>().ToList(),
+                "CabinClasses" => (await SettingsService.GetCabinClassesAsync()).Cast<object>().ToList(),
+                "TripTypes" => (await SettingsService.GetTripTypesAsync()).Cast<object>().ToList(),
+                "Statuses" => (await SettingsService.GetStatusesAsync()).Cast<object>().ToList(),
+                "ValidationStatuses" => (await SettingsService.GetValidationStatusesAsync()).Cast<object>().ToList(),
+                "BookingTypes" => (await SettingsService.GetBookingTypesAsync()).Cast<object>().ToList(),
+                "BookingStatuses" => (await SettingsService.GetBookingStatusesAsync()).Cast<object>().ToList(),
+                _ => new List<object>()
+            };
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnListTypeChanged()
+    {
+        await LoadCurrentList();
+    }
+
+    private string GetItemName(object item)
+    {
+        return item switch
+        {
+            Category c => c.Name,
+            Source s => s.Name,
+            Purpose p => p.Name,
+            CabinClass cc => cc.Name,
+            TripType tt => tt.Name,
+            Status st => st.Name,
+            ValidationStatus vs => vs.Name,
+            BookingType bt => bt.Name,
+            BookingStatus bs => bs.Name,
+            _ => ""
+        };
+    }
+
+    private string GetItemEmoji(object item)
+    {
+        return item switch
+        {
+            Category c => c.Emoji ?? "",
+            Purpose p => p.Emoji ?? "",
+            CabinClass cc => cc.Emoji ?? "",
+            TripType tt => tt.Emoji ?? "",
+            Status st => st.Emoji ?? "",
+            ValidationStatus vs => vs.Emoji ?? "",
+            BookingType bt => bt.Emoji ?? "",
+            BookingStatus bs => bs.Emoji ?? "",
+            _ => ""
+        };
+    }
+
+    private string GetUsageCount(object item)
+    {
+        // For now, return "0" - in a full implementation, this would query actual usage
+        return "0";
+    }
+
+    private bool SupportsEmoji(string listType)
+    {
+        return listType != "Sources";
+    }
+
+    private void ShowAddModal()
+    {
+        _editingItem = null;
+        _modalName = "";
+        _modalEmoji = "";
+        _showModal = true;
+    }
+
+    private void ShowEditModal(object item)
+    {
+        _editingItem = item;
+        _modalName = GetItemName(item);
+        _modalEmoji = GetItemEmoji(item);
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _editingItem = null;
+        _modalName = "";
+        _modalEmoji = "";
+    }
+
+    private async Task SaveItem()
+    {
+        try
+        {
+            if (_editingItem == null)
+            {
+                // Create new item
+                await CreateNewItem();
+            }
+            else
+            {
+                // Update existing item
+                await UpdateExistingItem();
+            }
+
+            CloseModal();
+            await LoadCurrentList();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+    }
+
+    private async Task CreateNewItem()
+    {
+        switch (_selectedListType)
+        {
+            case "Categories":
+                await SettingsService.CreateCategoryAsync(_modalName, _modalEmoji);
+                break;
+            case "Sources":
+                await SettingsService.CreateSourceAsync(_modalName);
+                break;
+            case "Purposes":
+                await SettingsService.CreatePurposeAsync(_modalName, _modalEmoji);
+                break;
+            case "CabinClasses":
+                await SettingsService.CreateCabinClassAsync(_modalName, _modalEmoji);
+                break;
+            case "TripTypes":
+                await SettingsService.CreateTripTypeAsync(_modalName, _modalEmoji);
+                break;
+            case "Statuses":
+                await SettingsService.CreateStatusAsync(_modalName, _modalEmoji);
+                break;
+            case "ValidationStatuses":
+                await SettingsService.CreateValidationStatusAsync(_modalName, _modalEmoji);
+                break;
+            case "BookingTypes":
+                await SettingsService.CreateBookingTypeAsync(_modalName, _modalEmoji);
+                break;
+            case "BookingStatuses":
+                await SettingsService.CreateBookingStatusAsync(_modalName, _modalEmoji);
+                break;
+        }
+    }
+
+    private async Task UpdateExistingItem()
+    {
+        switch (_selectedListType)
+        {
+            case "Categories" when _editingItem is Category c:
+                await SettingsService.UpdateCategoryAsync(c.CategoryId, _modalName, _modalEmoji);
+                break;
+            case "Sources" when _editingItem is Source s:
+                await SettingsService.UpdateSourceAsync(s.SourceId, _modalName);
+                break;
+            case "Purposes" when _editingItem is Purpose p:
+                await SettingsService.UpdatePurposeAsync(p.PurposeId, _modalName, _modalEmoji);
+                break;
+            case "CabinClasses" when _editingItem is CabinClass cc:
+                await SettingsService.UpdateCabinClassAsync(cc.CabinClassId, _modalName, _modalEmoji);
+                break;
+            case "TripTypes" when _editingItem is TripType tt:
+                await SettingsService.UpdateTripTypeAsync(tt.TripTypeId, _modalName, _modalEmoji);
+                break;
+            case "Statuses" when _editingItem is Status st:
+                await SettingsService.UpdateStatusAsync(st.StatusId, _modalName, _modalEmoji);
+                break;
+            case "ValidationStatuses" when _editingItem is ValidationStatus vs:
+                await SettingsService.UpdateValidationStatusAsync(vs.ValidationStatusId, _modalName, _modalEmoji);
+                break;
+            case "BookingTypes" when _editingItem is BookingType bt:
+                await SettingsService.UpdateBookingTypeAsync(bt.BookingTypeId, _modalName, _modalEmoji);
+                break;
+            case "BookingStatuses" when _editingItem is BookingStatus bs:
+                await SettingsService.UpdateBookingStatusAsync(bs.BookingStatusId, _modalName, _modalEmoji);
+                break;
+        }
+    }
+
+    private void ShowDeleteModal(object item)
+    {
+        _deletingItem = item;
+        _deleteUsageCount = int.Parse(GetUsageCount(item));
+        _showDeleteModal = true;
+    }
+
+    private void CloseDeleteModal()
+    {
+        _showDeleteModal = false;
+        _deletingItem = null;
+        _deleteUsageCount = 0;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_deletingItem == null) return;
+
+        try
+        {
+            switch (_selectedListType)
+            {
+                case "Categories" when _deletingItem is Category c:
+                    await SettingsService.DeleteCategoryAsync(c.CategoryId);
+                    break;
+                case "Sources" when _deletingItem is Source s:
+                    await SettingsService.DeleteSourceAsync(s.SourceId);
+                    break;
+                case "Purposes" when _deletingItem is Purpose p:
+                    await SettingsService.DeletePurposeAsync(p.PurposeId);
+                    break;
+                case "CabinClasses" when _deletingItem is CabinClass cc:
+                    await SettingsService.DeleteCabinClassAsync(cc.CabinClassId);
+                    break;
+                case "TripTypes" when _deletingItem is TripType tt:
+                    await SettingsService.DeleteTripTypeAsync(tt.TripTypeId);
+                    break;
+                case "Statuses" when _deletingItem is Status st:
+                    await SettingsService.DeleteStatusAsync(st.StatusId);
+                    break;
+                case "ValidationStatuses" when _deletingItem is ValidationStatus vs:
+                    await SettingsService.DeleteValidationStatusAsync(vs.ValidationStatusId);
+                    break;
+                case "BookingTypes" when _deletingItem is BookingType bt:
+                    await SettingsService.DeleteBookingTypeAsync(bt.BookingTypeId);
+                    break;
+                case "BookingStatuses" when _deletingItem is BookingStatus bs:
+                    await SettingsService.DeleteBookingStatusAsync(bs.BookingStatusId);
+                    break;
+            }
+
+            CloseDeleteModal();
+            await LoadCurrentList();
+        }
+        catch (Exception ex)
+        {
+            // Handle error - show message to user
+        }
+    }
+}

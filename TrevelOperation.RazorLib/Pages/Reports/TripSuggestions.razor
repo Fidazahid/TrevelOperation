@@ -1,0 +1,509 @@
+@page "/trip-suggestions"
+@using TravelOperation.Core.Models
+@using TravelOperation.Core.Services
+@inject ITransactionService TransactionService
+@inject IJSRuntime JSRuntime
+
+<div class="container mx-auto p-6">
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">🤖 Trip Suggestions</h1>
+            <p class="text-gray-600">Auto-detect trips from transaction patterns</p>
+        </div>
+        <div class="flex gap-2">
+            <button class="btn btn-secondary" @onclick="RefreshSuggestions">
+                🔄 Refresh
+            </button>
+            <button class="btn btn-primary" @onclick="ApproveAllSuggestions">
+                ✅ Approve All
+            </button>
+        </div>
+    </div>
+
+    <!-- Algorithm Info -->
+    <div class="alert alert-info mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <div>
+            <h3 class="font-bold">How Trip Detection Works</h3>
+            <p>The system groups transactions by email and date proximity (±2 days), looking for airfare/lodging patterns to identify potential trips.</p>
+        </div>
+    </div>
+
+    <!-- Suggestions -->
+    @if (tripSuggestions.Any())
+    {
+        <div class="space-y-6">
+            @foreach (var suggestion in tripSuggestions)
+            {
+                <div class="card bg-base-100 shadow-md border-l-4 @GetSuggestionBorderClass(suggestion.Confidence)">
+                    <div class="card-body">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 class="card-title text-lg">
+                                    🧳 @suggestion.SuggestedTripName
+                                    <div class="badge @GetConfidenceBadgeClass(suggestion.Confidence)">
+                                        @(suggestion.Confidence)% confidence
+                                    </div>
+                                </h3>
+                                <p class="text-gray-600">@suggestion.Email • @suggestion.DateRange</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button class="btn btn-success btn-sm" @onclick="() => ApproveSuggestion(suggestion)">
+                                    ✅ Approve
+                                </button>
+                                <button class="btn btn-error btn-sm" @onclick="() => RejectSuggestion(suggestion)">
+                                    ❌ Reject
+                                </button>
+                                <button class="btn btn-warning btn-sm" @onclick="() => EditSuggestion(suggestion)">
+                                    ✏️ Edit
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Trip Details Preview -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                            <div class="stat">
+                                <div class="stat-title">Duration</div>
+                                <div class="stat-value text-sm">@suggestion.Duration days</div>
+                                <div class="stat-desc">@suggestion.StartDate.ToString("dd/MM/yyyy") - @suggestion.EndDate.ToString("dd/MM/yyyy")</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-title">Destination</div>
+                                <div class="stat-value text-sm">@suggestion.Destination</div>
+                                <div class="stat-desc">@suggestion.DetectedCountry</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-title">Transactions</div>
+                                <div class="stat-value text-sm">@suggestion.TransactionCount</div>
+                                <div class="stat-desc">Total amount: $@suggestion.TotalAmount.ToString("N2")</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-title">Detection Reason</div>
+                                <div class="stat-value text-sm">@suggestion.DetectionReason</div>
+                                <div class="stat-desc">@suggestion.KeyIndicators</div>
+                            </div>
+                        </div>
+
+                        <!-- Related Transactions -->
+                        <div class="collapse collapse-arrow border border-base-300">
+                            <input type="checkbox" />
+                            <div class="collapse-title text-sm font-medium">
+                                📋 View Related Transactions (@suggestion.Transactions.Count)
+                            </div>
+                            <div class="collapse-content">
+                                <div class="overflow-x-auto">
+                                    <table class="table table-zebra table-sm w-full">
+                                        <thead>
+                                            <tr>
+                                                <th>Date</th>
+                                                <th>Category</th>
+                                                <th>Vendor</th>
+                                                <th>Address</th>
+                                                <th>Amount</th>
+                                                <th>Key Indicator</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var transaction in suggestion.Transactions.OrderBy(t => t.TransactionDate))
+                                            {
+                                                <tr class="@(suggestion.KeyTransactionIds.Contains(transaction.TransactionId) ? "bg-yellow-50" : "")">
+                                                    <td>@transaction.TransactionDate.ToString("dd/MM/yyyy")</td>
+                                                    <td>@transaction.Category?.Emoji @transaction.Category?.Name</td>
+                                                    <td>@transaction.Vendor</td>
+                                                    <td class="text-xs">@transaction.Address</td>
+                                                    <td>@transaction.Currency @transaction.Amount.ToString("N2")</td>
+                                                    <td>
+                                                        @if (suggestion.KeyTransactionIds.Contains(transaction.TransactionId))
+                                                        {
+                                                            <div class="badge badge-warning badge-xs">Key</div>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="card bg-base-100 shadow-md">
+            <div class="card-body text-center">
+                <div class="text-6xl mb-4">🎯</div>
+                <h3 class="text-xl font-bold mb-2">No Trip Suggestions Found</h3>
+                <p class="text-gray-600 mb-4">All transaction patterns have been processed or no clear trip patterns detected.</p>
+                <button class="btn btn-primary" @onclick="RefreshSuggestions">🔄 Refresh Suggestions</button>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Edit Suggestion Modal -->
+@if (showEditModal && editingSuggestion != null)
+{
+    <div class="modal modal-open">
+        <div class="modal-box w-11/12 max-w-2xl">
+            <form method="dialog">
+                <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @onclick="HideEditModal">✕</button>
+            </form>
+            <h3 class="font-bold text-lg mb-4">✏️ Edit Trip Suggestion</h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Trip Name</span>
+                    </label>
+                    <input type="text" class="input input-bordered w-full" @bind="editingSuggestion.SuggestedTripName">
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Destination City</span>
+                    </label>
+                    <input type="text" class="input input-bordered w-full" @bind="editingSuggestion.Destination">
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Country</span>
+                    </label>
+                    <input type="text" class="input input-bordered w-full" @bind="editingSuggestion.DetectedCountry">
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Purpose</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="editingSuggestion.SuggestedPurposeId">
+                        <option value="">Auto-detect</option>
+                        @foreach (var purpose in availablePurposes)
+                        {
+                            <option value="@purpose.PurposeId">@purpose.Emoji @purpose.Name</option>
+                        }
+                    </select>
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Start Date</span>
+                    </label>
+                    <input type="date" class="input input-bordered w-full" @bind="editingSuggestion.StartDate">
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">End Date</span>
+                    </label>
+                    <input type="date" class="input input-bordered w-full" @bind="editingSuggestion.EndDate">
+                </div>
+            </div>
+            
+            <!-- Transaction Selection -->
+            <div class="mt-6">
+                <h4 class="font-semibold mb-2">Select Transactions to Include</h4>
+                <div class="max-h-60 overflow-y-auto border rounded p-2">
+                    @foreach (var transaction in editingSuggestion.Transactions)
+                    {
+                        <label class="label cursor-pointer">
+                            <span class="label-text">
+                                @transaction.TransactionDate.ToString("dd/MM/yyyy") - @transaction.Category?.Name - @transaction.Vendor - @transaction.Currency @transaction.Amount.ToString("N2")
+                            </span>
+                            <input type="checkbox" class="checkbox checkbox-sm" 
+                                   checked="@editingSuggestion.SelectedTransactionIds.Contains(transaction.TransactionId)"
+                                   @onchange="(e) => ToggleTransactionSelection(transaction.TransactionId, (bool)e.Value!)">
+                        </label>
+                    }
+                </div>
+            </div>
+            
+            <div class="modal-action">
+                <button class="btn btn-ghost" @onclick="HideEditModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveEditedSuggestion">Save Changes</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<TripSuggestion> tripSuggestions = new();
+    private List<Purpose> availablePurposes = new();
+    
+    private bool showEditModal = false;
+    private TripSuggestion? editingSuggestion;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookupData();
+        await GenerateTripSuggestions();
+    }
+
+    private async Task LoadLookupData()
+    {
+        availablePurposes = new List<Purpose>
+        {
+            new Purpose { PurposeId = 1, Name = "Business trip", Emoji = "💼" },
+            new Purpose { PurposeId = 2, Name = "Onboarding", Emoji = "🎓" },
+            new Purpose { PurposeId = 3, Name = "Company trip", Emoji = "🏖" },
+            new Purpose { PurposeId = 4, Name = "BCP", Emoji = "🛡" }
+        };
+    }
+
+    private async Task GenerateTripSuggestions()
+    {
+        // This would normally call the actual trip suggestion algorithm
+        tripSuggestions = GenerateMockSuggestions();
+    }
+
+    private async Task RefreshSuggestions()
+    {
+        await GenerateTripSuggestions();
+        StateHasChanged();
+    }
+
+    private async Task ApproveSuggestion(TripSuggestion suggestion)
+    {
+        // Create actual trip from suggestion
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Create trip '{suggestion.SuggestedTripName}'?");
+        if (confirmed)
+        {
+            // TODO: Call trip service to create trip and link transactions
+            tripSuggestions.Remove(suggestion);
+            await JSRuntime.InvokeVoidAsync("alert", "Trip created successfully!");
+            StateHasChanged();
+        }
+    }
+
+    private async Task RejectSuggestion(TripSuggestion suggestion)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Reject suggestion '{suggestion.SuggestedTripName}'?");
+        if (confirmed)
+        {
+            tripSuggestions.Remove(suggestion);
+            StateHasChanged();
+        }
+    }
+
+    private void EditSuggestion(TripSuggestion suggestion)
+    {
+        editingSuggestion = new TripSuggestion
+        {
+            Id = suggestion.Id,
+            SuggestedTripName = suggestion.SuggestedTripName,
+            Email = suggestion.Email,
+            StartDate = suggestion.StartDate,
+            EndDate = suggestion.EndDate,
+            Destination = suggestion.Destination,
+            DetectedCountry = suggestion.DetectedCountry,
+            SuggestedPurposeId = suggestion.SuggestedPurposeId,
+            Confidence = suggestion.Confidence,
+            DetectionReason = suggestion.DetectionReason,
+            KeyIndicators = suggestion.KeyIndicators,
+            Transactions = suggestion.Transactions,
+            SelectedTransactionIds = new HashSet<string>(suggestion.SelectedTransactionIds)
+        };
+        showEditModal = true;
+    }
+
+    private void HideEditModal()
+    {
+        showEditModal = false;
+        editingSuggestion = null;
+    }
+
+    private void ToggleTransactionSelection(string transactionId, bool isSelected)
+    {
+        if (editingSuggestion == null) return;
+        
+        if (isSelected)
+        {
+            editingSuggestion.SelectedTransactionIds.Add(transactionId);
+        }
+        else
+        {
+            editingSuggestion.SelectedTransactionIds.Remove(transactionId);
+        }
+    }
+
+    private async Task SaveEditedSuggestion()
+    {
+        if (editingSuggestion == null) return;
+
+        // Update the original suggestion
+        var originalSuggestion = tripSuggestions.FirstOrDefault(s => s.Id == editingSuggestion.Id);
+        if (originalSuggestion != null)
+        {
+            originalSuggestion.SuggestedTripName = editingSuggestion.SuggestedTripName;
+            originalSuggestion.Destination = editingSuggestion.Destination;
+            originalSuggestion.DetectedCountry = editingSuggestion.DetectedCountry;
+            originalSuggestion.SuggestedPurposeId = editingSuggestion.SuggestedPurposeId;
+            originalSuggestion.StartDate = editingSuggestion.StartDate;
+            originalSuggestion.EndDate = editingSuggestion.EndDate;
+            originalSuggestion.SelectedTransactionIds = editingSuggestion.SelectedTransactionIds;
+            
+            // Recalculate derived properties
+            originalSuggestion.Duration = (originalSuggestion.EndDate - originalSuggestion.StartDate).Days + 1;
+            originalSuggestion.DateRange = $"{originalSuggestion.StartDate:dd/MM/yyyy} - {originalSuggestion.EndDate:dd/MM/yyyy}";
+            originalSuggestion.TransactionCount = originalSuggestion.SelectedTransactionIds.Count;
+            originalSuggestion.TotalAmount = originalSuggestion.Transactions
+                .Where(t => originalSuggestion.SelectedTransactionIds.Contains(t.TransactionId))
+                .Sum(t => t.AmountUSD ?? 0);
+        }
+
+        HideEditModal();
+        StateHasChanged();
+    }
+
+    private async Task ApproveAllSuggestions()
+    {
+        if (!tripSuggestions.Any()) return;
+
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Create {tripSuggestions.Count} trips from all suggestions?");
+        if (confirmed)
+        {
+            // TODO: Batch create all trips
+            var count = tripSuggestions.Count;
+            tripSuggestions.Clear();
+            await JSRuntime.InvokeVoidAsync("alert", $"{count} trips created successfully!");
+            StateHasChanged();
+        }
+    }
+
+    private string GetSuggestionBorderClass(int confidence)
+    {
+        return confidence switch
+        {
+            >= 90 => "border-green-500",
+            >= 70 => "border-yellow-500",
+            _ => "border-red-500"
+        };
+    }
+
+    private string GetConfidenceBadgeClass(int confidence)
+    {
+        return confidence switch
+        {
+            >= 90 => "badge-success",
+            >= 70 => "badge-warning",
+            _ => "badge-error"
+        };
+    }
+
+    private List<TripSuggestion> GenerateMockSuggestions()
+    {
+        var suggestions = new List<TripSuggestion>();
+        var random = new Random();
+        
+        // Generate mock suggestions with different confidence levels
+        var cities = new[] { ("London", "United Kingdom"), ("Paris", "France"), ("New York", "United States"), ("Tokyo", "Japan") };
+        var emails = new[] { "john.doe@company.com", "jane.smith@company.com", "mike.johnson@company.com" };
+
+        for (int i = 1; i <= 4; i++)
+        {
+            var city = cities[random.Next(cities.Length)];
+            var email = emails[random.Next(emails.Length)];
+            var startDate = DateTime.Today.AddDays(random.Next(-30, -5));
+            var endDate = startDate.AddDays(random.Next(2, 10));
+            var confidence = random.Next(65, 95);
+            
+            var mockTransactions = GenerateMockTransactionsForSuggestion(i, startDate, endDate);
+            var keyTransactions = mockTransactions.Where(t => t.Category?.Name == "Airfare" || t.Category?.Name == "Lodging").Select(t => t.TransactionId).ToList();
+
+            suggestions.Add(new TripSuggestion
+            {
+                Id = i,
+                SuggestedTripName = $"Trip to {city.Item1}",
+                Email = email,
+                StartDate = startDate,
+                EndDate = endDate,
+                Duration = (endDate - startDate).Days + 1,
+                DateRange = $"{startDate:dd/MM/yyyy} - {endDate:dd/MM/yyyy}",
+                Destination = city.Item1,
+                DetectedCountry = city.Item2,
+                Confidence = confidence,
+                DetectionReason = confidence >= 85 ? "Strong pattern" : "Partial pattern",
+                KeyIndicators = keyTransactions.Any() ? "Airfare + Lodging detected" : "Transaction clustering",
+                Transactions = mockTransactions,
+                SelectedTransactionIds = new HashSet<string>(mockTransactions.Select(t => t.TransactionId)),
+                KeyTransactionIds = keyTransactions,
+                TransactionCount = mockTransactions.Count,
+                TotalAmount = mockTransactions.Sum(t => t.AmountUSD ?? 0),
+                SuggestedPurposeId = 1
+            });
+        }
+
+        return suggestions;
+    }
+
+    private List<Transaction> GenerateMockTransactionsForSuggestion(int suggestionId, DateTime startDate, DateTime endDate)
+    {
+        var random = new Random();
+        var categories = new List<Category>
+        {
+            new Category { CategoryId = 1, Name = "Airfare", Emoji = "✈" },
+            new Category { CategoryId = 2, Name = "Lodging", Emoji = "🏨" },
+            new Category { CategoryId = 3, Name = "Meals", Emoji = "🍽" },
+            new Category { CategoryId = 4, Name = "Transportation", Emoji = "🚕" }
+        };
+
+        var transactions = new List<Transaction>();
+        var transactionCount = random.Next(3, 8);
+
+        for (int i = 0; i < transactionCount; i++)
+        {
+            var category = categories[random.Next(categories.Count)];
+            var amount = category.Name switch
+            {
+                "Airfare" => random.Next(200, 800),
+                "Lodging" => random.Next(100, 300),
+                "Meals" => random.Next(20, 80),
+                "Transportation" => random.Next(15, 50),
+                _ => random.Next(10, 100)
+            };
+            
+            var transactionDate = startDate.AddDays(random.Next(0, (endDate - startDate).Days + 1));
+
+            transactions.Add(new Transaction
+            {
+                TransactionId = $"SUG-{suggestionId}-{i + 1}",
+                TransactionDate = transactionDate,
+                CategoryId = category.CategoryId,
+                Category = category,
+                Vendor = $"{category.Name} Vendor {i + 1}",
+                Address = $"Address {i + 1}, City, Country",
+                Currency = "USD",
+                Amount = amount,
+                AmountUSD = amount
+            });
+        }
+
+        return transactions.OrderBy(t => t.TransactionDate).ToList();
+    }
+
+    // Trip suggestion model
+    public class TripSuggestion
+    {
+        public int Id { get; set; }
+        public string SuggestedTripName { get; set; } = "";
+        public string Email { get; set; } = "";
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
+        public int Duration { get; set; }
+        public string DateRange { get; set; } = "";
+        public string Destination { get; set; } = "";
+        public string DetectedCountry { get; set; } = "";
+        public int Confidence { get; set; }
+        public string DetectionReason { get; set; } = "";
+        public string KeyIndicators { get; set; } = "";
+        public List<Transaction> Transactions { get; set; } = new();
+        public HashSet<string> SelectedTransactionIds { get; set; } = new();
+        public List<string> KeyTransactionIds { get; set; } = new();
+        public int TransactionCount { get; set; }
+        public decimal TotalAmount { get; set; }
+        public int? SuggestedPurposeId { get; set; }
+    }
+}

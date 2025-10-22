@@ -1,0 +1,336 @@
+@using TrevelOperation.Service
+@using TravelOperation.Core.Models.Entities
+@inject ISettingsService SettingsService
+
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h2 class="text-xl font-bold">Tax Settings Management</h2>
+        <button class="btn btn-primary" @onclick="ShowAddModal">
+            <span class="mr-1">➕</span>
+            Add Tax Setting
+        </button>
+    </div>
+
+    <!-- Tax Settings List -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-body">
+            @if (_isLoading)
+            {
+                <div class="flex justify-center py-8">
+                    <span class="loading loading-spinner loading-lg"></span>
+                </div>
+            }
+            else if (!_taxSettings.Any())
+            {
+                <div class="text-center py-8 text-gray-500">
+                    <div class="text-4xl mb-2">💼</div>
+                    <p>No tax settings configured</p>
+                    <p class="text-sm">Add your first tax setting to get started</p>
+                </div>
+            }
+            else
+            {
+                <div class="overflow-x-auto">
+                    <table class="table w-full">
+                        <thead>
+                            <tr>
+                                <th>Fiscal Year</th>
+                                <th>Country</th>
+                                <th>Subsidiary</th>
+                                <th>Meals Cap</th>
+                                <th>Lodging Cap</th>
+                                <th>Tax Shield</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var taxSetting in _taxSettings)
+                            {
+                                <tr>
+                                    <td class="font-medium">@taxSetting.FiscalYear</td>
+                                    <td>@taxSetting.Country</td>
+                                    <td>@taxSetting.Subsidiary</td>
+                                    <td>$@(taxSetting.MealsCap?.ToString("N2") ?? "0.00")</td>
+                                    <td>$@(taxSetting.LodgingCap?.ToString("N2") ?? "0.00")</td>
+                                    <td>@(taxSetting.TaxShield?.ToString("P2") ?? "0.00%")</td>
+                                    <td>
+                                        <div class="flex gap-2">
+                                            <button class="btn btn-ghost btn-sm" @onclick="() => ShowEditModal(taxSetting)">
+                                                ✏️ Edit
+                                            </button>
+                                            <button class="btn btn-ghost btn-sm text-error" @onclick="() => ShowDeleteModal(taxSetting)">
+                                                🗑️ Delete
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+@if (_showModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box max-w-2xl">
+            <h3 class="font-bold text-lg mb-4">
+                @(_editingTaxSetting == null ? "Add New Tax Setting" : "Edit Tax Setting")
+            </h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Fiscal Year *</span>
+                    </label>
+                    <input type="number" @bind="_modalFiscalYear" class="input input-bordered w-full" 
+                           placeholder="2024" min="2020" max="2030" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Country *</span>
+                    </label>
+                    <select @bind="_modalCountry" class="select select-bordered w-full">
+                        <option value="">Select Country</option>
+                        <option value="Israel">Israel</option>
+                        <option value="United States">United States</option>
+                        <option value="United Kingdom">United Kingdom</option>
+                        <option value="Germany">Germany</option>
+                        <option value="France">France</option>
+                        <option value="Canada">Canada</option>
+                        <option value="Australia">Australia</option>
+                        <option value="Japan">Japan</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Subsidiary *</span>
+                    </label>
+                    <select @bind="_modalSubsidiary" class="select select-bordered w-full">
+                        <option value="">Select Subsidiary</option>
+                        <option value="WSC IL">WSC IL</option>
+                        <option value="WSC US">WSC US</option>
+                        <option value="WSC UK">WSC UK</option>
+                        <option value="WSC DE">WSC DE</option>
+                        <option value="WSC FR">WSC FR</option>
+                        <option value="WSC CA">WSC CA</option>
+                        <option value="WSC AU">WSC AU</option>
+                        <option value="WSC JP">WSC JP</option>
+                    </select>
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Meals Cap (USD) *</span>
+                    </label>
+                    <input type="number" @bind="_modalMealsCap" class="input input-bordered w-full" 
+                           placeholder="50.00" min="0" step="0.01" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Lodging Cap (USD) *</span>
+                    </label>
+                    <input type="number" @bind="_modalLodgingCap" class="input input-bordered w-full" 
+                           placeholder="200.00" min="0" step="0.01" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Tax Shield (%) *</span>
+                    </label>
+                    <input type="number" @bind="_modalTaxShield" class="input input-bordered w-full" 
+                           placeholder="0.25" min="0" max="1" step="0.01" />
+                </div>
+            </div>
+
+            <div class="alert alert-info mt-4">
+                <span class="text-sm">
+                    💡 Tax shield should be entered as decimal (e.g., 0.25 for 25%).
+                    Caps are daily limits in USD.
+                </span>
+            </div>
+
+            <div class="modal-action">
+                <button class="btn btn-primary" @onclick="SaveTaxSetting" 
+                        disabled="@(!IsValidTaxSetting())">
+                    @(_editingTaxSetting == null ? "Add Tax Setting" : "Update Tax Setting")
+                </button>
+                <button class="btn" @onclick="CloseModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (_showDeleteModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">Confirm Delete</h3>
+            
+            <p class="mb-4">
+                Are you sure you want to delete the tax setting for 
+                <strong>@_deletingTaxSetting?.FiscalYear @_deletingTaxSetting?.Country (@_deletingTaxSetting?.Subsidiary)</strong>?
+            </p>
+
+            <div class="modal-action">
+                <button class="btn btn-error" @onclick="ConfirmDelete">
+                    Delete
+                </button>
+                <button class="btn" @onclick="CloseDeleteModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Tax> _taxSettings = new();
+    private bool _isLoading = false;
+    
+    private bool _showModal = false;
+    private Tax? _editingTaxSetting = null;
+    private int _modalFiscalYear = DateTime.Now.Year;
+    private string _modalCountry = "";
+    private string _modalSubsidiary = "";
+    private decimal _modalMealsCap = 0;
+    private decimal _modalLodgingCap = 0;
+    private decimal _modalTaxShield = 0;
+    
+    private bool _showDeleteModal = false;
+    private Tax? _deletingTaxSetting = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTaxSettings();
+    }
+
+    private async Task LoadTaxSettings()
+    {
+        _isLoading = true;
+        try
+        {
+            _taxSettings = await SettingsService.GetTaxSettingsAsync();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ShowAddModal()
+    {
+        _editingTaxSetting = null;
+        _modalFiscalYear = DateTime.Now.Year;
+        _modalCountry = "";
+        _modalSubsidiary = "";
+        _modalMealsCap = 50;
+        _modalLodgingCap = 200;
+        _modalTaxShield = 0.25m;
+        _showModal = true;
+    }
+
+    private void ShowEditModal(Tax taxSetting)
+    {
+        _editingTaxSetting = taxSetting;
+        _modalFiscalYear = taxSetting.FiscalYear;
+        _modalCountry = taxSetting.Country;
+        _modalSubsidiary = taxSetting.Subsidiary;
+        _modalMealsCap = taxSetting.MealsCap ?? 0;
+        _modalLodgingCap = taxSetting.LodgingCap ?? 0;
+        _modalTaxShield = taxSetting.TaxShield ?? 0;
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _editingTaxSetting = null;
+    }
+
+    private bool IsValidTaxSetting()
+    {
+        return _modalFiscalYear >= 2020 && _modalFiscalYear <= 2030 &&
+               !string.IsNullOrWhiteSpace(_modalCountry) &&
+               !string.IsNullOrWhiteSpace(_modalSubsidiary) &&
+               _modalMealsCap >= 0 &&
+               _modalLodgingCap >= 0 &&
+               _modalTaxShield >= 0 && _modalTaxShield <= 1;
+    }
+
+    private async Task SaveTaxSetting()
+    {
+        try
+        {
+            if (_editingTaxSetting == null)
+            {
+                await SettingsService.CreateTaxSettingAsync(
+                    _modalFiscalYear,
+                    _modalCountry,
+                    _modalSubsidiary,
+                    _modalMealsCap,
+                    _modalLodgingCap,
+                    _modalTaxShield
+                );
+            }
+            else
+            {
+                await SettingsService.UpdateTaxSettingAsync(
+                    _editingTaxSetting.TaxId,
+                    _modalFiscalYear,
+                    _modalCountry,
+                    _modalSubsidiary,
+                    _modalMealsCap,
+                    _modalLodgingCap,
+                    _modalTaxShield
+                );
+            }
+
+            CloseModal();
+            await LoadTaxSettings();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+    }
+
+    private void ShowDeleteModal(Tax taxSetting)
+    {
+        _deletingTaxSetting = taxSetting;
+        _showDeleteModal = true;
+    }
+
+    private void CloseDeleteModal()
+    {
+        _showDeleteModal = false;
+        _deletingTaxSetting = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_deletingTaxSetting == null) return;
+
+        try
+        {
+            await SettingsService.DeleteTaxSettingAsync(_deletingTaxSetting.TaxId);
+            CloseDeleteModal();
+            await LoadTaxSettings();
+        }
+        catch (Exception ex)
+        {
+            // Handle error - show message to user
+        }
+    }
+}

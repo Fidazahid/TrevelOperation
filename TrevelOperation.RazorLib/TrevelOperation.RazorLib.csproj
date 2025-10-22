@@ -18,6 +18,11 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
     </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\TravelOperation.Core\TravelOperation.Core.csproj" />
+      <ProjectReference Include="..\TrevelOperation.Service\TrevelOperation.Service.csproj" />
+    </ItemGroup>
 	<Target Name="InstallWebDependencies" BeforeTargets="Build" Condition=" !Exists('node_modules') ">
 		<Exec Command="npm install" />
 	</Target>

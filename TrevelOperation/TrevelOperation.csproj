@@ -15,11 +15,18 @@
 
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+          <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
         <PackageReference Include="Microsoft.Extensions.Hosting" />
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\TrevelOperation.RazorLib\TrevelOperation.RazorLib.csproj" />
+        <ProjectReference Include="..\TrevelOperation.Service\TrevelOperation.Service.csproj" />
+        <ProjectReference Include="..\TravelOperation.Core\TravelOperation.Core.csproj" />
     </ItemGroup>
 
     <ItemGroup>

@@ -1,0 +1,543 @@
+@page "/airfare-control"
+@using TravelOperation.Core.Models
+@using TravelOperation.Core.Services
+@inject ITransactionService TransactionService
+@inject IJSRuntime JSRuntime
+
+<div class="container mx-auto p-6">
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">✈️ Airfare Control</h1>
+            <p class="text-gray-600">Ensure all airfare transactions have cabin class assigned</p>
+        </div>
+        <div class="flex gap-2">
+            <button class="btn btn-secondary" @onclick="RefreshData">
+                🔄 Refresh
+            </button>
+            <button class="btn btn-primary" @onclick="ValidateAll">
+                ✅ Validate All
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+        <div class="card bg-yellow-50 border-l-4 border-yellow-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">⚠️</div>
+                    <div>
+                        <div class="text-2xl font-bold text-yellow-700">@incompleteCount</div>
+                        <div class="text-yellow-600">Missing Cabin Class</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card bg-blue-50 border-l-4 border-blue-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">✈️</div>
+                    <div>
+                        <div class="text-2xl font-bold text-blue-700">@totalAirfareTransactions</div>
+                        <div class="text-blue-600">Total Airfare</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card bg-green-50 border-l-4 border-green-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">👑</div>
+                    <div>
+                        <div class="text-2xl font-bold text-green-700">@premiumCount</div>
+                        <div class="text-green-600">Premium Cabin</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card bg-purple-50 border-l-4 border-purple-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">💰</div>
+                    <div>
+                        <div class="text-2xl font-bold text-purple-700">$@totalAirfareAmount.ToString("N0")</div>
+                        <div class="text-purple-600">Total Amount</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card bg-base-100 shadow-md mb-6">
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Owner</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="selectedOwner" @bind:after="FilterTransactions">
+                        <option value="">All Owners</option>
+                        @foreach (var owner in availableOwners)
+                        {
+                            <option value="@owner">@owner</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Status</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="selectedStatus" @bind:after="FilterTransactions">
+                        <option value="">All</option>
+                        <option value="missing">Missing Cabin Class</option>
+                        <option value="premium">Premium Cabin</option>
+                        <option value="economy">Economy</option>
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Date Range</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="selectedDateRange" @bind:after="FilterTransactions">
+                        <option value="">All Dates</option>
+                        <option value="last-30">Last 30 days</option>
+                        <option value="last-90">Last 90 days</option>
+                        <option value="this-year">This year</option>
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Search</span>
+                    </label>
+                    <input type="text" class="input input-bordered w-full" placeholder="Search vendor..." @bind="searchText" @bind:after="FilterTransactions">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transactions Table -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-body">
+            <div class="overflow-x-auto">
+                <table class="table table-zebra w-full">
+                    <thead>
+                        <tr>
+                            <th>
+                                <input type="checkbox" class="checkbox" @onchange="ToggleSelectAll" checked="@allSelected">
+                            </th>
+                            <th>Document</th>
+                            <th>Transaction ID</th>
+                            <th>Email</th>
+                            <th>Date</th>
+                            <th>Vendor</th>
+                            <th>Address</th>
+                            <th>Currency</th>
+                            <th>Amount</th>
+                            <th>Amount (USD)</th>
+                            <th>Cabin Class</th>
+                            <th>Category</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var transaction in filteredTransactions.Skip((currentPage - 1) * pageSize).Take(pageSize))
+                        {
+                            <tr class="hover">
+                                <td>
+                                    <input type="checkbox" class="checkbox" @onchange="(e) => ToggleSelect(transaction.TransactionId, e)" checked="@selectedTransactions.Contains(transaction.TransactionId)">
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(transaction.DocumentUrl))
+                                    {
+                                        <a href="@transaction.DocumentUrl" target="_blank" class="btn btn-ghost btn-sm">📄</a>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-gray-400">No doc</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="font-mono text-sm">@transaction.TransactionId</div>
+                                </td>
+                                <td>@transaction.Email</td>
+                                <td>@transaction.TransactionDate.ToString("dd/MM/yyyy")</td>
+                                <td>@transaction.Vendor</td>
+                                <td>
+                                    <div class="text-sm text-gray-600">@transaction.Address</div>
+                                </td>
+                                <td>@transaction.Currency</td>
+                                <td>@transaction.Amount.ToString("N2")</td>
+                                <td>$@transaction.AmountUSD.ToString("N2")</td>
+                                <td>
+                                    <select class="select select-bordered select-sm @(string.IsNullOrEmpty(transaction.CabinClass) ? "bg-yellow-100 border-yellow-400" : "")" 
+                                            @onchange="(e) => UpdateCabinClass(transaction.TransactionId, e.Value?.ToString())">
+                                        <option value="">Select...</option>
+                                        <option value="Economy" selected="@(transaction.CabinClass == "Economy")">💺 Economy</option>
+                                        <option value="Premium Economy" selected="@(transaction.CabinClass == "Premium Economy")">🛫 Premium Economy</option>
+                                        <option value="Business" selected="@(transaction.CabinClass == "Business")">🧳 Business</option>
+                                        <option value="First" selected="@(transaction.CabinClass == "First")">👑 First</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <select class="select select-bordered select-sm bg-blue-50" 
+                                            @onchange="(e) => UpdateCategory(transaction.TransactionId, e.Value?.ToString())">
+                                        <option value="Airfare" selected="@(transaction.Category == "Airfare")">✈ Airfare</option>
+                                        <option value="Lodging" selected="@(transaction.Category == "Lodging")">🏨 Lodging</option>
+                                        <option value="Transportation" selected="@(transaction.Category == "Transportation")">🚕 Transportation</option>
+                                        <option value="Meals" selected="@(transaction.Category == "Meals")">🍽 Meals</option>
+                                        <option value="Client entertainment" selected="@(transaction.Category == "Client entertainment")">🍸 Client entertainment</option>
+                                        <option value="Communication" selected="@(transaction.Category == "Communication")">📱 Communication</option>
+                                        <option value="Other" selected="@(transaction.Category == "Other")">❔ Other</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <div class="dropdown dropdown-end">
+                                        <label tabindex="0" class="btn btn-ghost btn-sm">⋮</label>
+                                        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52">
+                                            <li><a @onclick="() => ViewDetails(transaction.TransactionId)">👁️ View Details</a></li>
+                                            <li><a @onclick="() => GenerateMessage(transaction.TransactionId)">📧 Generate Message</a></li>
+                                            <li><hr /></li>
+                                            <li><a @onclick="() => MarkAsValid(transaction.TransactionId)">✅ Mark Valid</a></li>
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Bulk Actions -->
+            @if (selectedTransactions.Any())
+            {
+                <div class="alert alert-info mt-4">
+                    <div class="flex justify-between items-center w-full">
+                        <span>@selectedTransactions.Count transaction(s) selected</span>
+                        <div class="flex gap-2">
+                            <button class="btn btn-sm btn-success" @onclick="MarkSelectedAsValid">
+                                ✅ Mark Selected as Valid
+                            </button>
+                            <button class="btn btn-sm btn-secondary" @onclick="ClearSelection">
+                                ❌ Clear Selection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Pagination -->
+            <div class="flex justify-between items-center mt-4">
+                <div class="text-sm text-gray-500">
+                    Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, filteredTransactions.Count) of @filteredTransactions.Count transactions
+                </div>
+                <div class="join">
+                    <button class="join-item btn btn-sm" disabled="@(currentPage <= 1)" @onclick="() => ChangePage(currentPage - 1)">«</button>
+                    @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                    {
+                        <button class="join-item btn btn-sm @(i == currentPage ? "btn-active" : "")" @onclick="() => ChangePage(i)">@i</button>
+                    }
+                    <button class="join-item btn btn-sm" disabled="@(currentPage >= totalPages)" @onclick="() => ChangePage(currentPage + 1)">»</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<AirfareTransactionData> transactions = new();
+    private List<AirfareTransactionData> filteredTransactions = new();
+    private List<string> availableOwners = new();
+    private HashSet<string> selectedTransactions = new();
+    
+    // Filters
+    private string selectedOwner = "";
+    private string selectedStatus = "";
+    private string selectedDateRange = "";
+    private string searchText = "";
+    
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 15;
+    private int totalPages => (int)Math.Ceiling((double)filteredTransactions.Count / pageSize);
+    
+    // Summary data
+    private int incompleteCount = 0;
+    private int totalAirfareTransactions = 0;
+    private int premiumCount = 0;
+    private decimal totalAirfareAmount = 0;
+    private bool allSelected = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAirfareTransactions();
+        CalculateSummary();
+        FilterTransactions();
+    }
+
+    private async Task LoadAirfareTransactions()
+    {
+        transactions = GenerateMockAirfareData();
+        availableOwners = transactions.Select(t => t.Owner).Where(o => !string.IsNullOrEmpty(o)).Distinct().ToList()!;
+    }
+
+    private void CalculateSummary()
+    {
+        incompleteCount = filteredTransactions.Count(t => string.IsNullOrEmpty(t.CabinClass));
+        totalAirfareTransactions = filteredTransactions.Count;
+        premiumCount = filteredTransactions.Count(t => t.CabinClass is "Business" or "First");
+        totalAirfareAmount = filteredTransactions.Sum(t => t.AmountUSD);
+    }
+
+    private void FilterTransactions()
+    {
+        filteredTransactions = transactions.Where(t =>
+            (string.IsNullOrEmpty(selectedOwner) || t.Owner == selectedOwner) &&
+            (string.IsNullOrEmpty(searchText) || 
+             t.Vendor.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+             t.TransactionId.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
+            FilterByStatus(t) &&
+            FilterByDateRange(t)
+        ).OrderByDescending(t => t.TransactionDate).ToList();
+        
+        CalculateSummary();
+        currentPage = 1;
+        selectedTransactions.Clear();
+        StateHasChanged();
+    }
+
+    private bool FilterByStatus(AirfareTransactionData transaction)
+    {
+        return selectedStatus switch
+        {
+            "missing" => string.IsNullOrEmpty(transaction.CabinClass),
+            "premium" => transaction.CabinClass is "Business" or "First",
+            "economy" => transaction.CabinClass == "Economy",
+            _ => true
+        };
+    }
+
+    private bool FilterByDateRange(AirfareTransactionData transaction)
+    {
+        return selectedDateRange switch
+        {
+            "last-30" => transaction.TransactionDate >= DateTime.Today.AddDays(-30),
+            "last-90" => transaction.TransactionDate >= DateTime.Today.AddDays(-90),
+            "this-year" => transaction.TransactionDate.Year == DateTime.Today.Year,
+            _ => true
+        };
+    }
+
+    private void ChangePage(int page)
+    {
+        if (page >= 1 && page <= totalPages)
+        {
+            currentPage = page;
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        var isChecked = (bool)(e.Value ?? false);
+        if (isChecked)
+        {
+            foreach (var transaction in filteredTransactions.Skip((currentPage - 1) * pageSize).Take(pageSize))
+            {
+                selectedTransactions.Add(transaction.TransactionId);
+            }
+        }
+        else
+        {
+            selectedTransactions.Clear();
+        }
+        allSelected = isChecked;
+        StateHasChanged();
+    }
+
+    private void ToggleSelect(string transactionId, ChangeEventArgs e)
+    {
+        var isChecked = (bool)(e.Value ?? false);
+        if (isChecked)
+        {
+            selectedTransactions.Add(transactionId);
+        }
+        else
+        {
+            selectedTransactions.Remove(transactionId);
+        }
+        allSelected = selectedTransactions.Count == pageSize;
+        StateHasChanged();
+    }
+
+    private async Task UpdateCabinClass(string transactionId, string? cabinClass)
+    {
+        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+        if (transaction != null)
+        {
+            transaction.CabinClass = cabinClass ?? "";
+            CalculateSummary();
+            StateHasChanged();
+        }
+    }
+
+    private async Task UpdateCategory(string transactionId, string? category)
+    {
+        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+        if (transaction != null)
+        {
+            transaction.Category = category ?? "";
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadAirfareTransactions();
+        FilterTransactions();
+    }
+
+    private async Task ValidateAll()
+    {
+        var result = await JSRuntime.InvokeAsync<bool>("confirm", "Mark all visible transactions as valid?");
+        if (result)
+        {
+            foreach (var transaction in filteredTransactions)
+            {
+                transaction.IsValid = true;
+            }
+            await JSRuntime.InvokeVoidAsync("alert", $"Marked {filteredTransactions.Count} transactions as valid");
+            StateHasChanged();
+        }
+    }
+
+    private async Task ViewDetails(string transactionId)
+    {
+        await JSRuntime.InvokeVoidAsync("alert", $"View details for transaction {transactionId} - Navigation pending");
+    }
+
+    private async Task GenerateMessage(string transactionId)
+    {
+        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+        if (transaction != null)
+        {
+            var message = GenerateAirfareMessage(transaction);
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", message);
+            await JSRuntime.InvokeVoidAsync("alert", "Message copied to clipboard!");
+        }
+    }
+
+    private async Task MarkAsValid(string transactionId)
+    {
+        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+        if (transaction != null)
+        {
+            transaction.IsValid = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task MarkSelectedAsValid()
+    {
+        foreach (var transactionId in selectedTransactions)
+        {
+            var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+            if (transaction != null)
+            {
+                transaction.IsValid = true;
+            }
+        }
+        selectedTransactions.Clear();
+        await JSRuntime.InvokeVoidAsync("alert", "Selected transactions marked as valid");
+        StateHasChanged();
+    }
+
+    private void ClearSelection()
+    {
+        selectedTransactions.Clear();
+        allSelected = false;
+        StateHasChanged();
+    }
+
+    private string GenerateAirfareMessage(AirfareTransactionData transaction)
+    {
+        return $@"Hi {GetFirstName(transaction.Email)},
+
+I have a question about the following travel-related transaction:
+
+Transaction ID: {transaction.TransactionId}
+Date: {transaction.TransactionDate:dd/MM/yyyy}
+Category: Airfare
+Vendor: {transaction.Vendor}
+Address: {transaction.Address}
+Amount: {transaction.Currency} {transaction.Amount:N2}
+Documentation: {transaction.DocumentUrl}
+
+The system detected this as an airfare transaction but couldn't determine the cabin class. Could you please confirm which cabin class was booked (Economy, Premium Economy, Business, or First)?
+
+This information is required for tax reporting purposes.
+
+Thank you!";
+    }
+
+    private string GetFirstName(string email)
+    {
+        return email.Split('@')[0].Split('.')[0];
+    }
+
+    private List<AirfareTransactionData> GenerateMockAirfareData()
+    {
+        var random = new Random();
+        var transactions = new List<AirfareTransactionData>();
+        var emails = new[] { "john.doe@company.com", "jane.smith@company.com", "mike.johnson@company.com", "sarah.wilson@company.com" };
+        var vendors = new[] { "United Airlines", "Delta Air Lines", "American Airlines", "Lufthansa", "Emirates", "British Airways" };
+        var owners = new[] { "Maayan Chesler", "Martina Poplinsk" };
+        var cabinClasses = new[] { "", "Economy", "Premium Economy", "Business", "First" };
+
+        for (int i = 1; i <= 25; i++)
+        {
+            var hasDocumentation = random.NextDouble() > 0.2;
+            var amount = random.Next(250, 2500);
+            var cabinClass = cabinClasses[random.Next(cabinClasses.Length)];
+            
+            transactions.Add(new AirfareTransactionData
+            {
+                TransactionId = $"TXN-AIR-{i:000}",
+                Email = emails[random.Next(emails.Length)],
+                TransactionDate = DateTime.Today.AddDays(random.Next(-120, -1)),
+                Vendor = vendors[random.Next(vendors.Length)],
+                Address = "Airline Reservation",
+                Currency = "USD",
+                Amount = amount,
+                AmountUSD = amount,
+                Category = "Airfare",
+                CabinClass = cabinClass,
+                DocumentUrl = hasDocumentation ? $"https://docs.company.com/receipt-{i}" : "",
+                Owner = owners[random.Next(owners.Length)],
+                IsValid = !string.IsNullOrEmpty(cabinClass)
+            });
+        }
+
+        return transactions.OrderByDescending(t => t.TransactionDate).ToList();
+    }
+
+    public class AirfareTransactionData
+    {
+        public string TransactionId { get; set; } = "";
+        public string Email { get; set; } = "";
+        public DateTime TransactionDate { get; set; }
+        public string Vendor { get; set; } = "";
+        public string Address { get; set; } = "";
+        public string Currency { get; set; } = "";
+        public decimal Amount { get; set; }
+        public decimal AmountUSD { get; set; }
+        public string Category { get; set; } = "";
+        public string CabinClass { get; set; } = "";
+        public string DocumentUrl { get; set; } = "";
+        public string Owner { get; set; } = "";
+        public bool IsValid { get; set; }
+    }
+}

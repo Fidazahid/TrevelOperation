@@ -1,0 +1,291 @@
+@typeparam TItem where TItem : class
+@using Microsoft.AspNetCore.Components.Web
+@inject IJSRuntime JSRuntime
+
+<div class="data-table-container">
+    <div class="table-toolbar">
+        <div class="table-actions">
+            <button class="btn btn-sm btn-outline-primary" @onclick="ToggleColumnManager">
+                <i class="fas fa-columns"></i> Columns
+            </button>
+            <button class="btn btn-sm btn-outline-success" @onclick="ExportToCsv">
+                <i class="fas fa-file-csv"></i> Export CSV
+            </button>
+            <button class="btn btn-sm btn-outline-success" @onclick="ExportToExcel">
+                <i class="fas fa-file-excel"></i> Export Excel
+            </button>
+            @if (AdditionalActions != null)
+            {
+                @AdditionalActions
+            }
+        </div>
+        
+        <div class="table-search">
+            <input type="text" class="form-control form-control-sm" 
+                   placeholder="Search..." 
+                   @bind="SearchTerm" 
+                   @bind:event="oninput"
+                   @onkeyup="OnSearchChanged" />
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-hover" @ref="tableElement">
+            <thead class="table-dark">
+                <tr>
+                    @foreach (var column in VisibleColumns.OrderBy(c => c.Order))
+                    {
+                        <th scope="col" 
+                            class="@GetHeaderClass(column)"
+                            style="@GetColumnStyle(column)"
+                            @onclick="() => SortBy(column.PropertyName)"
+                            data-column="@column.PropertyName">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>@column.DisplayName</span>
+                                @if (SortColumn == column.PropertyName)
+                                {
+                                    <i class="fas @(SortAscending ? "fa-sort-up" : "fa-sort-down")"></i>
+                                }
+                                else
+                                {
+                                    <i class="fas fa-sort text-muted"></i>
+                                }
+                            </div>
+                            <div class="resize-handle" @onmousedown="@((e) => StartResize(e, column.PropertyName))"></div>
+                        </th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @if (FilteredItems?.Any() == true)
+                {
+                    @foreach (var item in FilteredItems)
+                    {
+                        <tr @ondblclick="() => HandleRowDoubleClick(item)" class="@GetRowClass(item)">
+                            @foreach (var column in VisibleColumns.OrderBy(c => c.Order))
+                            {
+                                <td style="@GetColumnStyle(column)" class="@GetCellClass(column, item)">
+                                    @if (column.IsEditable && EditingRow == item)
+                                    {
+                                        @RenderEditableCell(column, item)
+                                    }
+                                    else
+                                    {
+                                        @RenderCell(column, item)
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="@VisibleColumns.Count()" class="text-center text-muted p-4">
+                            No data available
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="table-footer">
+        <div class="table-info">
+            Showing @(FilteredItems?.Count() ?? 0) of @(Items?.Count() ?? 0) items
+        </div>
+        
+        @if (ShowPagination && TotalPages > 1)
+        {
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item @(CurrentPage <= 1 ? "disabled" : "")">
+                        <a class="page-link" @onclick="() => GoToPage(CurrentPage - 1)">Previous</a>
+                    </li>
+                    
+                    @for (int i = Math.Max(1, CurrentPage - 2); i <= Math.Min(TotalPages, CurrentPage + 2); i++)
+                    {
+                        <li class="page-item @(CurrentPage == i ? "active" : "")">
+                            <a class="page-link" @onclick="() => GoToPage(i)">@i</a>
+                        </li>
+                    }
+                    
+                    <li class="page-item @(CurrentPage >= TotalPages ? "disabled" : "")">
+                        <a class="page-link" @onclick="() => GoToPage(CurrentPage + 1)">Next</a>
+                    </li>
+                </ul>
+            </nav>
+        }
+    </div>
+</div>
+
+@if (ShowColumnManager)
+{
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Manage Columns</h5>
+                    <button type="button" class="btn-close" @onclick="HideColumnManager"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col">
+                            <button class="btn btn-sm btn-secondary me-2" @onclick="ResetColumns">Reset to Default</button>
+                            <button class="btn btn-sm btn-primary" @onclick="SaveView">Save Current View</button>
+                        </div>
+                    </div>
+                    
+                    @if (SavedViews?.Any() == true)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Saved Views</label>
+                            <div class="list-group">
+                                @foreach (var view in SavedViews)
+                                {
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span>@view.Name</span>
+                                        <div>
+                                            <button class="btn btn-sm btn-outline-primary me-2" @onclick="() => LoadView(view)">Load</button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteView(view)">Delete</button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                    
+                    <div class="column-manager">
+                        @foreach (var column in AllColumns.OrderBy(c => c.Order))
+                        {
+                            <div class="column-item d-flex align-items-center mb-2">
+                                <div class="drag-handle me-2">
+                                    <i class="fas fa-grip-vertical"></i>
+                                </div>
+                                <div class="form-check me-3">
+                                    <input class="form-check-input" type="checkbox" 
+                                           @bind="column.IsVisible" id="col-@column.PropertyName">
+                                    <label class="form-check-label" for="col-@column.PropertyName">
+                                        @column.DisplayName
+                                    </label>
+                                </div>
+                                <input type="number" class="form-control form-control-sm" 
+                                       style="width: 80px;" 
+                                       @bind="column.Width" 
+                                       placeholder="Width" />
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="HideColumnManager">Close</button>
+                    <button type="button" class="btn btn-primary" @onclick="ApplyColumnChanges">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+<style>
+    .data-table-container {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+
+    .table-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .table-actions .btn {
+        margin-right: 0.5rem;
+    }
+
+    .table-search input {
+        width: 250px;
+    }
+
+    .table th {
+        position: relative;
+        user-select: none;
+        cursor: pointer;
+        border-right: 1px solid #495057;
+    }
+
+    .table th:last-child {
+        border-right: none;
+    }
+
+    .resize-handle {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 4px;
+        height: 100%;
+        cursor: col-resize;
+        background: transparent;
+    }
+
+    .resize-handle:hover {
+        background: #007bff;
+    }
+
+    .table-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+    }
+
+    .column-manager {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+
+    .column-item {
+        padding: 0.5rem;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        background: #f8f9fa;
+    }
+
+    .drag-handle {
+        cursor: move;
+        color: #6c757d;
+    }
+
+    .editable-cell {
+        background-color: #fff3cd !important;
+        border: 2px solid #ffc107 !important;
+    }
+
+    .monetary-cell {
+        text-align: right;
+        font-family: 'Courier New', monospace;
+    }
+
+    .date-cell {
+        white-space: nowrap;
+    }
+
+    .status-cell {
+        text-align: center;
+    }
+
+    .row-editing {
+        background-color: #d1ecf1 !important;
+    }
+
+    .row-selected {
+        background-color: #e3f2fd !important;
+    }
+</style>

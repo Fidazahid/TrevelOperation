@@ -1,0 +1,421 @@
+@using TrevelOperation.Service
+@inject ISettingsService SettingsService
+
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h2 class="text-xl font-bold">Countries & Cities Management</h2>
+        <button class="btn btn-primary" @onclick="ShowAddModal">
+            <span class="mr-1">➕</span>
+            Add Country/City
+        </button>
+    </div>
+
+    <!-- Search and Filter -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-body p-4">
+            <div class="flex flex-wrap gap-4">
+                <div class="form-control flex-1 min-w-64">
+                    <input type="text" @bind="_searchTerm" @oninput="OnSearchChanged" 
+                           class="input input-bordered w-full" placeholder="Search countries or cities..." />
+                </div>
+                <div class="form-control">
+                    <select value="@_selectedCountryFilter" @onchange="@(e => OnCountryFilterChanged(e))" class="select select-bordered">
+                        <option value="">All Countries</option>
+                        @foreach (var country in _uniqueCountries)
+                        {
+                            <option value="@country">@country</option>
+                        }
+                    </select>
+                </div>
+                <button class="btn btn-outline" @onclick="ClearFilters">
+                    Clear Filters
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Countries & Cities List -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-body">
+            @if (_isLoading)
+            {
+                <div class="flex justify-center py-8">
+                    <span class="loading loading-spinner loading-lg"></span>
+                </div>
+            }
+            else if (!_filteredCountriesCities.Any())
+            {
+                <div class="text-center py-8 text-gray-500">
+                    @if (!string.IsNullOrEmpty(_searchTerm) || !string.IsNullOrEmpty(_selectedCountryFilter))
+                    {
+                        <div class="text-4xl mb-2">🔍</div>
+                        <p>No results found</p>
+                        <p class="text-sm">Try adjusting your search or filters</p>
+                    }
+                    else
+                    {
+                        <div class="text-4xl mb-2">🌍</div>
+                        <p>No countries and cities configured</p>
+                        <p class="text-sm">Add your first country/city combination to get started</p>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="mb-4 text-sm text-gray-600">
+                    Showing @_filteredCountriesCities.Count of @_countriesCities.Count entries
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="table w-full">
+                        <thead>
+                            <tr>
+                                <th>Country</th>
+                                <th>City</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _paginatedCountriesCities)
+                            {
+                                <tr>
+                                    <td class="font-medium">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-lg">@GetCountryFlag(item.Country)</span>
+                                            @item.Country
+                                        </div>
+                                    </td>
+                                    <td>@item.City</td>
+                                    <td>
+                                        <div class="flex gap-2">
+                                            <button class="btn btn-ghost btn-sm" @onclick="() => ShowEditModal(item)">
+                                                ✏️ Edit
+                                            </button>
+                                            <button class="btn btn-ghost btn-sm text-error" @onclick="() => ShowDeleteModal(item)">
+                                                🗑️ Delete
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                @if (_totalPages > 1)
+                {
+                    <div class="flex justify-center mt-4">
+                        <div class="btn-group">
+                            <button class="btn @(_currentPage == 1 ? "btn-disabled" : "")" @onclick="() => ChangePage(1)">
+                                «
+                            </button>
+                            <button class="btn @(_currentPage == 1 ? "btn-disabled" : "")" @onclick="() => ChangePage(_currentPage - 1)">
+                                ‹
+                            </button>
+                            <button class="btn btn-active">
+                                Page @_currentPage of @_totalPages
+                            </button>
+                            <button class="btn @(_currentPage == _totalPages ? "btn-disabled" : "")" @onclick="() => ChangePage(_currentPage + 1)">
+                                ›
+                            </button>
+                            <button class="btn @(_currentPage == _totalPages ? "btn-disabled" : "")" @onclick="() => ChangePage(_totalPages)">
+                                »
+                            </button>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+@if (_showModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">
+                @(_editingCountryCity == null ? "Add New Country/City" : "Edit Country/City")
+            </h3>
+            
+            <div class="space-y-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Country *</span>
+                    </label>
+                    <input type="text" @bind="_modalCountry" class="input input-bordered w-full" 
+                           placeholder="Enter country name" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">City *</span>
+                    </label>
+                    <input type="text" @bind="_modalCity" class="input input-bordered w-full" 
+                           placeholder="Enter city name" />
+                </div>
+            </div>
+
+            <div class="alert alert-info mt-4">
+                <span class="text-sm">
+                    💡 Ensure consistent naming (e.g., "United States" not "USA").
+                    These will be used for trip planning and tax calculations.
+                </span>
+            </div>
+
+            <div class="modal-action">
+                <button class="btn btn-primary" @onclick="SaveCountryCity" 
+                        disabled="@(!IsValidCountryCity())">
+                    @(_editingCountryCity == null ? "Add Country/City" : "Update Country/City")
+                </button>
+                <button class="btn" @onclick="CloseModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (_showDeleteModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">Confirm Delete</h3>
+            
+            <p class="mb-4">
+                Are you sure you want to delete 
+                <strong>@_deletingCountryCity?.City, @_deletingCountryCity?.Country</strong>?
+            </p>
+
+            <div class="alert alert-warning">
+                <span class="text-sm">
+                    ⚠️ This action cannot be undone. The country/city combination will be removed from the system.
+                </span>
+            </div>
+
+            <div class="modal-action">
+                <button class="btn btn-error" @onclick="ConfirmDelete">
+                    Delete
+                </button>
+                <button class="btn" @onclick="CloseDeleteModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<CountryCity> _countriesCities = new();
+    private List<CountryCity> _filteredCountriesCities = new();
+    private List<CountryCity> _paginatedCountriesCities = new();
+    private List<string> _uniqueCountries = new();
+    private bool _isLoading = false;
+    
+    private string _searchTerm = "";
+    private string _selectedCountryFilter = "";
+    private int _currentPage = 1;
+    private int _pageSize = 20;
+    private int _totalPages = 1;
+    
+    private bool _showModal = false;
+    private CountryCity? _editingCountryCity = null;
+    private string _modalCountry = "";
+    private string _modalCity = "";
+    
+    private bool _showDeleteModal = false;
+    private CountryCity? _deletingCountryCity = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCountriesCities();
+    }
+
+    private async Task LoadCountriesCities()
+    {
+        _isLoading = true;
+        try
+        {
+            _countriesCities = await SettingsService.GetCountriesCitiesAsync();
+            _uniqueCountries = _countriesCities.Select(cc => cc.Country).Distinct().OrderBy(c => c).ToList();
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OnSearchChanged(ChangeEventArgs e)
+    {
+        _searchTerm = e.Value?.ToString() ?? "";
+        _currentPage = 1;
+        ApplyFilters();
+    }
+
+    private void OnCountryFilterChanged(ChangeEventArgs e)
+    {
+        _selectedCountryFilter = e.Value?.ToString() ?? "";
+        _currentPage = 1;
+        ApplyFilters();
+    }
+
+    private void ClearFilters()
+    {
+        _searchTerm = "";
+        _selectedCountryFilter = "";
+        _currentPage = 1;
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        var query = _countriesCities.AsQueryable();
+
+        if (!string.IsNullOrEmpty(_searchTerm))
+        {
+            query = query.Where(cc => 
+                cc.Country.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                cc.City.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrEmpty(_selectedCountryFilter))
+        {
+            query = query.Where(cc => 
+                cc.Country == _selectedCountryFilter);
+        }
+
+        _filteredCountriesCities = query.OrderBy(cc => cc.Country).ThenBy(cc => cc.City).ToList();
+
+        _totalPages = (int)Math.Ceiling((double)_filteredCountriesCities.Count / _pageSize);
+        if (_currentPage > _totalPages) _currentPage = 1;
+
+        var skip = (_currentPage - 1) * _pageSize;
+        _paginatedCountriesCities = _filteredCountriesCities.Skip(skip).Take(_pageSize).ToList();
+    }
+
+    private void ChangePage(int page)
+    {
+        if (page < 1 || page > _totalPages) return;
+        _currentPage = page;
+        ApplyFilters();
+    }
+
+    private string GetCountryFlag(string country)
+    {
+        return country.ToLower() switch
+        {
+            "israel" => "🇮🇱",
+            "united states" => "🇺🇸",
+            "united kingdom" => "🇬🇧",
+            "germany" => "🇩🇪",
+            "france" => "🇫🇷",
+            "canada" => "🇨🇦",
+            "australia" => "🇦🇺",
+            "japan" => "🇯🇵",
+            "italy" => "🇮🇹",
+            "spain" => "🇪🇸",
+            "netherlands" => "🇳🇱",
+            "switzerland" => "🇨🇭",
+            "sweden" => "🇸🇪",
+            "norway" => "🇳🇴",
+            "denmark" => "🇩🇰",
+            "austria" => "🇦🇹",
+            "belgium" => "🇧🇪",
+            "ireland" => "🇮🇪",
+            "poland" => "🇵🇱",
+            "china" => "🇨🇳",
+            "south korea" => "🇰🇷",
+            "singapore" => "🇸🇬",
+            "india" => "🇮🇳",
+            "brazil" => "🇧🇷",
+            "mexico" => "🇲🇽",
+            "argentina" => "🇦🇷",
+            _ => "🌍"
+        };
+    }
+
+    private void ShowAddModal()
+    {
+        _editingCountryCity = null;
+        _modalCountry = "";
+        _modalCity = "";
+        _showModal = true;
+    }
+
+    private void ShowEditModal(CountryCity countryCity)
+    {
+        _editingCountryCity = countryCity;
+        _modalCountry = countryCity.Country;
+        _modalCity = countryCity.City;
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _editingCountryCity = null;
+    }
+
+    private bool IsValidCountryCity()
+    {
+        return !string.IsNullOrWhiteSpace(_modalCountry) &&
+               !string.IsNullOrWhiteSpace(_modalCity);
+    }
+
+    private async Task SaveCountryCity()
+    {
+        try
+        {
+            if (_editingCountryCity == null)
+            {
+                await SettingsService.CreateCountryCityAsync(_modalCountry.Trim(), _modalCity.Trim());
+            }
+            else
+            {
+                await SettingsService.UpdateCountryCityAsync(
+                    _editingCountryCity.CountryCityId,
+                    _modalCountry.Trim(),
+                    _modalCity.Trim()
+                );
+            }
+
+            CloseModal();
+            await LoadCountriesCities();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+    }
+
+    private void ShowDeleteModal(CountryCity countryCity)
+    {
+        _deletingCountryCity = countryCity;
+        _showDeleteModal = true;
+    }
+
+    private void CloseDeleteModal()
+    {
+        _showDeleteModal = false;
+        _deletingCountryCity = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_deletingCountryCity == null) return;
+
+        try
+        {
+            await SettingsService.DeleteCountryCityAsync(_deletingCountryCity.CountryCityId);
+            CloseDeleteModal();
+            await LoadCountriesCities();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+    }
+}

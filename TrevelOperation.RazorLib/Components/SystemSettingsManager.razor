@@ -1,0 +1,449 @@
+@using TrevelOperation.Service
+@inject ISettingsService SettingsService
+
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h2 class="text-xl font-bold">System Settings</h2>
+        <button class="btn btn-primary" @onclick="SaveAllSettings">
+            <span class="mr-1">💾</span>
+            Save All Settings
+        </button>
+    </div>
+
+    <!-- Application Settings -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-header">
+            <h3 class="card-title text-lg font-semibold p-4 border-b">
+                <span class="mr-2">⚙️</span>
+                Application Settings
+            </h3>
+        </div>
+        <div class="card-body space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Default Currency</span>
+                        <span class="label-text-alt">Currency for calculations</span>
+                    </label>
+                    <select @bind="_defaultCurrency" class="select select-bordered">
+                        <option value="USD">USD - US Dollar</option>
+                        <option value="EUR">EUR - Euro</option>
+                        <option value="GBP">GBP - British Pound</option>
+                        <option value="ILS">ILS - Israeli Shekel</option>
+                        <option value="CAD">CAD - Canadian Dollar</option>
+                        <option value="AUD">AUD - Australian Dollar</option>
+                        <option value="JPY">JPY - Japanese Yen</option>
+                    </select>
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Date Format</span>
+                        <span class="label-text-alt">Display format for dates</span>
+                    </label>
+                    <select @bind="_dateFormat" class="select select-bordered">
+                        <option value="dd/MM/yyyy">DD/MM/YYYY (European)</option>
+                        <option value="MM/dd/yyyy">MM/DD/YYYY (US)</option>
+                        <option value="yyyy-MM-dd">YYYY-MM-DD (ISO)</option>
+                    </select>
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Fiscal Year Start</span>
+                        <span class="label-text-alt">Month when fiscal year begins</span>
+                    </label>
+                    <select @bind="_fiscalYearStart" class="select select-bordered">
+                        <option value="1">January</option>
+                        <option value="2">February</option>
+                        <option value="3">March</option>
+                        <option value="4">April</option>
+                        <option value="5">May</option>
+                        <option value="6">June</option>
+                        <option value="7">July</option>
+                        <option value="8">August</option>
+                        <option value="9">September</option>
+                        <option value="10">October</option>
+                        <option value="11">November</option>
+                        <option value="12">December</option>
+                    </select>
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Default Page Size</span>
+                        <span class="label-text-alt">Rows per page in tables</span>
+                    </label>
+                    <select @bind="_defaultPageSize" class="select select-bordered">
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Business Rules -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-header">
+            <h3 class="card-title text-lg font-semibold p-4 border-b">
+                <span class="mr-2">📋</span>
+                Business Rules
+            </h3>
+        </div>
+        <div class="card-body space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Trip Auto-Link Days</span>
+                        <span class="label-text-alt">Days before/after to suggest transactions</span>
+                    </label>
+                    <input type="number" @bind="_tripAutoLinkDays" class="input input-bordered" 
+                           min="1" max="14" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">High-Value Meal Threshold (USD)</span>
+                        <span class="label-text-alt">Amount to flag meals for review</span>
+                    </label>
+                    <input type="number" @bind="_highValueMealThreshold" class="input input-bordered" 
+                           min="0" step="0.01" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Low-Value Lodging Threshold (USD)</span>
+                        <span class="label-text-alt">Amount to flag lodging for review</span>
+                    </label>
+                    <input type="number" @bind="_lowValueLodgingThreshold" class="input input-bordered" 
+                           min="0" step="0.01" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Exchange Rate Update Frequency</span>
+                        <span class="label-text-alt">How often to fetch new rates</span>
+                    </label>
+                    <select @bind="_exchangeRateUpdateFrequency" class="select select-bordered">
+                        <option value="Manual">Manual Only</option>
+                        <option value="Daily">Daily</option>
+                        <option value="Weekly">Weekly</option>
+                        <option value="Monthly">Monthly</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="divider">Data Validation</div>
+
+            <div class="space-y-2">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" @bind="_requireDocumentation" class="checkbox checkbox-primary" />
+                    <span class="label-text">Require documentation for all transactions</span>
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" @bind="_validateParticipants" class="checkbox checkbox-primary" />
+                    <span class="label-text">Validate participants for client entertainment</span>
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" @bind="_autoCategorizeLodging" class="checkbox checkbox-primary" />
+                    <span class="label-text">Auto-categorize lodging based on vendor patterns</span>
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" @bind="_enforcePolicy" class="checkbox checkbox-primary" />
+                    <span class="label-text">Enforce company policy rules strictly</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Settings -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-header">
+            <h3 class="card-title text-lg font-semibold p-4 border-b">
+                <span class="mr-2">🔔</span>
+                Notification Settings
+            </h3>
+        </div>
+        <div class="card-body space-y-4">
+            <div class="space-y-2">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" @bind="_notifyOnLargeTransactions" class="checkbox checkbox-primary" />
+                    <span class="label-text">Notify on large transactions (>$1000)</span>
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" @bind="_notifyOnPolicyViolations" class="checkbox checkbox-primary" />
+                    <span class="label-text">Notify on policy violations</span>
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" @bind="_notifyOnMissingDocuments" class="checkbox checkbox-primary" />
+                    <span class="label-text">Notify on missing documentation</span>
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" @bind="_notifyOnTripValidation" class="checkbox checkbox-primary" />
+                    <span class="label-text">Notify when trips are ready for validation</span>
+                </label>
+            </div>
+
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text">Notification Email Recipients</span>
+                    <span class="label-text-alt">Comma-separated email addresses</span>
+                </label>
+                <textarea @bind="_notificationEmails" class="textarea textarea-bordered" rows="3"
+                          placeholder="admin@company.com, finance@company.com"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audit & Security -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-header">
+            <h3 class="card-title text-lg font-semibold p-4 border-b">
+                <span class="mr-2">🔒</span>
+                Audit & Security
+            </h3>
+        </div>
+        <div class="card-body space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Audit Log Retention (Days)</span>
+                        <span class="label-text-alt">How long to keep audit records</span>
+                    </label>
+                    <input type="number" @bind="_auditLogRetentionDays" class="input input-bordered" 
+                           min="30" max="2555" />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Session Timeout (Minutes)</span>
+                        <span class="label-text-alt">Auto-logout after inactivity</span>
+                    </label>
+                    <input type="number" @bind="_sessionTimeoutMinutes" class="input input-bordered" 
+                           min="5" max="480" />
+                </div>
+            </div>
+
+            <div class="space-y-2">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" @bind="_enableDetailedAuditLog" class="checkbox checkbox-primary" />
+                    <span class="label-text">Enable detailed audit logging</span>
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" @bind="_requireApprovalForDeletes" class="checkbox checkbox-primary" />
+                    <span class="label-text">Require approval for record deletions</span>
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" @bind="_enableDataBackup" class="checkbox checkbox-primary" />
+                    <span class="label-text">Enable automatic data backup</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Integration Settings -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-header">
+            <h3 class="card-title text-lg font-semibold p-4 border-b">
+                <span class="mr-2">🔗</span>
+                Integration Settings
+            </h3>
+        </div>
+        <div class="card-body space-y-4">
+            <div class="alert alert-info">
+                <span class="text-sm">
+                    💡 These settings control how the system integrates with external services and APIs.
+                </span>
+            </div>
+
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text">Exchange Rate API Key</span>
+                    <span class="label-text-alt">API key for currency conversion service</span>
+                </label>
+                <input type="password" @bind="_exchangeRateApiKey" class="input input-bordered" 
+                       placeholder="Enter API key..." />
+            </div>
+
+            <div class="space-y-2">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" @bind="_enableEmailIntegration" class="checkbox checkbox-primary" />
+                    <span class="label-text">Enable email integration for notifications</span>
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" @bind="_enableExternalApiSync" class="checkbox checkbox-primary" />
+                    <span class="label-text">Enable sync with external travel booking systems</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    @if (_hasUnsavedChanges)
+    {
+        <div class="alert alert-warning">
+            <span>⚠️ You have unsaved changes. Click "Save All Settings" to apply them.</span>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _isLoading = false;
+    private bool _hasUnsavedChanges = false;
+
+    // Application Settings
+    private string _defaultCurrency = "USD";
+    private string _dateFormat = "dd/MM/yyyy";
+    private int _fiscalYearStart = 1;
+    private int _defaultPageSize = 20;
+
+    // Business Rules
+    private int _tripAutoLinkDays = 5;
+    private decimal _highValueMealThreshold = 80;
+    private decimal _lowValueLodgingThreshold = 100;
+    private string _exchangeRateUpdateFrequency = "Weekly";
+    private bool _requireDocumentation = true;
+    private bool _validateParticipants = true;
+    private bool _autoCategorizeLodging = true;
+    private bool _enforcePolicy = false;
+
+    // Notification Settings
+    private bool _notifyOnLargeTransactions = true;
+    private bool _notifyOnPolicyViolations = true;
+    private bool _notifyOnMissingDocuments = false;
+    private bool _notifyOnTripValidation = true;
+    private string _notificationEmails = "";
+
+    // Audit & Security
+    private int _auditLogRetentionDays = 365;
+    private int _sessionTimeoutMinutes = 120;
+    private bool _enableDetailedAuditLog = true;
+    private bool _requireApprovalForDeletes = false;
+    private bool _enableDataBackup = true;
+
+    // Integration Settings
+    private string _exchangeRateApiKey = "";
+    private bool _enableEmailIntegration = false;
+    private bool _enableExternalApiSync = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSystemSettings();
+        
+        // Watch for changes
+        StateHasChanged();
+    }
+
+    private async Task LoadSystemSettings()
+    {
+        _isLoading = true;
+        try
+        {
+            var settings = await SettingsService.GetSystemSettingsAsync();
+            
+            // Load settings into properties
+            _defaultCurrency = settings.GetValueOrDefault("DefaultCurrency", "USD");
+            _dateFormat = settings.GetValueOrDefault("DateFormat", "dd/MM/yyyy");
+            _fiscalYearStart = int.Parse(settings.GetValueOrDefault("FiscalYearStart", "1"));
+            _defaultPageSize = int.Parse(settings.GetValueOrDefault("DefaultPageSize", "20"));
+            
+            _tripAutoLinkDays = int.Parse(settings.GetValueOrDefault("TripAutoLinkDays", "5"));
+            _highValueMealThreshold = decimal.Parse(settings.GetValueOrDefault("HighValueMealThreshold", "80"));
+            _lowValueLodgingThreshold = decimal.Parse(settings.GetValueOrDefault("LowValueLodgingThreshold", "100"));
+            _exchangeRateUpdateFrequency = settings.GetValueOrDefault("ExchangeRateUpdateFrequency", "Weekly");
+            _requireDocumentation = bool.Parse(settings.GetValueOrDefault("RequireDocumentation", "true"));
+            _validateParticipants = bool.Parse(settings.GetValueOrDefault("ValidateParticipants", "true"));
+            _autoCategorizeLodging = bool.Parse(settings.GetValueOrDefault("AutoCategorizeLodging", "true"));
+            _enforcePolicy = bool.Parse(settings.GetValueOrDefault("EnforcePolicy", "false"));
+            
+            _notifyOnLargeTransactions = bool.Parse(settings.GetValueOrDefault("NotifyOnLargeTransactions", "true"));
+            _notifyOnPolicyViolations = bool.Parse(settings.GetValueOrDefault("NotifyOnPolicyViolations", "true"));
+            _notifyOnMissingDocuments = bool.Parse(settings.GetValueOrDefault("NotifyOnMissingDocuments", "false"));
+            _notifyOnTripValidation = bool.Parse(settings.GetValueOrDefault("NotifyOnTripValidation", "true"));
+            _notificationEmails = settings.GetValueOrDefault("NotificationEmails", "");
+            
+            _auditLogRetentionDays = int.Parse(settings.GetValueOrDefault("AuditLogRetentionDays", "365"));
+            _sessionTimeoutMinutes = int.Parse(settings.GetValueOrDefault("SessionTimeoutMinutes", "120"));
+            _enableDetailedAuditLog = bool.Parse(settings.GetValueOrDefault("EnableDetailedAuditLog", "true"));
+            _requireApprovalForDeletes = bool.Parse(settings.GetValueOrDefault("RequireApprovalForDeletes", "false"));
+            _enableDataBackup = bool.Parse(settings.GetValueOrDefault("EnableDataBackup", "true"));
+            
+            _exchangeRateApiKey = settings.GetValueOrDefault("ExchangeRateApiKey", "");
+            _enableEmailIntegration = bool.Parse(settings.GetValueOrDefault("EnableEmailIntegration", "false"));
+            _enableExternalApiSync = bool.Parse(settings.GetValueOrDefault("EnableExternalApiSync", "false"));
+        }
+        catch (Exception ex)
+        {
+            // Handle error - load defaults
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task SaveAllSettings()
+    {
+        try
+        {
+            var settings = new Dictionary<string, string>
+            {
+                ["DefaultCurrency"] = _defaultCurrency,
+                ["DateFormat"] = _dateFormat,
+                ["FiscalYearStart"] = _fiscalYearStart.ToString(),
+                ["DefaultPageSize"] = _defaultPageSize.ToString(),
+                
+                ["TripAutoLinkDays"] = _tripAutoLinkDays.ToString(),
+                ["HighValueMealThreshold"] = _highValueMealThreshold.ToString(),
+                ["LowValueLodgingThreshold"] = _lowValueLodgingThreshold.ToString(),
+                ["ExchangeRateUpdateFrequency"] = _exchangeRateUpdateFrequency,
+                ["RequireDocumentation"] = _requireDocumentation.ToString(),
+                ["ValidateParticipants"] = _validateParticipants.ToString(),
+                ["AutoCategorizeLodging"] = _autoCategorizeLodging.ToString(),
+                ["EnforcePolicy"] = _enforcePolicy.ToString(),
+                
+                ["NotifyOnLargeTransactions"] = _notifyOnLargeTransactions.ToString(),
+                ["NotifyOnPolicyViolations"] = _notifyOnPolicyViolations.ToString(),
+                ["NotifyOnMissingDocuments"] = _notifyOnMissingDocuments.ToString(),
+                ["NotifyOnTripValidation"] = _notifyOnTripValidation.ToString(),
+                ["NotificationEmails"] = _notificationEmails,
+                
+                ["AuditLogRetentionDays"] = _auditLogRetentionDays.ToString(),
+                ["SessionTimeoutMinutes"] = _sessionTimeoutMinutes.ToString(),
+                ["EnableDetailedAuditLog"] = _enableDetailedAuditLog.ToString(),
+                ["RequireApprovalForDeletes"] = _requireApprovalForDeletes.ToString(),
+                ["EnableDataBackup"] = _enableDataBackup.ToString(),
+                
+                ["ExchangeRateApiKey"] = _exchangeRateApiKey,
+                ["EnableEmailIntegration"] = _enableEmailIntegration.ToString(),
+                ["EnableExternalApiSync"] = _enableExternalApiSync.ToString()
+            };
+
+            await SettingsService.UpdateSystemSettingsAsync(settings);
+            _hasUnsavedChanges = false;
+            
+            // Show success message
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+    }
+
+    private void OnSettingChanged()
+    {
+        _hasUnsavedChanges = true;
+        StateHasChanged();
+    }
+}

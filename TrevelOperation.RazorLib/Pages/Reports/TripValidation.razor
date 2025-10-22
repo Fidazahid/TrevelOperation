@@ -1,0 +1,478 @@
+@page "/trip-validation"
+@using TravelOperation.Core.Models
+@using TravelOperation.Core.Services
+@inject ITransactionService TransactionService
+@inject IJSRuntime JSRuntime
+
+<div class="container mx-auto p-6">
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">✅ Trip Validation</h1>
+            <p class="text-gray-600">Review and validate trips ready for approval</p>
+        </div>
+        <div class="flex gap-2">
+            <button class="btn btn-secondary" @onclick="RefreshValidation">
+                🔄 Refresh
+            </button>
+            <button class="btn btn-primary" @onclick="ValidateAllReady">
+                ✅ Validate All Ready
+            </button>
+        </div>
+    </div>
+
+    <!-- Validation Status Summary -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div class="card bg-yellow-50 border-l-4 border-yellow-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">🟡</div>
+                    <div>
+                        <div class="text-2xl font-bold text-yellow-700">@readyToValidateCount</div>
+                        <div class="text-yellow-600">Ready to Validate</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card bg-green-50 border-l-4 border-green-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">🟢</div>
+                    <div>
+                        <div class="text-2xl font-bold text-green-700">@validatedCount</div>
+                        <div class="text-green-600">Validated</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card bg-gray-50 border-l-4 border-gray-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">⚪</div>
+                    <div>
+                        <div class="text-2xl font-bold text-gray-700">@notReadyCount</div>
+                        <div class="text-gray-600">Not Ready</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card bg-base-100 shadow-md mb-6">
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Status Filter</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="selectedStatus" @bind:after="FilterTrips">
+                        <option value="">All Status</option>
+                        <option value="Ready to validate">🟡 Ready to validate</option>
+                        <option value="Validated">🟢 Validated</option>
+                        <option value="Not ready to validate">⚪ Not ready to validate</option>
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Owner</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="selectedOwner" @bind:after="FilterTrips">
+                        <option value="">All Owners</option>
+                        @foreach (var owner in availableOwners)
+                        {
+                            <option value="@owner">@owner</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Date Range</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="selectedDateRange" @bind:after="FilterTrips">
+                        <option value="">All Dates</option>
+                        <option value="last-30">Last 30 days</option>
+                        <option value="last-90">Last 90 days</option>
+                        <option value="this-year">This year</option>
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Search</span>
+                    </label>
+                    <input type="text" class="input input-bordered w-full" placeholder="Search trips..." @bind="searchText" @bind:after="FilterTrips">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trips Ready for Validation -->
+    @if (filteredTrips.Any())
+    {
+        <div class="space-y-4">
+            @foreach (var trip in filteredTrips.Skip((currentPage - 1) * pageSize).Take(pageSize))
+            {
+                <div class="card bg-base-100 shadow-md border-l-4 @GetValidationBorderClass(trip.ValidationStatus?.Name)">
+                    <div class="card-body">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 class="card-title text-lg">
+                                    🧳 @trip.TripName
+                                    <div class="badge @GetValidationBadgeClass(trip.ValidationStatus?.Name)">
+                                        @trip.ValidationStatus?.Emoji @trip.ValidationStatus?.Name
+                                    </div>
+                                </h3>
+                                <p class="text-gray-600">@trip.Email • @trip.StartDate.ToString("dd/MM/yyyy") - @trip.EndDate.ToString("dd/MM/yyyy")</p>
+                            </div>
+                            <div class="flex gap-2">
+                                @if (trip.ValidationStatus?.Name == "Ready to validate")
+                                {
+                                    <button class="btn btn-success btn-sm" @onclick="() => ValidateTrip(trip)">
+                                        ✅ Validate
+                                    </button>
+                                }
+                                <button class="btn btn-info btn-sm" @onclick="() => ViewTripDetails(trip)">
+                                    👁️ Review
+                                </button>
+                                <button class="btn btn-warning btn-sm" @onclick="() => EditTrip(trip)">
+                                    ✏️ Edit
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Trip Summary -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+                            <div class="stat">
+                                <div class="stat-title">Duration</div>
+                                <div class="stat-value text-sm">@trip.Duration days</div>
+                                <div class="stat-desc">@trip.City1, @trip.Country1</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-title">Transactions</div>
+                                <div class="stat-value text-sm">@GetTransactionCount(trip.TripId)</div>
+                                <div class="stat-desc">Total: $@GetTotalAmount(trip.TripId).ToString("N2")</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-title">Per Day Cost</div>
+                                <div class="stat-value text-sm">$@GetPerDayCost(trip.TripId).ToString("N0")</div>
+                                <div class="stat-desc">Average daily spend</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-title">Tax Exposure</div>
+                                <div class="stat-value text-sm @(GetTaxExposure(trip.TripId) > 0 ? "text-warning" : "text-success")">
+                                    $@GetTaxExposure(trip.TripId).ToString("N2")
+                                </div>
+                                <div class="stat-desc">@(GetTaxExposure(trip.TripId) > 0 ? "Requires attention" : "Compliant")</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-title">Documentation</div>
+                                <div class="stat-value text-sm @(GetMissingDocs(trip.TripId) > 0 ? "text-error" : "text-success")">
+                                    @GetMissingDocs(trip.TripId)
+                                </div>
+                                <div class="stat-desc">Missing receipts</div>
+                            </div>
+                        </div>
+
+                        <!-- Validation Issues -->
+                        @{
+                            var issues = GetValidationIssues(trip.TripId);
+                        }
+                        @if (issues.Any())
+                        {
+                            <div class="alert alert-warning">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.732 15.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+                                <div>
+                                    <h4 class="font-bold">Validation Issues Found:</h4>
+                                    <ul class="list-disc list-inside mt-2">
+                                        @foreach (var issue in issues)
+                                        {
+                                            <li>@issue</li>
+                                        }
+                                    </ul>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex justify-between items-center mt-6">
+            <div class="text-sm text-gray-500">
+                Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, filteredTrips.Count) of @filteredTrips.Count trips
+            </div>
+            <div class="join">
+                <button class="join-item btn btn-sm" disabled="@(currentPage <= 1)" @onclick="() => ChangePage(currentPage - 1)">«</button>
+                @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                {
+                    <button class="join-item btn btn-sm @(i == currentPage ? "btn-active" : "")" @onclick="() => ChangePage(i)">@i</button>
+                }
+                <button class="join-item btn btn-sm" disabled="@(currentPage >= totalPages)" @onclick="() => ChangePage(currentPage + 1)">»</button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card bg-base-100 shadow-md">
+            <div class="card-body text-center">
+                <div class="text-6xl mb-4">✅</div>
+                <h3 class="text-xl font-bold mb-2">All Trips Validated</h3>
+                <p class="text-gray-600 mb-4">No trips requiring validation at this time.</p>
+                <button class="btn btn-primary" @onclick="RefreshValidation">🔄 Refresh</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Trip> trips = new();
+    private List<Trip> filteredTrips = new();
+    private List<string> availableOwners = new();
+    
+    // Filters
+    private string selectedStatus = "";
+    private string selectedOwner = "";
+    private string selectedDateRange = "";
+    private string searchText = "";
+    
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages => (int)Math.Ceiling((double)filteredTrips.Count / pageSize);
+    
+    // Summary counts
+    private int readyToValidateCount = 0;
+    private int validatedCount = 0;
+    private int notReadyCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTrips();
+        CalculateSummary();
+        FilterTrips();
+    }
+
+    private async Task LoadTrips()
+    {
+        // Mock data - replace with actual service call
+        trips = GenerateMockTripsForValidation();
+        availableOwners = trips.Select(t => t.Owner?.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct().ToList()!;
+    }
+
+    private void CalculateSummary()
+    {
+        readyToValidateCount = trips.Count(t => t.ValidationStatus?.Name == "Ready to validate");
+        validatedCount = trips.Count(t => t.ValidationStatus?.Name == "Validated");
+        notReadyCount = trips.Count(t => t.ValidationStatus?.Name == "Not ready to validate");
+    }
+
+    private void FilterTrips()
+    {
+        filteredTrips = trips.Where(t =>
+            (string.IsNullOrEmpty(selectedStatus) || t.ValidationStatus?.Name == selectedStatus) &&
+            (string.IsNullOrEmpty(selectedOwner) || t.Owner?.Name == selectedOwner) &&
+            (string.IsNullOrEmpty(searchText) || 
+             t.TripName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+             t.Email.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
+            FilterByDateRange(t)
+        ).ToList();
+        
+        currentPage = 1;
+        StateHasChanged();
+    }
+
+    private bool FilterByDateRange(Trip trip)
+    {
+        return selectedDateRange switch
+        {
+            "last-30" => trip.StartDate >= DateTime.Today.AddDays(-30),
+            "last-90" => trip.StartDate >= DateTime.Today.AddDays(-90),
+            "this-year" => trip.StartDate.Year == DateTime.Today.Year,
+            _ => true
+        };
+    }
+
+    private void ChangePage(int page)
+    {
+        if (page >= 1 && page <= totalPages)
+        {
+            currentPage = page;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefreshValidation()
+    {
+        await LoadTrips();
+        CalculateSummary();
+        FilterTrips();
+    }
+
+    private async Task ValidateTrip(Trip trip)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Validate trip '{trip.TripName}'?");
+        if (confirmed)
+        {
+            // Update validation status
+            trip.ValidationStatusId = 3; // Validated
+            trip.ValidationStatus = new ValidationStatus { ValidationStatusId = 3, Name = "Validated", Emoji = "🟢" };
+            
+            CalculateSummary();
+            FilterTrips();
+            await JSRuntime.InvokeVoidAsync("alert", "Trip validated successfully!");
+        }
+    }
+
+    private async Task ValidateAllReady()
+    {
+        var readyTrips = trips.Where(t => t.ValidationStatus?.Name == "Ready to validate").ToList();
+        if (!readyTrips.Any())
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "No trips ready for validation.");
+            return;
+        }
+
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Validate all {readyTrips.Count} ready trips?");
+        if (confirmed)
+        {
+            foreach (var trip in readyTrips)
+            {
+                trip.ValidationStatusId = 3; // Validated
+                trip.ValidationStatus = new ValidationStatus { ValidationStatusId = 3, Name = "Validated", Emoji = "🟢" };
+            }
+            
+            CalculateSummary();
+            FilterTrips();
+            await JSRuntime.InvokeVoidAsync("alert", $"{readyTrips.Count} trips validated successfully!");
+        }
+    }
+
+    private async Task ViewTripDetails(Trip trip)
+    {
+        // Navigate to trip details or show modal
+        await JSRuntime.InvokeVoidAsync("alert", $"Viewing details for '{trip.TripName}' - Full implementation pending");
+    }
+
+    private async Task EditTrip(Trip trip)
+    {
+        // Navigate to edit trip
+        await JSRuntime.InvokeVoidAsync("alert", $"Editing '{trip.TripName}' - Navigation pending");
+    }
+
+    private string GetValidationBorderClass(string? status)
+    {
+        return status switch
+        {
+            "Ready to validate" => "border-yellow-400",
+            "Validated" => "border-green-400",
+            "Not ready to validate" => "border-gray-400",
+            _ => "border-gray-300"
+        };
+    }
+
+    private string GetValidationBadgeClass(string? status)
+    {
+        return status switch
+        {
+            "Ready to validate" => "badge-warning",
+            "Validated" => "badge-success",
+            "Not ready to validate" => "badge-ghost",
+            _ => "badge-ghost"
+        };
+    }
+
+    private int GetTransactionCount(int tripId)
+    {
+        return new Random().Next(3, 12); // Mock data
+    }
+
+    private decimal GetTotalAmount(int tripId)
+    {
+        return new Random().Next(500, 3000); // Mock data
+    }
+
+    private decimal GetPerDayCost(int tripId)
+    {
+        var trip = trips.FirstOrDefault(t => t.TripId == tripId);
+        if (trip == null) return 0;
+        return GetTotalAmount(tripId) / trip.Duration;
+    }
+
+    private decimal GetTaxExposure(int tripId)
+    {
+        return new Random().Next(0, 500); // Mock data
+    }
+
+    private int GetMissingDocs(int tripId)
+    {
+        return new Random().Next(0, 3); // Mock data
+    }
+
+    private List<string> GetValidationIssues(int tripId)
+    {
+        var issues = new List<string>();
+        var random = new Random(tripId);
+        
+        if (random.NextDouble() > 0.7)
+            issues.Add("High meal expenses detected (>$80 per transaction)");
+        if (random.NextDouble() > 0.8)
+            issues.Add("Missing cabin class for airfare transactions");
+        if (random.NextDouble() > 0.9)
+            issues.Add("Client entertainment missing participant details");
+        if (GetMissingDocs(tripId) > 0)
+            issues.Add($"{GetMissingDocs(tripId)} transactions missing receipts");
+        
+        return issues;
+    }
+
+    private List<Trip> GenerateMockTripsForValidation()
+    {
+        var random = new Random();
+        var validationStatuses = new List<ValidationStatus>
+        {
+            new ValidationStatus { ValidationStatusId = 1, Name = "Not ready to validate", Emoji = "⚪" },
+            new ValidationStatus { ValidationStatusId = 2, Name = "Ready to validate", Emoji = "🟡" },
+            new ValidationStatus { ValidationStatusId = 3, Name = "Validated", Emoji = "🟢" }
+        };
+        
+        var owners = new List<Owner>
+        {
+            new Owner { OwnerId = 1, Name = "Maayan Chesler", Email = "maayan@company.com" },
+            new Owner { OwnerId = 2, Name = "Martina Poplinsk", Email = "martina@company.com" }
+        };
+
+        var mockTrips = new List<Trip>();
+        var cities = new[] { ("London", "United Kingdom"), ("Paris", "France"), ("New York", "United States"), ("Tokyo", "Japan") };
+        var emails = new[] { "john.doe@company.com", "jane.smith@company.com", "mike.johnson@company.com" };
+
+        for (int i = 1; i <= 15; i++)
+        {
+            var startDate = DateTime.Today.AddDays(random.Next(-120, -10));
+            var endDate = startDate.AddDays(random.Next(1, 10));
+            var city = cities[random.Next(cities.Length)];
+            var validation = validationStatuses[random.Next(validationStatuses.Count)];
+            var owner = owners[random.Next(owners.Count)];
+
+            mockTrips.Add(new Trip
+            {
+                TripId = i,
+                TripName = $"Trip to {city.Item1}",
+                Email = emails[random.Next(emails.Length)],
+                StartDate = startDate,
+                EndDate = endDate,
+                Duration = (endDate - startDate).Days + 1,
+                Country1 = city.Item2,
+                City1 = city.Item1,
+                ValidationStatusId = validation.ValidationStatusId,
+                ValidationStatus = validation,
+                OwnerId = owner.OwnerId,
+                Owner = owner,
+                IsManual = random.NextDouble() > 0.7
+            });
+        }
+
+        return mockTrips;
+    }
+}

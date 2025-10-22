@@ -1,0 +1,303 @@
+@using TrevelOperation.Service
+@using TravelOperation.Core.Models.Entities
+@inject ISettingsService SettingsService
+
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h2 class="text-xl font-bold">Owners Management</h2>
+        <button class="btn btn-primary" @onclick="ShowAddModal">
+            <span class="mr-1">➕</span>
+            Add New Owner
+        </button>
+    </div>
+
+    <!-- Owners List -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-body">
+            @if (_isLoading)
+            {
+                <div class="flex justify-center py-8">
+                    <span class="loading loading-spinner loading-lg"></span>
+                </div>
+            }
+            else if (!_owners.Any())
+            {
+                <div class="text-center py-8 text-gray-500">
+                    <div class="text-4xl mb-2">👥</div>
+                    <p>No owners configured</p>
+                    <p class="text-sm">Add your first owner to get started</p>
+                </div>
+            }
+            else
+            {
+                <div class="overflow-x-auto">
+                    <table class="table w-full">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Cost Center</th>
+                                <th>Department</th>
+                                <th>Domain</th>
+                                <th>Trips</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var owner in _owners)
+                            {
+                                <tr>
+                                    <td class="font-medium">@owner.Name</td>
+                                    <td>@owner.Email</td>
+                                    <td>@(owner.CostCenter ?? "-")</td>
+                                    <td>@(owner.Department ?? "-")</td>
+                                    <td>@(owner.Domain ?? "-")</td>
+                                    <td>
+                                        <span class="badge badge-ghost">0</span>
+                                    </td>
+                                    <td>
+                                        <div class="flex gap-2">
+                                            <button class="btn btn-ghost btn-sm" @onclick="() => ShowEditModal(owner)">
+                                                ✏️ Edit
+                                            </button>
+                                            <button class="btn btn-ghost btn-sm text-error" @onclick="() => ShowDeleteModal(owner)">
+                                                🗑️ Delete
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+@if (_showModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box max-w-2xl">
+            <h3 class="font-bold text-lg mb-4">
+                @(_editingOwner == null ? "Add New Owner" : "Edit Owner")
+            </h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Name *</span>
+                    </label>
+                    <input type="text" @bind="_modalName" class="input input-bordered w-full" 
+                           placeholder="Enter full name..." />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Email *</span>
+                    </label>
+                    <input type="email" @bind="_modalEmail" class="input input-bordered w-full" 
+                           placeholder="Enter email address..." />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Cost Center</span>
+                    </label>
+                    <input type="text" @bind="_modalCostCenter" class="input input-bordered w-full" 
+                           placeholder="Enter cost center..." />
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Department</span>
+                    </label>
+                    <input type="text" @bind="_modalDepartment" class="input input-bordered w-full" 
+                           placeholder="Enter department..." />
+                </div>
+
+                <div class="form-control md:col-span-2">
+                    <label class="label">
+                        <span class="label-text">Domain</span>
+                    </label>
+                    <input type="text" @bind="_modalDomain" class="input input-bordered w-full" 
+                           placeholder="Enter domain..." />
+                </div>
+            </div>
+
+            <div class="modal-action">
+                <button class="btn btn-primary" @onclick="SaveOwner" 
+                        disabled="@(string.IsNullOrWhiteSpace(_modalName) || string.IsNullOrWhiteSpace(_modalEmail))">
+                    @(_editingOwner == null ? "Add Owner" : "Update Owner")
+                </button>
+                <button class="btn" @onclick="CloseModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (_showDeleteModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">Confirm Delete</h3>
+            
+            <p class="mb-4">
+                Are you sure you want to delete owner <strong>@_deletingOwner?.Name</strong>?
+            </p>
+
+            @if (_deleteUsageCount > 0)
+            {
+                <div class="alert alert-warning mb-4">
+                    <span>⚠️ This owner has @_deleteUsageCount trip(s) and cannot be deleted.</span>
+                </div>
+            }
+
+            <div class="modal-action">
+                <button class="btn btn-error" @onclick="ConfirmDelete" disabled="@(_deleteUsageCount > 0)">
+                    Delete
+                </button>
+                <button class="btn" @onclick="CloseDeleteModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Owner> _owners = new();
+    private bool _isLoading = false;
+    
+    private bool _showModal = false;
+    private Owner? _editingOwner = null;
+    private string _modalName = "";
+    private string _modalEmail = "";
+    private string _modalCostCenter = "";
+    private string _modalDepartment = "";
+    private string _modalDomain = "";
+    
+    private bool _showDeleteModal = false;
+    private Owner? _deletingOwner = null;
+    private int _deleteUsageCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOwners();
+    }
+
+    private async Task LoadOwners()
+    {
+        _isLoading = true;
+        try
+        {
+            _owners = await SettingsService.GetOwnersAsync();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ShowAddModal()
+    {
+        _editingOwner = null;
+        _modalName = "";
+        _modalEmail = "";
+        _modalCostCenter = "";
+        _modalDepartment = "";
+        _modalDomain = "";
+        _showModal = true;
+    }
+
+    private void ShowEditModal(Owner owner)
+    {
+        _editingOwner = owner;
+        _modalName = owner.Name;
+        _modalEmail = owner.Email;
+        _modalCostCenter = owner.CostCenter ?? "";
+        _modalDepartment = owner.Department ?? "";
+        _modalDomain = owner.Domain ?? "";
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _editingOwner = null;
+        _modalName = "";
+        _modalEmail = "";
+        _modalCostCenter = "";
+        _modalDepartment = "";
+        _modalDomain = "";
+    }
+
+    private async Task SaveOwner()
+    {
+        try
+        {
+            if (_editingOwner == null)
+            {
+                await SettingsService.CreateOwnerAsync(
+                    _modalName, 
+                    _modalEmail, 
+                    string.IsNullOrWhiteSpace(_modalCostCenter) ? null : _modalCostCenter,
+                    string.IsNullOrWhiteSpace(_modalDepartment) ? null : _modalDepartment,
+                    string.IsNullOrWhiteSpace(_modalDomain) ? null : _modalDomain
+                );
+            }
+            else
+            {
+                await SettingsService.UpdateOwnerAsync(
+                    _editingOwner.OwnerId,
+                    _modalName, 
+                    _modalEmail, 
+                    string.IsNullOrWhiteSpace(_modalCostCenter) ? null : _modalCostCenter,
+                    string.IsNullOrWhiteSpace(_modalDepartment) ? null : _modalDepartment,
+                    string.IsNullOrWhiteSpace(_modalDomain) ? null : _modalDomain
+                );
+            }
+
+            CloseModal();
+            await LoadOwners();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+    }
+
+    private void ShowDeleteModal(Owner owner)
+    {
+        _deletingOwner = owner;
+        _deleteUsageCount = 0; // In a full implementation, this would query actual usage
+        _showDeleteModal = true;
+    }
+
+    private void CloseDeleteModal()
+    {
+        _showDeleteModal = false;
+        _deletingOwner = null;
+        _deleteUsageCount = 0;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_deletingOwner == null) return;
+
+        try
+        {
+            await SettingsService.DeleteOwnerAsync(_deletingOwner.OwnerId);
+            CloseDeleteModal();
+            await LoadOwners();
+        }
+        catch (Exception ex)
+        {
+            // Handle error - show message to user
+        }
+    }
+}

@@ -1,0 +1,634 @@
+@page "/missing-documentation-control"
+@using TravelOperation.Core.Models
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Services
+@using TrevelOperation.Service
+@inject ITransactionService TransactionService
+@inject IMessageTemplateService MessageTemplateService
+@inject IJSRuntime JSRuntime
+
+<div class="container mx-auto p-6">
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">📄 Missing Documentation Control</h1>
+            <p class="text-gray-600">Flag transactions without receipts</p>
+        </div>
+        <div class="flex gap-2">
+            <button class="btn btn-secondary" @onclick="RefreshData">
+                🔄 Refresh
+            </button>
+            <button class="btn btn-primary" @onclick="RequestAllDocuments">
+                📧 Request All
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+        <div class="card bg-red-50 border-l-4 border-red-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">📄</div>
+                    <div>
+                        <div class="text-2xl font-bold text-red-700">@missingDocCount</div>
+                        <div class="text-red-600">Missing Docs</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card bg-orange-50 border-l-4 border-orange-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">💰</div>
+                    <div>
+                        <div class="text-2xl font-bold text-orange-700">$@missingDocAmount.ToString("N0")</div>
+                        <div class="text-orange-600">Amount at Risk</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card bg-yellow-50 border-l-4 border-yellow-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">⚠️</div>
+                    <div>
+                        <div class="text-2xl font-bold text-yellow-700">@highValueMissingCount</div>
+                        <div class="text-yellow-600">High Value (>$100)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card bg-blue-50 border-l-4 border-blue-400">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">📊</div>
+                    <div>
+                        <div class="text-2xl font-bold text-blue-700">@complianceRate.ToString("N1")%</div>
+                        <div class="text-blue-600">Compliance Rate</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card bg-base-100 shadow-md mb-6">
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Owner</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="selectedOwner" @bind:after="FilterTransactions">
+                        <option value="">All Owners</option>
+                        @foreach (var owner in availableOwners)
+                        {
+                            <option value="@owner">@owner</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Category</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="selectedCategory" @bind:after="FilterTransactions">
+                        <option value="">All Categories</option>
+                        <option value="Airfare">✈ Airfare</option>
+                        <option value="Lodging">🏨 Lodging</option>
+                        <option value="Transportation">🚕 Transportation</option>
+                        <option value="Meals">🍽 Meals</option>
+                        <option value="Client entertainment">🍸 Client entertainment</option>
+                        <option value="Other">❔ Other</option>
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Amount Range</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="selectedAmountRange" @bind:after="FilterTransactions">
+                        <option value="">All Amounts</option>
+                        <option value="high">≥ $100 (High Risk)</option>
+                        <option value="medium">$50 - $100</option>
+                        <option value="low">&lt; $50</option>
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Age</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="selectedAge" @bind:after="FilterTransactions">
+                        <option value="">All</option>
+                        <option value="recent">Last 30 days</option>
+                        <option value="old">30+ days</option>
+                        <option value="urgent">60+ days (Urgent)</option>
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Search</span>
+                    </label>
+                    <input type="text" class="input input-bordered w-full" placeholder="Search vendor..." @bind="searchText" @bind:after="FilterTransactions">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transactions Table -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-body">
+            <div class="overflow-x-auto">
+                <table class="table table-zebra w-full">
+                    <thead>
+                        <tr>
+                            <th>
+                                <input type="checkbox" class="checkbox" @onchange="ToggleSelectAll" checked="@allSelected">
+                            </th>
+                            <th>Priority</th>
+                            <th>Transaction ID</th>
+                            <th>Email</th>
+                            <th>Date</th>
+                            <th>Age</th>
+                            <th>Vendor</th>
+                            <th>Category</th>
+                            <th>Currency</th>
+                            <th>Amount</th>
+                            <th>Amount (USD)</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var transaction in filteredTransactions.Skip((currentPage - 1) * pageSize).Take(pageSize))
+                        {
+                            <tr class="hover @(GetRowHighlight(transaction))">
+                                <td>
+                                    <input type="checkbox" class="checkbox" @onchange="(e) => ToggleSelect(transaction.TransactionId, e)" checked="@selectedTransactions.Contains(transaction.TransactionId)">
+                                </td>
+                                <td>
+                                    <div class="badge @(GetPriorityBadgeClass(transaction))">
+                                        @GetPriorityText(transaction)
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="font-mono text-sm">@transaction.TransactionId</div>
+                                </td>
+                                <td>@transaction.Email</td>
+                                <td>@transaction.TransactionDate.ToString("dd/MM/yyyy")</td>
+                                <td>
+                                    <div class="text-sm @(GetAgeColorClass(transaction))">
+                                        @GetAgeText(transaction) days
+                                    </div>
+                                </td>
+                                <td>@transaction.Vendor</td>
+                                <td>
+                                    <span class="badge badge-outline">@GetCategoryIcon(transaction.Category) @transaction.Category</span>
+                                </td>
+                                <td>@transaction.Currency</td>
+                                <td>@transaction.Amount.ToString("N2")</td>
+                                <td>
+                                    <div class="font-bold @(GetAmountColorClass(transaction.AmountUSD))">
+                                        $@transaction.AmountUSD.ToString("N2")
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="dropdown dropdown-end">
+                                        <label tabindex="0" class="btn btn-ghost btn-sm">⋮</label>
+                                        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52">
+                                            <li><a @onclick="() => ViewDetails(transaction.TransactionId)">👁️ View Details</a></li>
+                                            <li><a @onclick="() => RequestDocument(transaction.TransactionId)">📧 Request Document</a></li>
+                                            <li><a @onclick="() => UploadDocument(transaction.TransactionId)">📤 Upload Document</a></li>
+                                            <li><hr /></li>
+                                            <li><a @onclick="() => MarkAsExempt(transaction.TransactionId)">✓ Mark as Exempt</a></li>
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Bulk Actions -->
+            @if (selectedTransactions.Any())
+            {
+                <div class="alert alert-warning mt-4">
+                    <div class="flex justify-between items-center w-full">
+                        <span>@selectedTransactions.Count transaction(s) selected - Total: $@GetSelectedAmount().ToString("N2")</span>
+                        <div class="flex gap-2">
+                            <button class="btn btn-sm btn-primary" @onclick="BulkRequestDocuments">
+                                📧 Request Documents
+                            </button>
+                            <button class="btn btn-sm btn-success" @onclick="BulkMarkAsExempt">
+                                ✓ Mark as Exempt
+                            </button>
+                            <button class="btn btn-sm btn-secondary" @onclick="ClearSelection">
+                                ❌ Clear Selection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Pagination -->
+            <div class="flex justify-between items-center mt-4">
+                <div class="text-sm text-gray-500">
+                    Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, filteredTransactions.Count) of @filteredTransactions.Count transactions
+                </div>
+                <div class="join">
+                    <button class="join-item btn btn-sm" disabled="@(currentPage <= 1)" @onclick="() => ChangePage(currentPage - 1)">«</button>
+                    @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                    {
+                        <button class="join-item btn btn-sm @(i == currentPage ? "btn-active" : "")" @onclick="() => ChangePage(i)">@i</button>
+                    }
+                    <button class="join-item btn btn-sm" disabled="@(currentPage >= totalPages)" @onclick="() => ChangePage(currentPage + 1)">»</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<MissingDocTransactionData> transactions = new();
+    private List<MissingDocTransactionData> filteredTransactions = new();
+    private List<string> availableOwners = new();
+    private HashSet<string> selectedTransactions = new();
+    
+    // Filters
+    private string selectedOwner = "";
+    private string selectedCategory = "";
+    private string selectedAmountRange = "";
+    private string selectedAge = "";
+    private string searchText = "";
+    
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 15;
+    private int totalPages => (int)Math.Ceiling((double)filteredTransactions.Count / pageSize);
+    
+    // Summary data
+    private int missingDocCount = 0;
+    private decimal missingDocAmount = 0;
+    private int highValueMissingCount = 0;
+    private decimal complianceRate = 0;
+    private bool allSelected = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMissingDocTransactions();
+        CalculateSummary();
+        FilterTransactions();
+    }
+
+    private async Task LoadMissingDocTransactions()
+    {
+        transactions = GenerateMockMissingDocData();
+        availableOwners = transactions.Select(t => t.Owner).Where(o => !string.IsNullOrEmpty(o)).Distinct().ToList()!;
+    }
+
+    private void CalculateSummary()
+    {
+        missingDocCount = filteredTransactions.Count;
+        missingDocAmount = filteredTransactions.Sum(t => t.AmountUSD);
+        highValueMissingCount = filteredTransactions.Count(t => t.AmountUSD >= 100);
+        
+        // Simulate compliance rate (assuming total transactions include those with docs)
+        var totalTransactions = filteredTransactions.Count + 150; // Mock total including those with docs
+        complianceRate = totalTransactions > 0 ? (150.0m / totalTransactions) * 100 : 0;
+    }
+
+    private void FilterTransactions()
+    {
+        filteredTransactions = transactions.Where(t =>
+            (string.IsNullOrEmpty(selectedOwner) || t.Owner == selectedOwner) &&
+            (string.IsNullOrEmpty(selectedCategory) || t.Category == selectedCategory) &&
+            (string.IsNullOrEmpty(searchText) || 
+             t.Vendor.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+             t.TransactionId.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
+            FilterByAmountRange(t) &&
+            FilterByAge(t)
+        ).OrderByDescending(t => GetPriority(t)).ThenByDescending(t => t.AmountUSD).ToList();
+        
+        CalculateSummary();
+        currentPage = 1;
+        selectedTransactions.Clear();
+        StateHasChanged();
+    }
+
+    private bool FilterByAmountRange(MissingDocTransactionData transaction)
+    {
+        return selectedAmountRange switch
+        {
+            "high" => transaction.AmountUSD >= 100,
+            "medium" => transaction.AmountUSD >= 50 && transaction.AmountUSD < 100,
+            "low" => transaction.AmountUSD < 50,
+            _ => true
+        };
+    }
+
+    private bool FilterByAge(MissingDocTransactionData transaction)
+    {
+        var ageInDays = GetAgeInDays(transaction);
+        return selectedAge switch
+        {
+            "recent" => ageInDays <= 30,
+            "old" => ageInDays > 30,
+            "urgent" => ageInDays > 60,
+            _ => true
+        };
+    }
+
+    private string GetRowHighlight(MissingDocTransactionData transaction)
+    {
+        var priority = GetPriority(transaction);
+        return priority switch
+        {
+            3 => "bg-red-50",   // Critical
+            2 => "bg-orange-50", // High
+            1 => "bg-yellow-50", // Medium
+            _ => ""              // Low
+        };
+    }
+
+    private int GetPriority(MissingDocTransactionData transaction)
+    {
+        var ageInDays = GetAgeInDays(transaction);
+        var amount = transaction.AmountUSD;
+        
+        // Critical: High amount + old OR very high amount
+        if ((amount >= 100 && ageInDays > 60) || amount >= 300) return 3;
+        
+        // High: Medium amount + old OR high amount
+        if ((amount >= 50 && ageInDays > 30) || amount >= 150) return 2;
+        
+        // Medium: Any amount + old OR medium amount
+        if (ageInDays > 30 || amount >= 75) return 1;
+        
+        // Low: Recent + low amount
+        return 0;
+    }
+
+    private string GetPriorityText(MissingDocTransactionData transaction)
+    {
+        return GetPriority(transaction) switch
+        {
+            3 => "Critical",
+            2 => "High",
+            1 => "Medium",
+            _ => "Low"
+        };
+    }
+
+    private string GetPriorityBadgeClass(MissingDocTransactionData transaction)
+    {
+        return GetPriority(transaction) switch
+        {
+            3 => "badge-error",
+            2 => "badge-warning",
+            1 => "badge-info",
+            _ => "badge-ghost"
+        };
+    }
+
+    private int GetAgeInDays(MissingDocTransactionData transaction)
+    {
+        return (DateTime.Today - transaction.TransactionDate).Days;
+    }
+
+    private string GetAgeText(MissingDocTransactionData transaction)
+    {
+        return GetAgeInDays(transaction).ToString();
+    }
+
+    private string GetAgeColorClass(MissingDocTransactionData transaction)
+    {
+        var ageInDays = GetAgeInDays(transaction);
+        if (ageInDays > 60) return "text-red-600 font-bold";
+        if (ageInDays > 30) return "text-orange-600 font-semibold";
+        return "text-gray-600";
+    }
+
+    private string GetAmountColorClass(decimal amount)
+    {
+        if (amount >= 300) return "text-red-600";
+        if (amount >= 150) return "text-orange-600";
+        if (amount >= 75) return "text-yellow-600";
+        return "text-gray-600";
+    }
+
+    private string GetCategoryIcon(string category)
+    {
+        return category switch
+        {
+            "Airfare" => "✈",
+            "Lodging" => "🏨",
+            "Transportation" => "🚕",
+            "Meals" => "🍽",
+            "Client entertainment" => "🍸",
+            "Communication" => "📱",
+            _ => "❔"
+        };
+    }
+
+    private decimal GetSelectedAmount()
+    {
+        return selectedTransactions.Sum(id => 
+            filteredTransactions.FirstOrDefault(t => t.TransactionId == id)?.AmountUSD ?? 0);
+    }
+
+    private void ChangePage(int page)
+    {
+        if (page >= 1 && page <= totalPages)
+        {
+            currentPage = page;
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        var isChecked = (bool)(e.Value ?? false);
+        if (isChecked)
+        {
+            foreach (var transaction in filteredTransactions.Skip((currentPage - 1) * pageSize).Take(pageSize))
+            {
+                selectedTransactions.Add(transaction.TransactionId);
+            }
+        }
+        else
+        {
+            selectedTransactions.Clear();
+        }
+        allSelected = isChecked;
+        StateHasChanged();
+    }
+
+    private void ToggleSelect(string transactionId, ChangeEventArgs e)
+    {
+        var isChecked = (bool)(e.Value ?? false);
+        if (isChecked)
+        {
+            selectedTransactions.Add(transactionId);
+        }
+        else
+        {
+            selectedTransactions.Remove(transactionId);
+        }
+        StateHasChanged();
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadMissingDocTransactions();
+        FilterTransactions();
+    }
+
+    private async Task RequestAllDocuments()
+    {
+        var result = await JSRuntime.InvokeAsync<bool>("confirm", $"Send document requests for all {filteredTransactions.Count} transactions?");
+        if (result)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Document requests sent for {filteredTransactions.Count} transactions");
+        }
+    }
+
+    private async Task ViewDetails(string transactionId)
+    {
+        await JSRuntime.InvokeVoidAsync("alert", $"View details for transaction {transactionId} - Navigation pending");
+    }
+
+    private async Task RequestDocument(string transactionId)
+    {
+        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+        if (transaction != null)
+        {
+            var message = GenerateDocumentRequestMessage(transaction);
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", message);
+            await JSRuntime.InvokeVoidAsync("alert", "Document request message copied to clipboard!");
+        }
+    }
+
+    private async Task UploadDocument(string transactionId)
+    {
+        await JSRuntime.InvokeVoidAsync("alert", $"Upload document for transaction {transactionId} - File upload pending");
+    }
+
+    private async Task MarkAsExempt(string transactionId)
+    {
+        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+        if (transaction != null)
+        {
+            transaction.IsExempt = true;
+            FilterTransactions();
+        }
+    }
+
+    private async Task BulkRequestDocuments()
+    {
+        await JSRuntime.InvokeVoidAsync("alert", $"Document requests sent for {selectedTransactions.Count} transactions");
+        selectedTransactions.Clear();
+        StateHasChanged();
+    }
+
+    private async Task BulkMarkAsExempt()
+    {
+        foreach (var transactionId in selectedTransactions)
+        {
+            var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+            if (transaction != null)
+            {
+                transaction.IsExempt = true;
+            }
+        }
+        selectedTransactions.Clear();
+        await JSRuntime.InvokeVoidAsync("alert", "Selected transactions marked as exempt");
+        FilterTransactions();
+    }
+
+    private void ClearSelection()
+    {
+        selectedTransactions.Clear();
+        allSelected = false;
+        StateHasChanged();
+    }
+
+    private string GenerateDocumentRequestMessage(MissingDocTransactionData transaction)
+    {
+        var ageInDays = GetAgeInDays(transaction);
+        var urgencyText = ageInDays > 60 ? "URGENT - " : ageInDays > 30 ? "Important - " : "";
+        var additionalNote = ageInDays > 60 ? "This expense is over 60 days old and requires immediate attention." : "";
+        
+        return $@"Hi {GetFirstName(transaction.Email)},
+
+{urgencyText}Missing Receipt Required
+
+We are missing documentation for the following expense:
+
+Transaction ID: {transaction.TransactionId}
+Date: {transaction.TransactionDate:dd/MM/yyyy}
+Vendor: {transaction.Vendor}
+Category: {transaction.Category}
+Amount: {transaction.Currency} {transaction.Amount:N2}
+Age: {ageInDays} days
+
+Please provide a receipt or other supporting documentation for this expense as soon as possible. This is required for compliance and tax reporting purposes.
+
+{additionalNote}
+
+You can upload the document through the expense portal or reply with an attached image/PDF.
+
+Thank you for your prompt attention to this matter!";
+    }
+
+    private string GetFirstName(string email)
+    {
+        return email.Split('@')[0].Split('.')[0];
+    }
+
+    private List<MissingDocTransactionData> GenerateMockMissingDocData()
+    {
+        var random = new Random();
+        var transactions = new List<MissingDocTransactionData>();
+        var emails = new[] { "john.doe@company.com", "jane.smith@company.com", "mike.johnson@company.com", "sarah.wilson@company.com" };
+        var vendors = new[] { "Restaurant ABC", "Taxi Service", "Hotel Chain", "Airlines Co", "Gas Station", "Coffee Shop", "Equipment Rental" };
+        var owners = new[] { "Maayan Chesler", "Martina Poplinsk" };
+        var categories = new[] { "Meals", "Transportation", "Lodging", "Airfare", "Other", "Client entertainment" };
+
+        for (int i = 1; i <= 28; i++)
+        {
+            var amount = random.Next(20, 400);
+            var daysAgo = random.Next(1, 120);
+            
+            transactions.Add(new MissingDocTransactionData
+            {
+                TransactionId = $"TXN-MISS-{i:000}",
+                Email = emails[random.Next(emails.Length)],
+                TransactionDate = DateTime.Today.AddDays(-daysAgo),
+                Vendor = vendors[random.Next(vendors.Length)],
+                Category = categories[random.Next(categories.Length)],
+                Currency = "USD",
+                Amount = amount,
+                AmountUSD = amount,
+                Owner = owners[random.Next(owners.Length)],
+                IsExempt = false
+            });
+        }
+
+        return transactions.Where(t => !t.IsExempt).ToList();
+    }
+
+    public class MissingDocTransactionData
+    {
+        public string TransactionId { get; set; } = "";
+        public string Email { get; set; } = "";
+        public DateTime TransactionDate { get; set; }
+        public string Vendor { get; set; } = "";
+        public string Category { get; set; } = "";
+        public string Currency { get; set; } = "";
+        public decimal Amount { get; set; }
+        public decimal AmountUSD { get; set; }
+        public string Owner { get; set; } = "";
+        public bool IsExempt { get; set; }
+    }
+}

@@ -1,0 +1,381 @@
+@page "/data-integrity/split-engine"
+@using TravelOperation.Core.Interfaces
+@using TravelOperation.Core.Models
+
+<div class="p-6 max-w-7xl mx-auto">
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Split Engine</h1>
+        <p class="text-gray-600">Manage transaction splitting with automatic suggestions and manual controls</p>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center">
+                <div class="p-2 bg-blue-100 rounded-lg">
+                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Suggestions</p>
+                    <p class="text-2xl font-bold text-gray-900">@statistics?.TotalSuggestions</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center">
+                <div class="p-2 bg-green-100 rounded-lg">
+                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Applied Splits</p>
+                    <p class="text-2xl font-bold text-gray-900">@statistics?.AppliedSplits</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center">
+                <div class="p-2 bg-yellow-100 rounded-lg">
+                    <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Total Amount</p>
+                    <p class="text-2xl font-bold text-gray-900">$@statistics?.TotalSplitAmount.ToString("N2")</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center">
+                <div class="p-2 bg-purple-100 rounded-lg">
+                    <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                    </svg>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Avg Participants</p>
+                    <p class="text-2xl font-bold text-gray-900">@statistics?.MostCommonParticipantCount</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="border-b border-gray-200 mb-6">
+        <nav class="-mb-px flex space-x-8">
+            <button @onclick="() => activeTab = suggestionsTab" 
+                    class="@GetTabClass(suggestionsTab) whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                Auto Suggestions
+            </button>
+            <button @onclick="() => activeTab = manualTab" 
+                    class="@GetTabClass(manualTab) whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                Manual Split
+            </button>
+        </nav>
+    </div>
+
+    @if (activeTab == suggestionsTab)
+    {
+        <!-- Auto Suggestions Tab -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-medium text-gray-900">Split Suggestions</h2>
+                    <button @onclick="RefreshSuggestions" class="btn btn-primary btn-sm">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+
+            @if (isLoading)
+            {
+                <div class="p-6 text-center">
+                    <div class="loading loading-spinner loading-lg"></div>
+                    <p class="mt-2 text-gray-500">Loading suggestions...</p>
+                </div>
+            }
+            else if (suggestions?.Any() == true)
+            {
+                <div class="divide-y divide-gray-200">
+                    @foreach (var suggestion in suggestions)
+                    {
+                        <div class="p-6">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center space-x-4 mb-3">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium @GetConfidenceBadgeClass(suggestion.ConfidenceScore)">
+                                            @suggestion.ConfidenceScore% Confidence
+                                        </span>
+                                        <span class="text-sm text-gray-500">@suggestion.Transaction.TransactionDate.ToString("dd/MM/yyyy")</span>
+                                    </div>
+                                    
+                                    <h3 class="text-lg font-medium text-gray-900 mb-2">
+                                        @suggestion.Transaction.Vendor - $@suggestion.TotalAmount.ToString("N2")
+                                    </h3>
+                                    
+                                    <p class="text-sm text-gray-600 mb-3">@suggestion.SuggestedReason</p>
+                                    
+                                    <div class="mb-4">
+                                        <h4 class="text-sm font-medium text-gray-700 mb-2">Suggested Split:</h4>
+                                        <div class="space-y-2">
+                                            @foreach (var split in suggestion.SuggestedSplits)
+                                            {
+                                                <div class="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                                                    <div class="flex items-center space-x-3">
+                                                        @if (split.IsExternal)
+                                                        {
+                                                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">External</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Internal</span>
+                                                        }
+                                                        <span class="text-sm font-medium">@split.Name</span>
+                                                        <span class="text-sm text-gray-500">(@split.Email)</span>
+                                                    </div>
+                                                    <span class="text-sm font-medium">$@split.AmountUSD.ToString("N2")</span>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex space-x-2 ml-4">
+                                    <button @onclick="() => ApplySuggestion(suggestion)" 
+                                            class="btn btn-success btn-sm" 
+                                            disabled="@isProcessing">
+                                        @if (isProcessing)
+                                        {
+                                            <span class="loading loading-spinner loading-xs"></span>
+                                        }
+                                        Apply Split
+                                    </button>
+                                    <button @onclick="() => RejectSuggestion(suggestion)" 
+                                            class="btn btn-outline btn-sm"
+                                            disabled="@isProcessing">
+                                        Reject
+                                    </button>
+                                    <button @onclick="() => OpenManualEdit(suggestion)" 
+                                            class="btn btn-outline btn-sm">
+                                        Edit
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="p-6 text-center">
+                    <svg class="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                    <p class="text-gray-500">No split suggestions available</p>
+                    <p class="text-sm text-gray-400 mt-1">All eligible transactions have been processed</p>
+                </div>
+            }
+        </div>
+    }
+    else if (activeTab == manualTab)
+    {
+        <!-- Manual Split Tab -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-lg font-medium text-gray-900">Manual Transaction Split</h2>
+                <p class="text-sm text-gray-600 mt-1">Search for a transaction to split manually</p>
+            </div>
+
+            <div class="p-6">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Search Transaction</label>
+                    <div class="flex space-x-2">
+                        <input @bind="searchQuery" @onkeypress="HandleSearchKeyPress"
+                               class="input input-bordered flex-1" 
+                               placeholder="Enter Transaction ID, Vendor, or Email..." />
+                        <button @onclick="SearchTransactions" class="btn btn-primary">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                            Search
+                        </button>
+                    </div>
+                </div>
+
+                @if (searchResults?.Any() == true)
+                {
+                    <div class="space-y-3">
+                        @foreach (var transaction in searchResults)
+                        {
+                            <div class="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer"
+                                 @onclick="() => SelectTransactionForSplit(transaction)">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h3 class="font-medium text-gray-900">@transaction.Vendor</h3>
+                                        <p class="text-sm text-gray-600">
+                                            @transaction.TransactionDate.ToString("dd/MM/yyyy") • 
+                                            @transaction.Email • 
+                                            @transaction.Category?.Name
+                                        </p>
+                                        <p class="text-sm font-medium text-gray-900 mt-1">
+                                            @transaction.Currency @transaction.Amount.ToString("N2") 
+                                            (@(transaction.AmountUSD?.ToString("N2") ?? "0.00") USD)
+                                        </p>
+                                    </div>
+                                    <button class="btn btn-outline btn-sm">Select</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else if (!string.IsNullOrEmpty(searchQuery) && searchResults != null)
+                {
+                    <div class="text-center py-8">
+                        <p class="text-gray-500">No transactions found matching your search</p>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Manual Split Modal -->
+@if (showSplitModal && selectedTransaction != null)
+{
+    <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Split Transaction</h3>
+                    <button @onclick="CloseSplitModal" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Transaction Details -->
+                <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                    <h4 class="font-medium text-gray-900 mb-2">Transaction Details</h4>
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span class="text-gray-500">Transaction ID:</span>
+                            <span class="ml-2 font-medium">@selectedTransaction.TransactionId</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Date:</span>
+                            <span class="ml-2 font-medium">@selectedTransaction.TransactionDate.ToString("dd/MM/yyyy")</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Vendor:</span>
+                            <span class="ml-2 font-medium">@selectedTransaction.Vendor</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Total Amount:</span>
+                            <span class="ml-2 font-medium">@selectedTransaction.Currency @selectedTransaction.Amount.ToString("N2") ($@(selectedTransaction.AmountUSD?.ToString("N2") ?? "0.00"))</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Split Configuration -->
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="font-medium text-gray-900">Split Configuration</h4>
+                        <button @onclick="AddSplitItem" class="btn btn-outline btn-sm">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                            Add Split
+                        </button>
+                    </div>
+
+                    <div class="space-y-3">
+                        @for (int i = 0; i < splitItems.Count; i++)
+                        {
+                            var index = i; // Capture for lambda
+                            <div class="border rounded-lg p-4">
+                                <div class="grid grid-cols-12 gap-3 items-center">
+                                    <div class="col-span-3">
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">Email</label>
+                                        <input @bind="splitItems[index].Email" class="input input-bordered input-sm w-full" />
+                                    </div>
+                                    <div class="col-span-2">
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">Name</label>
+                                        <input @bind="splitItems[index].Name" class="input input-bordered input-sm w-full" />
+                                    </div>
+                                    <div class="col-span-2">
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">Amount</label>
+                                        <input @bind="splitItems[index].Amount" type="number" step="0.01" class="input input-bordered input-sm w-full" />
+                                    </div>
+                                    <div class="col-span-2">
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">Amount USD</label>
+                                        <input @bind="splitItems[index].AmountUSD" type="number" step="0.01" class="input input-bordered input-sm w-full" />
+                                    </div>
+                                    <div class="col-span-2">
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">Category</label>
+                                        <select @bind="splitItems[index].CategoryId" class="select select-bordered select-sm w-full">
+                                            @if (categories != null)
+                                            {
+                                                @foreach (var category in categories)
+                                                {
+                                                    <option value="@category.CategoryId">@category.Emoji @category.Name</option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-span-1">
+                                        <button @onclick="() => RemoveSplitItem(index)" class="btn btn-error btn-sm btn-square mt-5">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Split Summary -->
+                    <div class="mt-4 bg-blue-50 rounded-lg p-3">
+                        <div class="flex justify-between text-sm">
+                            <span>Total Split Amount (USD):</span>
+                            <span class="font-medium">$@splitItems.Sum(s => s.AmountUSD).ToString("N2")</span>
+                        </div>
+                        <div class="flex justify-between text-sm mt-1">
+                            <span>Original Amount (USD):</span>
+                            <span class="font-medium">$@(selectedTransaction.AmountUSD?.ToString("N2") ?? "0.00")</span>
+                        </div>
+                        <div class="flex justify-between text-sm mt-1 @(Math.Abs(splitItems.Sum(s => s.AmountUSD) - (selectedTransaction.AmountUSD ?? 0)) > 0.01m ? "text-red-600" : "text-green-600")">
+                            <span>Difference:</span>
+                            <span class="font-medium">$@(splitItems.Sum(s => s.AmountUSD) - (selectedTransaction.AmountUSD ?? 0)).ToString("N2")</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal Actions -->
+                <div class="flex justify-end space-x-3">
+                    <button @onclick="CloseSplitModal" class="btn btn-outline">Cancel</button>
+                    <button @onclick="SaveSplit" 
+                            class="btn btn-primary"
+                            disabled="@(isProcessing || Math.Abs(splitItems.Sum(s => s.AmountUSD) - (selectedTransaction.AmountUSD ?? 0)) > 0.01m)">
+                        @if (isProcessing)
+                        {
+                            <span class="loading loading-spinner loading-xs"></span>
+                        }
+                        Apply Split
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
