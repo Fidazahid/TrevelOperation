@@ -1,0 +1,204 @@
+@page "/settings/audit-verification"
+@using TravelOperation.Core.Services.Interfaces
+@using TravelOperation.Core.Models.Entities
+@using AuditLogEntity = TravelOperation.Core.Models.Entities.AuditLog
+@inject ITransactionService TransactionService
+@inject ITripService TripService
+@inject IAuditService AuditService
+@inject ILookupService LookupService
+
+<div class="container mx-auto p-6">
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">🔍 Audit Logging Verification</h1>
+        <p class="text-gray-600">Test and verify that all CRUD operations are being properly logged</p>
+    </div>
+
+    @* Test Status Summary *@
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="stats shadow">
+            <div class="stat">
+                <div class="stat-title">Tests Run</div>
+                <div class="stat-value text-primary">@testsRun</div>
+            </div>
+        </div>
+        <div class="stats shadow">
+            <div class="stat">
+                <div class="stat-title">Passed</div>
+                <div class="stat-value text-success">@testsPassed</div>
+            </div>
+        </div>
+        <div class="stats shadow">
+            <div class="stat">
+                <div class="stat-title">Failed</div>
+                <div class="stat-value text-error">@testsFailed</div>
+            </div>
+        </div>
+        <div class="stats shadow">
+            <div class="stat">
+                <div class="stat-title">Audit Entries</div>
+                <div class="stat-value">@auditEntriesCreated</div>
+            </div>
+        </div>
+    </div>
+
+    @* Test Actions *@
+    <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card-body">
+            <h2 class="card-title text-xl mb-4">🧪 Run Tests</h2>
+            
+            <div class="flex flex-wrap gap-2 mb-4">
+                <button class="btn btn-primary" @onclick="RunAllTests" disabled="@isRunning">
+                    @if (isRunning)
+                    {
+                        <span class="loading loading-spinner loading-sm"></span>
+                    }
+                    Run All Tests
+                </button>
+                <button class="btn btn-outline btn-primary" @onclick="RunTransactionTests" disabled="@isRunning">
+                    Transaction Tests
+                </button>
+                <button class="btn btn-outline btn-primary" @onclick="RunTripTests" disabled="@isRunning">
+                    Trip Tests
+                </button>
+                <button class="btn btn-outline btn-secondary" @onclick="ClearResults" disabled="@isRunning">
+                    Clear Results
+                </button>
+                <button class="btn btn-outline btn-error" @onclick="CleanupTestData" disabled="@isRunning">
+                    Cleanup Test Data
+                </button>
+            </div>
+
+            @if (!string.IsNullOrEmpty(statusMessage))
+            {
+                <div class="alert @(statusMessage.Contains("✅") ? "alert-success" : statusMessage.Contains("❌") ? "alert-error" : "alert-info")">
+                    <span>@statusMessage</span>
+                </div>
+            }
+        </div>
+    </div>
+
+    @* Test Results *@
+    @if (testResults.Any())
+    {
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title text-xl mb-4">📋 Test Results</h2>
+                
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Test Name</th>
+                                <th>Operation</th>
+                                <th>Entity</th>
+                                <th>Logged</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var result in testResults)
+                            {
+                                <tr>
+                                    <td>
+                                        @if (result.Success)
+                                        {
+                                            <span class="badge badge-success">✓ PASS</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-error">✗ FAIL</span>
+                                        }
+                                    </td>
+                                    <td class="font-semibold">@result.TestName</td>
+                                    <td><span class="badge badge-outline">@result.Operation</span></td>
+                                    <td>@result.EntityType</td>
+                                    <td>
+                                        @if (result.AuditLogged)
+                                        {
+                                            <span class="badge badge-success">Yes</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-error">No</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <details class="collapse collapse-arrow bg-base-200">
+                                            <summary class="collapse-title text-sm">View Details</summary>
+                                            <div class="collapse-content">
+                                                <pre class="text-xs">@result.Details</pre>
+                                            </div>
+                                        </details>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Audit Log Viewer *@
+    @if (recentAuditLogs.Any())
+    {
+        <div class="card bg-base-100 shadow-xl mt-6">
+            <div class="card-body">
+                <h2 class="card-title text-xl mb-4">📜 Recent Audit Logs (Test Operations)</h2>
+                
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra table-sm">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Action</th>
+                                <th>Table</th>
+                                <th>Record ID</th>
+                                <th>User</th>
+                                <th>Has Old Value</th>
+                                <th>Has New Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var log in recentAuditLogs.Take(20))
+                            {
+                                <tr>
+                                    <td class="text-xs">@log.Timestamp.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                                    <td>
+                                        <span class="badge badge-sm @GetActionBadgeClass(log.Action)">
+                                            @log.Action
+                                        </span>
+                                    </td>
+                                    <td>@log.LinkedTable</td>
+                                    <td class="font-mono text-xs">@log.LinkedRecordId</td>
+                                    <td>@log.UserId</td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(log.OldValue))
+                                        {
+                                            <span class="badge badge-success badge-xs">✓</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-ghost badge-xs">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(log.NewValue))
+                                        {
+                                            <span class="badge badge-success badge-xs">✓</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-ghost badge-xs">-</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>

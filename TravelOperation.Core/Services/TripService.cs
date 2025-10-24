@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TravelOperation.Core.Data;
+using TravelOperation.Core.Extensions;
+using TravelOperation.Core.Models;
 using TravelOperation.Core.Models.Entities;
 using TravelOperation.Core.Services.Interfaces;
 
@@ -53,6 +55,66 @@ public class TripService : ITripService
         return await query
             .OrderByDescending(t => t.StartDate)
             .ToListAsync();
+    }
+
+    public async Task<PagedResult<Trip>> GetAllTripsPagedAsync(PaginationParams pagination)
+    {
+        var query = _context.Trips
+            .Include(t => t.Purpose)
+            .Include(t => t.TripType)
+            .Include(t => t.Status)
+            .Include(t => t.ValidationStatus)
+            .Include(t => t.Owner)
+            .Include(t => t.Transactions)
+            .AsQueryable();
+
+        // Apply role-based filtering
+        var currentUser = await _authService.GetCurrentUserAsync();
+        if (currentUser != null)
+        {
+            if (currentUser.Role == "Employee")
+            {
+                query = query.Where(t => t.Email == currentUser.Email);
+            }
+            else if (currentUser.Role == "Owner")
+            {
+                var departmentEmails = await GetDepartmentEmailsAsync(currentUser.Department);
+                query = query.Where(t => departmentEmails.Contains(t.Email));
+            }
+        }
+
+        query = query.OrderByDescending(t => t.StartDate);
+
+        return await query.ToPagedResultAsync(pagination);
+    }
+
+    public async Task<PagedResult<Trip>> GetTripsByEmailPagedAsync(string email, PaginationParams pagination)
+    {
+        var query = _context.Trips
+            .Include(t => t.Purpose)
+            .Include(t => t.TripType)
+            .Include(t => t.Status)
+            .Include(t => t.ValidationStatus)
+            .Include(t => t.Owner)
+            .Where(t => t.Email == email)
+            .OrderByDescending(t => t.StartDate);
+
+        return await query.ToPagedResultAsync(pagination);
+    }
+
+    public async Task<PagedResult<Trip>> GetTripsReadyForValidationPagedAsync(PaginationParams pagination)
+    {
+        var query = _context.Trips
+            .Include(t => t.Purpose)
+            .Include(t => t.TripType)
+            .Include(t => t.Status)
+            .Include(t => t.ValidationStatus)
+            .Include(t => t.Owner)
+            .Include(t => t.Transactions)
+            .Where(t => t.ValidationStatus != null && t.ValidationStatus.Name == "Ready to validate")
+            .OrderByDescending(t => t.StartDate);
+
+        return await query.ToPagedResultAsync(pagination);
     }
 
     private async Task<List<string>> GetDepartmentEmailsAsync(string department)

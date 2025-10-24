@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TravelOperation.Core.Data;
+using TravelOperation.Core.Extensions;
+using TravelOperation.Core.Models;
 using TravelOperation.Core.Models.Entities;
 using TravelOperation.Core.Services.Interfaces;
 
@@ -55,6 +57,61 @@ public class TransactionService : ITransactionService
         return await query
             .OrderByDescending(t => t.TransactionDate)
             .ToListAsync();
+    }
+
+    // Paginated version with role-based filtering
+    public async Task<PagedResult<Transaction>> GetAllTransactionsPagedAsync(PaginationParams pagination)
+    {
+        var query = _context.Transactions
+            .Include(t => t.Source)
+            .Include(t => t.Category)
+            .Include(t => t.Trip)
+            .Include(t => t.CabinClass)
+            .Include(t => t.BookingStatus)
+            .Include(t => t.BookingType)
+            .AsQueryable();
+
+        // Apply role-based filtering
+        var currentUser = await _authService.GetCurrentUserAsync();
+        if (currentUser != null)
+        {
+            if (currentUser.Role == "Employee")
+            {
+                query = query.Where(t => t.Email == currentUser.Email);
+            }
+            else if (currentUser.Role == "Owner")
+            {
+                var departmentEmails = await GetDepartmentEmailsAsync(currentUser.Department);
+                query = query.Where(t => departmentEmails.Contains(t.Email));
+            }
+        }
+
+        query = query.OrderByDescending(t => t.TransactionDate);
+        
+        return await query.ToPagedResultAsync(pagination);
+    }
+
+    public async Task<PagedResult<Transaction>> GetTransactionsByEmailPagedAsync(string email, PaginationParams pagination)
+    {
+        var query = _context.Transactions
+            .Include(t => t.Source)
+            .Include(t => t.Category)
+            .Include(t => t.Trip)
+            .Where(t => t.Email == email)
+            .OrderByDescending(t => t.TransactionDate);
+
+        return await query.ToPagedResultAsync(pagination);
+    }
+
+    public async Task<PagedResult<Transaction>> GetUnlinkedTransactionsPagedAsync(PaginationParams pagination)
+    {
+        var query = _context.Transactions
+            .Include(t => t.Source)
+            .Include(t => t.Category)
+            .Where(t => t.TripId == null)
+            .OrderByDescending(t => t.TransactionDate);
+
+        return await query.ToPagedResultAsync(pagination);
     }
 
     private async Task<List<string>> GetDepartmentEmailsAsync(string department)
@@ -361,6 +418,19 @@ public class TransactionService : ITransactionService
             .ToListAsync();
     }
 
+    public async Task<PagedResult<Transaction>> GetAirfareWithoutCabinClassPagedAsync(PaginationParams pagination)
+    {
+        var query = _context.Transactions
+            .Include(t => t.Source)
+            .Include(t => t.Category)
+            .Include(t => t.CabinClass)
+            .Where(t => t.Category.Name == "Airfare" && t.CabinClassId == null)
+            .OrderBy(t => t.Email)
+            .ThenBy(t => t.TransactionDate);
+
+        return await query.ToPagedResultAsync(pagination);
+    }
+
     public async Task<IEnumerable<Transaction>> GetHighValueMealsAsync(decimal threshold = 80)
     {
         return await _context.Transactions
@@ -372,6 +442,20 @@ public class TransactionService : ITransactionService
             .OrderBy(t => t.Email)
             .ThenBy(t => t.TransactionDate)
             .ToListAsync();
+    }
+
+    public async Task<PagedResult<Transaction>> GetHighValueMealsPagedAsync(PaginationParams pagination, decimal threshold = 80)
+    {
+        var query = _context.Transactions
+            .Include(t => t.Source)
+            .Include(t => t.Category)
+            .Where(t => t.Category.Name == "Meals" && 
+                       ((t.AmountUSD ?? 0) >= threshold || (t.AmountUSD ?? 0) <= -threshold) &&
+                       !t.IsValid)
+            .OrderBy(t => t.Email)
+            .ThenBy(t => t.TransactionDate);
+
+        return await query.ToPagedResultAsync(pagination);
     }
 
     public async Task<IEnumerable<Transaction>> GetLowValueLodgingAsync(decimal threshold = 100)
@@ -388,6 +472,21 @@ public class TransactionService : ITransactionService
             .ToListAsync();
     }
 
+    public async Task<PagedResult<Transaction>> GetLowValueLodgingPagedAsync(PaginationParams pagination, decimal threshold = 100)
+    {
+        var query = _context.Transactions
+            .Include(t => t.Source)
+            .Include(t => t.Category)
+            .Where(t => t.Category.Name == "Lodging" && 
+                       (t.AmountUSD ?? 0) <= threshold && 
+                       (t.AmountUSD ?? 0) >= -threshold &&
+                       !t.IsValid)
+            .OrderBy(t => t.Email)
+            .ThenBy(t => t.TransactionDate);
+
+        return await query.ToPagedResultAsync(pagination);
+    }
+
     public async Task<IEnumerable<Transaction>> GetClientEntertainmentWithoutParticipantsAsync()
     {
         return await _context.Transactions
@@ -398,6 +497,19 @@ public class TransactionService : ITransactionService
             .OrderBy(t => t.Email)
             .ThenBy(t => t.TransactionDate)
             .ToListAsync();
+    }
+
+    public async Task<PagedResult<Transaction>> GetClientEntertainmentWithoutParticipantsPagedAsync(PaginationParams pagination)
+    {
+        var query = _context.Transactions
+            .Include(t => t.Source)
+            .Include(t => t.Category)
+            .Where(t => t.Category.Name == "Client entertainment" && 
+                       !t.ParticipantsValidated)
+            .OrderBy(t => t.Email)
+            .ThenBy(t => t.TransactionDate);
+
+        return await query.ToPagedResultAsync(pagination);
     }
 
     public async Task<IEnumerable<Transaction>> GetOtherCategoryTransactionsAsync()
@@ -411,6 +523,18 @@ public class TransactionService : ITransactionService
             .ToListAsync();
     }
 
+    public async Task<PagedResult<Transaction>> GetOtherCategoryTransactionsPagedAsync(PaginationParams pagination)
+    {
+        var query = _context.Transactions
+            .Include(t => t.Source)
+            .Include(t => t.Category)
+            .Where(t => t.Category.Name == "Other")
+            .OrderBy(t => t.Email)
+            .ThenBy(t => t.TransactionDate);
+
+        return await query.ToPagedResultAsync(pagination);
+    }
+
     public async Task<IEnumerable<Transaction>> GetTransactionsWithoutDocumentationAsync()
     {
         return await _context.Transactions
@@ -420,6 +544,18 @@ public class TransactionService : ITransactionService
             .OrderBy(t => t.Email)
             .ThenBy(t => t.TransactionDate)
             .ToListAsync();
+    }
+
+    public async Task<PagedResult<Transaction>> GetTransactionsWithoutDocumentationPagedAsync(PaginationParams pagination)
+    {
+        var query = _context.Transactions
+            .Include(t => t.Source)
+            .Include(t => t.Category)
+            .Where(t => string.IsNullOrEmpty(t.DocumentUrl))
+            .OrderBy(t => t.Email)
+            .ThenBy(t => t.TransactionDate);
+
+        return await query.ToPagedResultAsync(pagination);
     }
 
     public async Task<IEnumerable<Transaction>> SearchTransactionsAsync(string searchQuery, int pageSize = 50, bool includeAlreadySplit = true)
@@ -450,6 +586,35 @@ public class TransactionService : ITransactionService
             .OrderByDescending(t => t.TransactionDate)
             .Take(pageSize)
             .ToListAsync();
+    }
+
+    public async Task<PagedResult<Transaction>> SearchTransactionsPagedAsync(string searchQuery, PaginationParams pagination, bool includeAlreadySplit = true)
+    {
+        var query = _context.Transactions
+            .Include(t => t.Source)
+            .Include(t => t.Category)
+            .Include(t => t.CabinClass)
+            .AsQueryable();
+
+        if (!includeAlreadySplit)
+        {
+            query = query.Where(t => !t.IsSplit && string.IsNullOrEmpty(t.OriginalTransactionId));
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            var searchTerm = searchQuery.ToLower();
+            query = query.Where(t => 
+                t.TransactionId.ToLower().Contains(searchTerm) ||
+                t.Email.ToLower().Contains(searchTerm) ||
+                (t.Vendor != null && t.Vendor.ToLower().Contains(searchTerm)) ||
+                (t.Address != null && t.Address.ToLower().Contains(searchTerm)) ||
+                (t.Notes != null && t.Notes.ToLower().Contains(searchTerm)));
+        }
+
+        query = query.OrderByDescending(t => t.TransactionDate);
+
+        return await query.ToPagedResultAsync(pagination);
     }
 
     public async Task<List<Transaction>> GetAllTransactionsAsync(bool includeRelated = false)
