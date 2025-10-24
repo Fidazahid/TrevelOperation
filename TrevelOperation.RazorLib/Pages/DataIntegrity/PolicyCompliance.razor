@@ -1,0 +1,300 @@
+@page "/data-integrity/policy-compliance"
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Services.Interfaces
+@using TrevelOperation.RazorLib.Components
+@inject IPolicyComplianceService PolicyComplianceService
+@inject ITransactionService TransactionService
+@inject IJSRuntime JSRuntime
+
+<div class="container mx-auto p-6">
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">Policy Compliance</h1>
+            <p class="text-gray-600 mt-1">Review transactions that violate company policies</p>
+        </div>
+        <div class="flex gap-2">
+            <button class="btn btn-outline btn-sm" @onclick="RefreshData">
+                🔄 Refresh
+            </button>
+            <button class="btn btn-primary btn-sm" @onclick="RunComplianceCheck">
+                ✅ Run Compliance Check
+            </button>
+        </div>
+    </div>
+
+    @if (stats != null)
+    {
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="stat bg-error text-error-content rounded-lg shadow">
+                <div class="stat-title text-white opacity-80">Critical Violations</div>
+                <div class="stat-value">@stats.CriticalCount</div>
+                <div class="stat-desc text-white opacity-60">Requires Immediate Action</div>
+            </div>
+            <div class="stat bg-warning text-warning-content rounded-lg shadow">
+                <div class="stat-title text-gray-800 opacity-80">High Priority</div>
+                <div class="stat-value">@stats.HighCount</div>
+                <div class="stat-desc text-gray-800 opacity-60">Requires Approval</div>
+            </div>
+            <div class="stat bg-info text-info-content rounded-lg shadow">
+                <div class="stat-title text-white opacity-80">Medium Priority</div>
+                <div class="stat-value">@stats.MediumCount</div>
+                <div class="stat-desc text-white opacity-60">Needs Review</div>
+            </div>
+            <div class="stat bg-base-200 rounded-lg shadow">
+                <div class="stat-title">Total Amount at Risk</div>
+                <div class="stat-value text-primary">$@stats.TotalAmount.ToString("N2")</div>
+                <div class="stat-desc">Non-compliant transactions</div>
+            </div>
+        </div>
+    }
+
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <!-- Filters -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <select class="select select-bordered" @bind="selectedSeverity">
+                    <option value="">All Severities</option>
+                    <option value="Critical">🔴 Critical</option>
+                    <option value="High">🟠 High</option>
+                    <option value="Medium">🟡 Medium</option>
+                    <option value="Low">⚪ Low</option>
+                </select>
+
+                <select class="select select-bordered" @bind="selectedViolationType">
+                    <option value="">All Violation Types</option>
+                    <option value="HighValueMeal">High Value Meal</option>
+                    <option value="LowValueLodging">Low Value Lodging</option>
+                    <option value="PremiumCabinClass">Premium Cabin Class</option>
+                    <option value="MissingParticipants">Missing Participants</option>
+                    <option value="MissingDocumentation">Missing Documentation</option>
+                    <option value="UncategorizedTransaction">Uncategorized</option>
+                    <option value="ExcessiveSpending">Excessive Spending</option>
+                    <option value="InvalidCurrency">Invalid Currency</option>
+                </select>
+
+                <select class="select select-bordered" @bind="requiresApprovalFilter">
+                    <option value="">All Transactions</option>
+                    <option value="true">Requires Approval</option>
+                    <option value="false">No Approval Needed</option>
+                </select>
+
+                <button class="btn btn-primary" @onclick="ApplyFilters">
+                    🔍 Filter
+                </button>
+            </div>
+
+            @if (loading)
+            {
+                <div class="flex justify-center items-center py-12">
+                    <span class="loading loading-spinner loading-lg"></span>
+                </div>
+            }
+            else if (complianceResults != null && complianceResults.Any())
+            {
+                <div class="space-y-4">
+                    @foreach (var result in pagedResults)
+                    {
+                        var transaction = transactions?.FirstOrDefault(t => t.TransactionId == result.TransactionId);
+                        if (transaction != null)
+                        {
+                            <div class="card bg-base-200 border-l-4 @GetSeverityBorderClass(result)">
+                                <div class="card-body">
+                                    <div class="flex justify-between items-start">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-2 mb-2">
+                                                <span class="badge @GetSeverityBadgeClass(result)">
+                                                    @GetSeverityIcon(result) @GetHighestSeverity(result)
+                                                </span>
+                                                <span class="font-mono text-sm">@transaction.TransactionId</span>
+                                                <span class="text-sm text-gray-600">@transaction.TransactionDate.ToString("dd/MM/yyyy")</span>
+                                            </div>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+                                                <div>
+                                                    <strong>Employee:</strong> @transaction.Email
+                                                </div>
+                                                <div>
+                                                    <strong>Vendor:</strong> @transaction.Vendor
+                                                </div>
+                                                <div>
+                                                    <strong>Amount:</strong> $@(transaction.AmountUSD?.ToString("N2") ?? "0.00")
+                                                </div>
+                                            </div>
+
+                                            <!-- Violations List -->
+                                            <div class="space-y-2">
+                                                @foreach (var violation in result.Violations)
+                                                {
+                                                    <div class="alert @GetViolationAlertClass(violation.Severity) py-2">
+                                                        <div>
+                                                            <div class="font-semibold flex items-center gap-2">
+                                                                @violation.Type.ToString()
+                                                                @if (violation.RequiresApproval)
+                                                                {
+                                                                    <span class="badge badge-error badge-sm">Approval Required</span>
+                                                                }
+                                                            </div>
+                                                            <div class="text-sm">@violation.Description</div>
+                                                            <div class="text-xs text-gray-600 mt-1">
+                                                                <strong>Policy:</strong> @violation.Rule
+                                                            </div>
+                                                            @if (violation.ThresholdValue.HasValue && violation.ActualValue.HasValue)
+                                                            {
+                                                                <div class="text-xs text-gray-600">
+                                                                    <strong>Threshold:</strong> $@violation.ThresholdValue.Value.ToString("N2") 
+                                                                    | <strong>Actual:</strong> $@violation.ActualValue.Value.ToString("N2")
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+
+                                        <!-- Actions -->
+                                        <div class="flex flex-col gap-2 ml-4">
+                                            <button class="btn btn-sm btn-success" @onclick="() => ApproveException(result)">
+                                                ✅ Approve
+                                            </button>
+                                            <button class="btn btn-sm btn-warning" @onclick="() => FlagTransaction(result)">
+                                                🚩 Flag
+                                            </button>
+                                            <button class="btn btn-sm btn-info" @onclick="() => ViewTransaction(transaction)">
+                                                👁️ View
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+
+                <!-- Pagination -->
+                <div class="flex justify-between items-center mt-6">
+                    <div class="text-sm text-gray-600">
+                        Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, filteredResults.Count()) of @filteredResults.Count() violations
+                    </div>
+                    <div class="join">
+                        <button class="join-item btn btn-sm" disabled="@(currentPage <= 1)" @onclick="() => ChangePage(currentPage - 1)">
+                            « Previous
+                        </button>
+                        <button class="join-item btn btn-sm btn-active">
+                            Page @currentPage
+                        </button>
+                        <button class="join-item btn btn-sm" disabled="@(currentPage >= totalPages)" @onclick="() => ChangePage(currentPage + 1)">
+                            Next »
+                        </button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-12">
+                    <div class="text-6xl mb-4">✅</div>
+                    <h3 class="text-xl font-semibold text-gray-600 mb-2">All transactions are compliant!</h3>
+                    <p class="text-gray-500">No policy violations detected. Great job!</p>
+                    <button class="btn btn-primary mt-4" @onclick="RunComplianceCheck">
+                        Run Compliance Check
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Approve Exception Modal -->
+@if (showApproveModal && selectedResult != null)
+{
+    <div class="modal modal-open">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">Approve Exception</h3>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Approved By</span>
+                </label>
+                <input type="text" placeholder="Your Name/Email" class="input input-bordered" @bind="approvedBy" />
+            </div>
+
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Approval Reason</span>
+                </label>
+                <textarea class="textarea textarea-bordered h-24" placeholder="Explain why this exception is approved..." @bind="approvalReason"></textarea>
+            </div>
+
+            <div class="alert alert-warning mb-4">
+                <div>
+                    <span>⚠️ This will mark the transaction as valid and add the approval to the notes.</span>
+                </div>
+            </div>
+
+            <div class="modal-action">
+                <button class="btn btn-success" @onclick="ConfirmApprove" disabled="@(string.IsNullOrWhiteSpace(approvedBy) || string.IsNullOrWhiteSpace(approvalReason))">
+                    ✅ Approve Exception
+                </button>
+                <button class="btn" @onclick="CloseApproveModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Flag Transaction Modal -->
+@if (showFlagModal && selectedResult != null)
+{
+    <div class="modal modal-open">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">Flag Transaction</h3>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Flag Reason</span>
+                </label>
+                <textarea class="textarea textarea-bordered h-24" placeholder="Explain why this transaction is being flagged..." @bind="flagReason"></textarea>
+            </div>
+
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Violation Type</span>
+                </label>
+                <select class="select select-bordered" @bind="selectedFlagViolationType">
+                    <option value="">Select violation type</option>
+                    @foreach (var violation in selectedResult.Violations)
+                    {
+                        <option value="@violation.Type.ToString()">@violation.Type.ToString()</option>
+                    }
+                </select>
+            </div>
+
+            <div class="alert alert-error mb-4">
+                <div>
+                    <span>🚩 This will flag the transaction for review and add the reason to the notes.</span>
+                </div>
+            </div>
+
+            <div class="modal-action">
+                <button class="btn btn-warning" @onclick="ConfirmFlag" disabled="@(string.IsNullOrWhiteSpace(flagReason) || string.IsNullOrWhiteSpace(selectedFlagViolationType))">
+                    🚩 Flag Transaction
+                </button>
+                <button class="btn" @onclick="CloseFlagModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Transaction Detail Modal -->
+<TransactionDetailModal 
+    @ref="transactionDetailModal" 
+    Transaction="selectedTransaction"
+    IsVisible="showTransactionDetailModal"
+    OnClose="CloseTransactionDetailModal"
+    OnEdit="HandleTransactionEdit"
+    OnDelete="HandleTransactionDelete" />
+
+<!-- Transaction Edit Modal -->
+<TransactionEditModal 
+    @ref="transactionEditModal"
+    OnTransactionUpdated="HandleTransactionUpdated" />
+
+

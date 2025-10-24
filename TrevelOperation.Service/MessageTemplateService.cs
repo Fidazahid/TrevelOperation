@@ -1,16 +1,27 @@
 using System.Text;
 using TravelOperation.Core.Models.Entities;
+using TravelOperation.Core.Services.Interfaces;
 
 namespace TrevelOperation.Service;
 
 public class MessageTemplateService : IMessageTemplateService
 {
+    private readonly ISettingsService _settingsService;
+    
+    // Default company domains - can be extended via configuration
     private readonly HashSet<string> CompanyDomains = new(StringComparer.OrdinalIgnoreCase)
     {
         "@company.com",
         "@wsc.com",
-        "@subsidiary.com"
+        "@subsidiary.com",
+        "@walkme.com",
+        "@walkmeinc.com"
     };
+
+    public MessageTemplateService(ISettingsService settingsService)
+    {
+        _settingsService = settingsService;
+    }
 
     public string GenerateMealsMessage(Transaction transaction, List<string>? participants = null)
     {
@@ -213,6 +224,39 @@ public class MessageTemplateService : IMessageTemplateService
         return analysis;
     }
 
+    public void AddCompanyDomain(string domain)
+    {
+        if (!string.IsNullOrWhiteSpace(domain))
+        {
+            // Ensure domain starts with @
+            var normalizedDomain = domain.StartsWith("@") ? domain : $"@{domain}";
+            CompanyDomains.Add(normalizedDomain);
+        }
+    }
+
+    public void AddCompanyDomains(IEnumerable<string> domains)
+    {
+        foreach (var domain in domains)
+        {
+            AddCompanyDomain(domain);
+        }
+    }
+
+    public IReadOnlyCollection<string> GetCompanyDomains()
+    {
+        return CompanyDomains.ToList().AsReadOnly();
+    }
+
+    public bool IsCompanyEmail(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains("@"))
+        {
+            return false;
+        }
+
+        return CompanyDomains.Any(domain => email.EndsWith(domain, StringComparison.OrdinalIgnoreCase));
+    }
+
     private bool IsInternalParticipant(string participant, List<string> internalEmails)
     {
         // Check if exact match in internal emails list
@@ -264,10 +308,29 @@ public class MessageTemplateService : IMessageTemplateService
         };
     }
 
+    private async Task<List<string>> GetInternalEmailsAsync()
+    {
+        try
+        {
+            // Get all employee emails from Headcount table
+            var headcount = await _settingsService.GetAllHeadcountAsync();
+            return headcount
+                .Where(h => !string.IsNullOrWhiteSpace(h.Email))
+                .Select(h => h.Email)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch
+        {
+            // Fallback to empty list if headcount service fails
+            return new List<string>();
+        }
+    }
+
     private List<string> GetDefaultInternalEmails()
     {
-        // This should ideally come from a database or configuration
-        // For now, return empty list - should be injected with actual employee emails
-        return new List<string>();
+        // Synchronous wrapper for backward compatibility
+        // In production, prefer async methods
+        return GetInternalEmailsAsync().GetAwaiter().GetResult();
     }
 }

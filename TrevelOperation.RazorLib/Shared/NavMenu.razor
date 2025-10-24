@@ -141,9 +141,20 @@
         if (userRole == "Finance")
         {
             items.Add(new NavMenuItem { IsSection = true, Label = "DATA INTEGRITY" });
-            items.Add(new NavMenuItem { Icon = "🛡️", Label = "Controls", Href = "/data-integrity/controls" });
+            
+            // Controls subsection
+            items.Add(new NavMenuItem { Icon = "🛡️", Label = "Controls", IsSection = true });
+            items.Add(new NavMenuItem { Icon = "✈️", Label = "  Airfare", Href = "/airfare-control" });
+            items.Add(new NavMenuItem { Icon = "🍽️", Label = "  Meals", Href = "/meals-control" });
+            items.Add(new NavMenuItem { Icon = "🏨", Label = "  Lodging", Href = "/lodging-control" });
+            items.Add(new NavMenuItem { Icon = "🍸", Label = "  Client Entertainment", Href = "/client-entertainment-control" });
+            items.Add(new NavMenuItem { Icon = "❔", Label = "  Other", Href = "/other-control" });
+            items.Add(new NavMenuItem { Icon = "📄", Label = "  Missing Docs", Href = "/missing-documentation-control" });
+            items.Add(new NavMenuItem { Icon = "🛡️", Label = "  Policy Compliance", Href = "/data-integrity/policy-compliance" });
+            
+            // Engines
             items.Add(new NavMenuItem { Icon = "🔗", Label = "Matching Engine", Href = "/data-integrity/matching" });
-            items.Add(new NavMenuItem { Icon = "✂️", Label = "Split Engine", Href = "/data-integrity/split" });
+            items.Add(new NavMenuItem { Icon = "✂️", Label = "Split Engine", Href = "/data-integrity/split-engine" });
         }
 
         // Settings - Finance only (full system configuration)

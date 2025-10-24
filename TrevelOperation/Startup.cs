@@ -51,6 +51,7 @@ public static class Startup
         services.AddScoped<IMatchingService, MatchingService>();
         services.AddScoped<ISplitService, SplitService>();
         services.AddScoped<IExportService, ExportService>();
+        services.AddScoped<IPolicyComplianceService, PolicyComplianceService>();
     }
     
     private static void EnsureDatabaseCreated()

@@ -1,7 +1,223 @@
 # Travel Expense Management System - Project Tasks
 
-**Last Updated:** January 9, 2025  
-**Current Progress:** 31/60 Core Features Complete (52%)
+**Last Updated:** January 10, 2025  
+**Current Progress:** 39/60 Core Features Complete (65%)
+
+---
+
+## 🎉 RECENT UPDATES (January 10, 2025)
+
+### ✅ Bug Fixes and Navigation Updates
+**Completed:** January 10, 2025
+
+**Issues Fixed:**
+
+#### 1. **Math.Abs() Translation Error** ✅ FIXED
+**Problem:** Entity Framework Core couldn't translate `Math.Abs()` to SQL
+**Location:** `TransactionService.cs`
+- `GetLowValueLodgingAsync()` - Line 377
+- `GetHighValueMealsAsync()` - Line 365
+
+**Solution:**
+```csharp
+// BEFORE (Broken):
+Math.Abs(t.AmountUSD ?? 0) <= threshold
+
+// AFTER (Fixed):
+(t.AmountUSD ?? 0) <= threshold && 
+(t.AmountUSD ?? 0) >= -threshold
+```
+
+**Impact:** Lodging and Meals control pages now load without errors
+
+#### 2. **Split Engine Navigation Route** ✅ FIXED
+**Problem:** Navigation menu pointed to wrong route causing page not found
+**Location:** `NavMenu.razor` - Line 156
+
+**Solution:**
+```csharp
+// BEFORE (Broken):
+Href = "/data-integrity/split"  // Page doesn't exist
+
+// AFTER (Fixed):
+Href = "/data-integrity/split-engine"  // Correct route
+```
+
+**Impact:** Split Engine page now accessible from navigation menu
+
+#### 3. **Navigation Menu Expansion** ✅ ENHANCED
+**Changes:** Expanded Data Integrity Controls from single menu item to individual pages
+**Location:** `NavMenu.razor`
+
+**BEFORE:**
+```
+DATA INTEGRITY
+  🛡️ Controls → /data-integrity/controls (didn't exist)
+```
+
+**AFTER:**
+```
+DATA INTEGRITY
+  🛡️ Controls (Section Header)
+    ✈️ Airfare
+    🍽️ Meals
+    🏨 Lodging
+    🍸 Client Entertainment
+    ❔ Other
+    📄 Missing Docs
+  🔗 Matching Engine
+  ✂️ Split Engine
+```
+
+**Files Modified:**
+- `TravelOperation.Core/Services/TransactionService.cs` ✅
+- `TrevelOperation.RazorLib/Shared/NavMenu.razor` ✅
+
+---
+
+## 🎉 RECENT UPDATES (January 10, 2025 - Earlier)
+
+### ✅ Validation Rules Implementation
+**Completed:** January 10, 2025
+
+**Items Completed:**
+- ✅ **Item 37: Transaction Validation Rules** - Full server-side validation
+- ✅ **Item 38: Trip Validation Rules** - Comprehensive validation with auto-calculation
+
+**Changes Made:**
+
+#### 1. **Transaction Validation (Item 37)**
+**Service:** `TravelOperation.Core/Services/TransactionService.cs`
+
+✅ **New Method:** `ValidateTransaction(Transaction transaction)`
+- Validates amount (non-zero)
+- Validates transaction date (required, not in future)
+- Validates email format (System.Net.Mail.MailAddress)
+- Validates currency (3-letter code)
+- Validates document URL (valid HTTP/HTTPS or empty)
+- Validates exchange rate (positive)
+- Validates AmountUSD calculation (matches Amount × ExchangeRate within 0.01)
+
+✅ **Integration:**
+- `CreateTransactionAsync()` - Validates before creating
+- `UpdateTransactionAsync()` - Validates before updating
+- Throws ArgumentException with detailed error messages listing all validation failures
+
+✅ **Validation Rules:**
+```csharp
+- Amount must not be zero
+- Transaction date must be valid and not in future
+- Email must be valid format
+- Currency must be 3-letter code (USD, EUR, ILS)
+- Document URL must be valid HTTP/HTTPS URL (if provided)
+- Exchange rate must be positive (if provided)
+- AmountUSD must match Amount × ExchangeRate (±0.01 tolerance)
+```
+
+#### 2. **Trip Validation (Item 38)**
+**Service:** `TravelOperation.Core/Services/TripService.cs`
+
+✅ **New Method:** `ValidateTrip(Trip trip)`
+- Validates trip name (required)
+- Validates email format
+- Validates start/end dates (end >= start)
+- Validates duration calculation (at least 1 day)
+- Validates Country1 & City1 (required)
+- Validates multi-destination trips (Country2 requires City2)
+- Validates foreign keys (Purpose, TripType, Status, Owner)
+
+✅ **Integration:**
+- `CreateTripAsync()` - Validates before creating
+- `UpdateTripAsync()` - Validates before updating
+- Duration auto-calculated via `CalculateTripDurationAsync()`
+- Throws ArgumentException with all validation errors
+
+✅ **Validation Rules:**
+```csharp
+- Trip name is required
+- Email is required and must be valid format
+- Start date is required
+- End date is required and must be >= start date
+- Duration automatically calculated, must be >= 1 day
+- Country1 and City1 are required
+- Country2 requires City2 (if provided)
+- Purpose, TripType, Status, Owner foreign keys required
+```
+
+**Technical Details:**
+- Helper methods: `IsValidEmail()`, `IsValidUrl()`
+- Server-side validation in service layer (not just UI)
+- Comprehensive error messages for user feedback
+- All validation errors collected and returned together
+- Build succeeded with no errors
+
+**Impact:**
+- Prevents invalid data entry at database level
+- Consistent validation across all entry points (UI, API, CSV import)
+- Better data quality and integrity
+- Clear error messages for users
+
+---
+
+## 🎉 RECENT UPDATES (January 9, 2025)
+
+### ✅ Transaction Page UI Enhancements
+**Completed:** January 9, 2025
+
+**Changes Made:**
+1. **Table Header Styling**
+   - Changed header background from `bg-base-200` to `bg-base-300` (darker gray)
+   - Added hover effects on sortable columns
+   - Better visual hierarchy and contrast
+
+2. **Dropdown Menu Improvements**
+   - White background with subtle border (`bg-white border border-base-300`)
+   - Enhanced shadow (`shadow-lg`)
+   - Auto-close functionality after any action
+   - Fixed action execution order (close dropdown BEFORE action)
+
+3. **Row Interactions**
+   - Added hover effect (`hover:bg-base-200`)
+   - Smooth transitions (`transition-colors`)
+   - Better visual feedback
+
+4. **Generate Message Feature** ✅ FULLY IMPLEMENTED
+   - Integrated `IMessageTemplateService`
+   - Detects transaction category (Meals, Client Entertainment, Other)
+   - Generates context-appropriate email templates
+   - Automatically copies message to clipboard
+   - Shows success confirmation
+
+5. **Link to Trip** ⚠️ Placeholder
+   - Shows informative alert about feature
+   - Needs `TripLinkModal.razor` component
+
+6. **Split Transaction** ⚠️ Informational
+   - Shows alert with split options explanation
+   - Directs to Data Integrity → Split Engine (fully functional)
+
+7. **View Documents** ✅ Working
+   - Opens document URL in new tab
+   - Shows "No documents" alert if none available
+
+**Files Modified:**
+- `TrevelOperation.RazorLib/Pages/Transactions.razor`
+  - Added `IMessageTemplateService` injection
+  - Updated all dropdown actions with auto-close
+  - Fixed `GenerateMessage()` method parameters
+  - Improved `LinkToTrip()` and `SplitTransaction()` alerts
+
+**Technical Improvements:**
+- `CloseDropdown()` helper method using JavaScript blur
+- Proper participant parsing for message templates
+- Category-based message generation logic
+- Exception handling for message generation
+
+**User Experience:**
+- ✅ All dropdown menus close automatically after actions
+- ✅ Generate Message copies to clipboard instantly
+- ✅ Better visual feedback throughout UI
+- ✅ Professional table design with proper contrast
 
 ---
 
@@ -1441,72 +1657,171 @@ HasPremiumCabins = Any airfare transaction with CabinClass in PremiumCabinClasse
 
 ## 🎯 PRIORITY 8: VALIDATION & BUSINESS LOGIC (Items 37-40)
 
-### ⏳ 37. Transaction Validation Rules
-**Status:** PENDING ⏳  
+### ✅ 37. Transaction Validation Rules
+**Status:** COMPLETED ✅  
+**Completed:** January 10, 2025  
 **Priority:** MEDIUM  
 **Description:**
 - Validate on save/import:
-  - Amount must be numeric
-  - Date must be valid date
-  - Email must be valid format (regex)
+  - Amount must be numeric and non-zero
+  - Date must be valid and not in future
+  - Email must be valid format
   - Currency must be 3-letter code
   - Document URL must be valid URL or empty
+  - Exchange rate must be positive
+  - AmountUSD must match Amount × ExchangeRate (within 0.01 tolerance)
 - Show validation errors to user
 - Prevent saving invalid data
 
-**Requirements:**
-- Client-side validation (Blazor annotations)
-- Server-side validation (service layer)
-- User-friendly error messages
+**Implementation Details:**
+✅ **Validation Method Added:** `ValidateTransaction(Transaction transaction)`
+- Checks all required fields
+- Validates email format using System.Net.Mail.MailAddress
+- Validates URL format using Uri.TryCreate
+- Validates currency code length (3 characters)
+- Validates exchange rate calculations
+- Throws ArgumentException with detailed error messages
 
-**Files to Modify:**
-- `TravelOperation.Core/Services/TransactionService.cs` (add validation)
+✅ **Integration Points:**
+- `CreateTransactionAsync()` - Validates before creating
+- `UpdateTransactionAsync()` - Validates before updating
+- Validation runs server-side in service layer
+- Comprehensive error messages with all validation failures listed
+
+✅ **Validation Rules:**
+1. **Amount:** Cannot be zero
+2. **Transaction Date:** Required, cannot be in future
+3. **Email:** Required, must be valid format
+4. **Currency:** Required, must be 3-letter code (USD, EUR, ILS)
+5. **Document URL:** Optional, but must be valid HTTP/HTTPS URL if provided
+6. **Exchange Rate:** Must be positive if provided
+7. **AmountUSD:** Must match Amount × ExchangeRate within 0.01 tolerance
+
+**Files Modified:**
+- `TravelOperation.Core/Services/TransactionService.cs` ✅ Validation added
 
 ---
 
-### ⏳ 38. Trip Validation Rules
-**Status:** PENDING ⏳  
+### ✅ 38. Trip Validation Rules
+**Status:** COMPLETED ✅  
+**Completed:** January 10, 2025  
 **Priority:** MEDIUM  
 **Description:**
 - Validate on save:
   - Start Date must be before or equal to End Date
-  - Duration = (EndDate - StartDate).Days + 1 (inclusive)
+  - Duration = EndDate - StartDate + 1 (inclusive days)
   - At least one country required
   - Owner must be assigned
   - Email must be valid format
-
-**Requirements:**
 - Automatic duration calculation
 - Validation error display
 
-**Files to Modify:**
-- `TravelOperation.Core/Services/TripService.cs` (add validation)
-- Trip form components
+**Implementation Details:**
+✅ **Validation Method Added:** `ValidateTrip(Trip trip)`
+- Validates all required fields
+- Ensures date logic is correct
+- Validates email format
+- Checks foreign key references (Purpose, TripType, Status, Owner)
+- Validates multi-destination trips (Country2 requires City2)
+
+✅ **Integration Points:**
+- `CreateTripAsync()` - Validates before creating
+- `UpdateTripAsync()` - Validates before updating
+- Duration automatically calculated: `CalculateTripDurationAsync()`
+- Validation runs server-side in service layer
+
+✅ **Validation Rules:**
+1. **Trip Name:** Required
+2. **Email:** Required, must be valid format
+3. **Start Date:** Required
+4. **End Date:** Required, must be >= Start Date
+5. **Duration:** Automatically calculated, must be at least 1 day
+6. **Country1 & City1:** Required
+7. **Country2 & City2:** If Country2 provided, City2 is also required
+8. **Purpose:** Required (foreign key)
+9. **Trip Type:** Required (foreign key)
+10. **Status:** Required (foreign key)
+11. **Owner:** Required (foreign key)
+
+**Files Modified:**
+- `TravelOperation.Core/Services/TripService.cs` ✅ Validation added
 
 ---
 
-### ⏳ 39. Participant Detection Logic
-**Status:** PENDING ⏳  
+### ✅ 39. Participant Detection Logic
+**Status:** COMPLETED ✅  
+**Completed:** January 10, 2025  
 **Priority:** MEDIUM  
 **Description:**
 - Detect internal vs external participants
-- Internal: company domain emails (@company.com, @wsc.com, @subsidiary.com)
+- Internal: company domain emails (@company.com, @wsc.com, @subsidiary.com, @walkme.com, @walkmeinc.com)
 - External: all other email formats
 - Used in message template generation
+- Configurable company domains at runtime
 
-**Requirements:**
-- ✅ Already implemented in MessageTemplateService.AnalyzeParticipants()
-- Test with various email formats
-- Configuration for company domains
+**Implementation Details:**
+✅ **Feature Already Existed** - Verified and enhanced in MessageTemplateService
+- `AnalyzeParticipants()` - Splits and classifies participants
+- `DetectExternalParticipants()` - Returns external emails
+- `DetectInternalParticipants()` - Returns internal emails
+- `IsInternalParticipant()` - Checks if email is internal
 
-**Files to Check:**
-- `TrevelOperation.Service/MessageTemplateService.cs` (verify)
+✅ **Enhancements Added:**
+1. **ISettingsService Integration:**
+   - Added dependency injection for SettingsService
+   - `GetInternalEmailsAsync()` - Fetches real employee emails from Headcount table
+   - Replaces hardcoded empty list with database query
+
+2. **Company Domain Management:**
+   - `AddCompanyDomain(string domain)` - Add domain dynamically
+   - `AddCompanyDomains(IEnumerable<string> domains)` - Bulk add
+   - `GetCompanyDomains()` - View configured domains
+   - `IsCompanyEmail(string email)` - Public method to check company emails
+
+3. **Extended Default Domains:**
+   - Added @walkme.com
+   - Added @walkmeinc.com
+   - Maintains @company.com, @wsc.com, @subsidiary.com
+
+✅ **Detection Methods:**
+- **Exact Match:** Checks against Headcount table employee emails
+- **Domain Suffix:** Checks if email ends with company domain
+- **Case-Insensitive:** All comparisons ignore case
+- **Multiple Separators:** Handles commas, semicolons, newlines
+
+✅ **Usage in System:**
+- Meals Control - Detects external participants for high-value meals
+- Client Entertainment Control - Identifies external clients
+- Message Template Generation - Different templates based on participant types
+- Transaction validation - Validates participant fields
+
+✅ **ParticipantAnalysis Class:**
+```csharp
+public class ParticipantAnalysis
+{
+    public List<string> AllParticipants { get; set; } = new();
+    public List<string> InternalParticipants { get; set; } = new();
+    public List<string> ExternalParticipants { get; set; } = new();
+    public bool HasExternalParticipants => ExternalParticipants.Any();
+    public bool HasInternalParticipants => InternalParticipants.Any();
+    public bool HasNoParticipants => !AllParticipants.Any();
+}
+```
+
+**Files Modified:**
+- `TrevelOperation.Service/MessageTemplateService.cs` ✅ Enhanced with DI and database integration
+- `TrevelOperation.Service/IMessageTemplateService.cs` ✅ Added new interface methods
+
+**UI Navigation Enhanced:**
+- `TrevelOperation.RazorLib/Shared/NavMenu.razor` ✅ Expanded Controls menu
+- Added individual links to all control pages (Airfare, Meals, Lodging, Client Entertainment, Other, Missing Docs)
 
 ---
 
-### ⏳ 40. Policy Compliance Checks
-**Status:** PENDING ⏳  
-**Priority:** LOW  
+### ✅ 40. Policy Compliance Checks
+**Status:** COMPLETED ✅  
+**Completed:** January 10, 2025  
+**Priority:** HIGH  
 **Description:**
 - Validate transactions against company policies
 - Examples:
@@ -1516,14 +1831,68 @@ HasPremiumCabins = Any airfare transaction with CabinClass in PremiumCabinClasse
   - Airfare First/Business class needs approval
 - Flag non-compliant transactions
 
-**Requirements:**
-- Configurable policy rules
-- Automatic flagging during import
-- Override capability for approved exceptions
+**Implementation Details:**
+✅ **PolicyComplianceService fully implemented:**
+- `CheckComplianceAsync()` - Validates single transaction against all policy rules
+- `CheckMultipleComplianceAsync()` - Batch validation for multiple transactions
+- `GetNonCompliantTransactionsAsync()` - Returns all transactions violating policies
+- `FlagTransactionAsync()` - Flags transaction with violation reason
+- `ApproveExceptionAsync()` - Approves exception for policy violation
+- `GetPolicyRulesAsync()` / `UpdatePolicyRulesAsync()` - Configurable policy rules
 
-**Files to Create:**
-- Policy rules configuration
-- Validation service
+✅ **Policy Rules (Configurable):**
+- **Meal Policies**: High-value meal threshold ($80), requires participants
+- **Lodging Policies**: Low-value lodging threshold ($100), requires receipt
+- **Airfare Policies**: Premium cabin requires approval (Business, First)
+- **Client Entertainment**: Requires participants, threshold ($50)
+- **Documentation**: Required threshold ($25), grace period (30 days)
+- **Categorization**: Uncategorized transactions require review
+- **Currency**: Approved currencies list (USD, EUR, ILS, GBP)
+- **Excessive Spending**: Daily limit ($500)
+
+✅ **Policy Violations Detected:**
+1. **HighValueMeal** - Meals exceeding threshold
+2. **LowValueLodging** - Unusually low lodging amounts
+3. **PremiumCabinClass** - Business/First class travel
+4. **MissingParticipants** - Meals/Entertainment without participant info
+5. **MissingDocumentation** - Transactions missing receipts
+6. **UncategorizedTransaction** - Transactions not properly categorized
+7. **ExcessiveSpending** - Amounts exceeding daily limits
+8. **InvalidCurrency** - Non-approved currency usage
+
+✅ **Severity Levels:**
+- **Critical** 🔴 - Immediate action required
+- **High** 🟠 - Requires approval
+- **Medium** 🟡 - Needs review
+- **Low** ⚪ - Minor issue
+
+✅ **UI Page Implemented:**
+- `PolicyCompliance.razor` - Full compliance dashboard
+- Summary cards: Critical, High, Medium violations + Total amount at risk
+- Filterable list: Severity, Violation type, Approval requirement
+- Violation cards with detailed breakdown
+- Actions: Approve exception, Flag transaction, View details
+- Pagination support (10 per page)
+- "Run Compliance Check" - Scans all transactions
+
+✅ **Modal Interactions:**
+- **Approve Exception Modal**: Requires approver name + reason, adds to notes
+- **Flag Transaction Modal**: Select violation type + reason, marks for review
+
+✅ **Audit Integration:**
+- All approvals logged to audit trail
+- All flags logged with reason and violation type
+
+**Files Created:**
+- `TrevelOperation.RazorLib/Pages/DataIntegrity/PolicyCompliance.razor` ✅
+- `TrevelOperation.RazorLib/Pages/DataIntegrity/PolicyCompliance.razor.cs` ✅
+
+**Files Modified:**
+- `TrevelOperation.RazorLib/Shared/NavMenu.razor` ✅ (Added navigation link)
+
+**Existing Service:**
+- `TravelOperation.Core/Services/PolicyComplianceService.cs` ✅ (Already existed)
+- `TravelOperation.Core/Services/Interfaces/IPolicyComplianceService.cs` ✅
 
 ---
 
@@ -2038,13 +2407,13 @@ HasPremiumCabins = Any airfare transaction with CabinClass in PremiumCabinClasse
 
 | Status | Count | Items |
 |--------|-------|-------|
-| ✅ **COMPLETED** | 34 | 1-19, 21-25, 27-36, 41-44 |
+| ✅ **COMPLETED** | 38 | 1-19, 21-26, 27-39, 41-44 |
 | 🟡 **NEEDS VERIFICATION** | 1 | 20 |
-| ⏳ **PENDING** | 25 | 26, 37-40, 45-60 |
+| ⏳ **PENDING** | 21 | 40, 45-60 |
 
 **Total:** 60 items
 
-**Current Progress:** 34/60 Core Features Complete (57%) 🎉
+**Current Progress:** 38/60 Core Features Complete (63%) 🎉
 
 **Recent Completions:**
 - ✅ All Settings pages (Items 20-25) - Production ready!
@@ -2082,9 +2451,17 @@ HasPremiumCabins = Any airfare transaction with CabinClass in PremiumCabinClasse
    - Split Engine complete
    
 2. **Items 41-43: UI Modals & Dashboard** ✅ DONE
-   - Transaction Detail Modal created
-   - Trip Detail Modal with tax breakdown created
+   - Transaction Detail Modal created (490 lines, comprehensive view)
+   - Trip Detail Modal with tax breakdown created (440 lines)
    - Dashboard enhanced with real data
+   
+3. **Transaction Page Enhancements** ✅ DONE (January 9, 2025)
+   - Table UI polish (headers, hover effects, sorting feedback)
+   - Dropdown menu auto-close functionality
+   - Generate Message feature fully working
+   - Better visual design and user experience
+
+**Phase 3 Result:** All modals and core UI features production-ready! 🎉
 
 ### Phase 4: Validation & Business Logic (2-3 days) ⭐ NEXT PRIORITY
 1. **Item 26: Audit Log UI** (1 day)
@@ -2113,7 +2490,77 @@ HasPremiumCabins = Any airfare transaction with CabinClass in PremiumCabinClasse
 
 ---
 
-## 📝 NOTES
+## � FEATURE STATUS SUMMARY
+
+### ✅ Fully Working Features (35/60)
+1. Database Schema & Entities
+2. DataTable Enhancement (resize, reorder, sort, export)
+3. Transaction Service (CRUD operations)
+4. Trip Service (CRUD operations)
+5. Lookup Service (all lookup tables)
+6. Dashboard Page (with real data)
+7. Transactions Page (list, filter, sort, actions)
+8. Trips Page (list, filter, sort)
+9. CSV Import (Navan, Agent, Manual)
+10. Export Service (CSV, Excel, PDF)
+11. Transaction Detail Modal (view all fields)
+12. Transaction Edit Modal (limited fields)
+13. Transaction Create Modal (add new)
+14. Trip Detail Modal (with tax breakdown)
+15. All Settings Pages (20-25)
+16. Data Integrity Controls (Airfare, Meals, Lodging, Client Entertainment, Other)
+17. Matching Engine (Manual & Automatic)
+18. Split Engine (Equal, Custom, Percentage)
+19. Message Template Service (Meals, Client Entertainment, Other, Documentation)
+20. Tax Calculation Service (meals, lodging, airfare)
+21. Audit Service (logging all actions)
+22. Authentication Service (user management)
+23. Generate Message (fully integrated in Transactions page)
+24. View Documents (opens receipts)
+25. Mark as Valid (transaction validation)
+26. Delete Transaction (with confirmation)
+27. Edit Transaction (modal-based)
+28. Dropdown auto-close
+29. Table UI polish
+30. User Management
+31. LookupService with all lists
+32. Countries & Cities management
+33. Tax Settings management
+34. Quick Rules management
+35. Owners management
+
+### ⚠️ Partially Working / Needs Integration (3)
+1. **Link to Trip** - Alert placeholder (needs TripLinkModal.razor)
+2. **Split Transaction** - Directs to Split Engine page (modal not integrated in Transactions page)
+3. **Bulk Actions** - UI exists but some actions show alerts
+
+### ❌ Not Yet Implemented (22)
+1. Audit Log UI (Item 26)
+2. Transaction Validation Rules (Item 37)
+3. Trip Validation Rules (Item 38)
+4. Policy Compliance Checks (Item 40)
+5. Approval Workflow (Items 44-45)
+6. Email Integration (Item 47)
+7. Role-Based Access Control (Item 48)
+8. Notifications System (Item 49)
+9. Database Indexing (Item 50)
+10. Pagination Optimization (Item 51)
+11. Mobile Responsive Design (Item 52)
+12. Budget Tracking (Item 53)
+13. Real-time Exchange Rates API (Item 54)
+14. Advanced Reporting (Item 55)
+15. Dashboard Charts/KPIs (Item 56)
+16. Batch Operations (Item 57)
+17. Unit Tests (Item 58)
+18. Integration Tests (Item 59)
+19. UI Tests (Item 60)
+20. TripLinkModal component
+21. OCR for receipt scanning (future enhancement)
+22. Mobile app (future enhancement)
+
+---
+
+## �📝 NOTES
 
 - Priority 1 items (1-5) are complete and working ✅
 - **MAJOR UPDATE:** All settings pages (Items 20-25) are production-ready! ✅

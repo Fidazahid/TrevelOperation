@@ -123,6 +123,9 @@ public class TripService : ITripService
 
     public async Task<Trip> CreateTripAsync(Trip trip)
     {
+        // Validate trip before creating
+        ValidateTrip(trip);
+        
         trip.Duration = await CalculateTripDurationAsync(trip.StartDate, trip.EndDate);
         trip.CreatedAt = DateTime.UtcNow;
         trip.ModifiedAt = DateTime.UtcNow;
@@ -141,6 +144,9 @@ public class TripService : ITripService
         if (existing == null)
             throw new ArgumentException($"Trip with ID {trip.TripId} not found");
 
+        // Validate trip before updating
+        ValidateTrip(trip);
+        
         trip.Duration = await CalculateTripDurationAsync(trip.StartDate, trip.EndDate);
         trip.ModifiedAt = DateTime.UtcNow;
         
@@ -148,6 +154,118 @@ public class TripService : ITripService
         await _context.SaveChangesAsync();
 
         await _auditService.LogActionAsync("System", "Edit", "Trips", trip.TripId.ToString(), existing, trip);
+    }
+
+    /// <summary>
+    /// Validates a trip according to business rules
+    /// </summary>
+    /// <param name="trip">The trip to validate</param>
+    /// <exception cref="ArgumentException">Thrown when validation fails</exception>
+    private void ValidateTrip(Trip trip)
+    {
+        var errors = new List<string>();
+
+        // Trip name is required
+        if (string.IsNullOrWhiteSpace(trip.TripName))
+        {
+            errors.Add("Trip name is required.");
+        }
+
+        // Email is required and must be valid format
+        if (string.IsNullOrWhiteSpace(trip.Email))
+        {
+            errors.Add("Email is required.");
+        }
+        else if (!IsValidEmail(trip.Email))
+        {
+            errors.Add("Email format is invalid.");
+        }
+
+        // Start Date must be before or equal to End Date
+        if (trip.StartDate == default(DateTime))
+        {
+            errors.Add("Start date is required.");
+        }
+
+        if (trip.EndDate == default(DateTime))
+        {
+            errors.Add("End date is required.");
+        }
+
+        if (trip.EndDate < trip.StartDate)
+        {
+            errors.Add("End date must be on or after start date.");
+        }
+
+        // Duration calculation check
+        var calculatedDuration = (trip.EndDate - trip.StartDate).Days + 1;
+        if (calculatedDuration < 1)
+        {
+            errors.Add("Trip duration must be at least 1 day.");
+        }
+
+        // At least one country is required
+        if (string.IsNullOrWhiteSpace(trip.Country1))
+        {
+            errors.Add("At least one country is required.");
+        }
+
+        // At least one city is required
+        if (string.IsNullOrWhiteSpace(trip.City1))
+        {
+            errors.Add("At least one city is required.");
+        }
+
+        // Purpose is required
+        if (trip.PurposeId == 0)
+        {
+            errors.Add("Trip purpose is required.");
+        }
+
+        // Trip type is required
+        if (trip.TripTypeId == 0)
+        {
+            errors.Add("Trip type is required.");
+        }
+
+        // Status is required
+        if (trip.StatusId == 0)
+        {
+            errors.Add("Trip status is required.");
+        }
+
+        // Owner must be assigned
+        if (trip.OwnerId == 0)
+        {
+            errors.Add("Trip owner must be assigned.");
+        }
+
+        // If second country is provided, second city must also be provided
+        if (!string.IsNullOrWhiteSpace(trip.Country2) && string.IsNullOrWhiteSpace(trip.City2))
+        {
+            errors.Add("City2 is required when Country2 is specified.");
+        }
+
+        if (errors.Any())
+        {
+            throw new ArgumentException($"Trip validation failed:\n{string.Join("\n", errors)}");
+        }
+    }
+
+    /// <summary>
+    /// Validates email format
+    /// </summary>
+    private bool IsValidEmail(string email)
+    {
+        try
+        {
+            var addr = new System.Net.Mail.MailAddress(email);
+            return addr.Address == email;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public async Task DeleteTripAsync(int tripId)

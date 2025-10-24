@@ -131,6 +131,9 @@ public class TransactionService : ITransactionService
 
     public async Task<Transaction> CreateTransactionAsync(Transaction transaction)
     {
+        // Validate transaction before creating
+        ValidateTransaction(transaction);
+        
         transaction.CreatedAt = DateTime.UtcNow;
         transaction.ModifiedAt = DateTime.UtcNow;
         
@@ -148,12 +151,120 @@ public class TransactionService : ITransactionService
         if (existing == null)
             throw new ArgumentException($"Transaction with ID {transaction.TransactionId} not found");
 
+        // Validate transaction before updating
+        ValidateTransaction(transaction);
+        
         transaction.ModifiedAt = DateTime.UtcNow;
         
         _context.Entry(existing).CurrentValues.SetValues(transaction);
         await _context.SaveChangesAsync();
 
         await _auditService.LogActionAsync("System", "Edit", "Transactions", transaction.TransactionId, existing, transaction);
+    }
+
+    /// <summary>
+    /// Validates a transaction according to business rules
+    /// </summary>
+    /// <param name="transaction">The transaction to validate</param>
+    /// <exception cref="ArgumentException">Thrown when validation fails</exception>
+    private void ValidateTransaction(Transaction transaction)
+    {
+        var errors = new List<string>();
+
+        // Amount must be numeric (C# type system enforces this, but check for valid range)
+        if (transaction.Amount == 0)
+        {
+            errors.Add("Amount must not be zero.");
+        }
+
+        // Transaction date must be valid
+        if (transaction.TransactionDate == default(DateTime))
+        {
+            errors.Add("Transaction date is required.");
+        }
+
+        if (transaction.TransactionDate > DateTime.Now.AddDays(1))
+        {
+            errors.Add("Transaction date cannot be in the future.");
+        }
+
+        // Email must be valid format
+        if (string.IsNullOrWhiteSpace(transaction.Email))
+        {
+            errors.Add("Email is required.");
+        }
+        else if (!IsValidEmail(transaction.Email))
+        {
+            errors.Add("Email format is invalid.");
+        }
+
+        // Currency must be 3-letter code
+        if (string.IsNullOrWhiteSpace(transaction.Currency))
+        {
+            errors.Add("Currency is required.");
+        }
+        else if (transaction.Currency.Length != 3)
+        {
+            errors.Add("Currency must be a 3-letter code (e.g., USD, EUR, ILS).");
+        }
+
+        // Document URL must be valid URL or empty
+        if (!string.IsNullOrWhiteSpace(transaction.DocumentUrl))
+        {
+            if (!IsValidUrl(transaction.DocumentUrl))
+            {
+                errors.Add("Document URL format is invalid.");
+            }
+        }
+
+        // Exchange rate should be positive if provided
+        if (transaction.ExchangeRate.HasValue && transaction.ExchangeRate.Value <= 0)
+        {
+            errors.Add("Exchange rate must be a positive number.");
+        }
+
+        // If AmountUSD is provided, it should match Amount * ExchangeRate
+        if (transaction.AmountUSD.HasValue && transaction.ExchangeRate.HasValue)
+        {
+            var calculatedUSD = transaction.Amount * transaction.ExchangeRate.Value;
+            var difference = Math.Abs(transaction.AmountUSD.Value - calculatedUSD);
+            
+            // Allow for small rounding errors (within 0.01)
+            if (difference > 0.01m)
+            {
+                errors.Add($"Amount USD ({transaction.AmountUSD:F2}) does not match Amount × Exchange Rate ({calculatedUSD:F2}).");
+            }
+        }
+
+        if (errors.Any())
+        {
+            throw new ArgumentException($"Transaction validation failed:\n{string.Join("\n", errors)}");
+        }
+    }
+
+    /// <summary>
+    /// Validates email format
+    /// </summary>
+    private bool IsValidEmail(string email)
+    {
+        try
+        {
+            var addr = new System.Net.Mail.MailAddress(email);
+            return addr.Address == email;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Validates URL format
+    /// </summary>
+    private bool IsValidUrl(string url)
+    {
+        return Uri.TryCreate(url, UriKind.Absolute, out var uriResult)
+            && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
     }
 
     public async Task DeleteTransactionAsync(string transactionId)
@@ -256,7 +367,7 @@ public class TransactionService : ITransactionService
             .Include(t => t.Source)
             .Include(t => t.Category)
             .Where(t => t.Category.Name == "Meals" && 
-                       Math.Abs(t.AmountUSD ?? 0) >= threshold && 
+                       ((t.AmountUSD ?? 0) >= threshold || (t.AmountUSD ?? 0) <= -threshold) &&
                        !t.IsValid)
             .OrderBy(t => t.Email)
             .ThenBy(t => t.TransactionDate)
@@ -269,7 +380,8 @@ public class TransactionService : ITransactionService
             .Include(t => t.Source)
             .Include(t => t.Category)
             .Where(t => t.Category.Name == "Lodging" && 
-                       Math.Abs(t.AmountUSD ?? 0) <= threshold && 
+                       (t.AmountUSD ?? 0) <= threshold && 
+                       (t.AmountUSD ?? 0) >= -threshold &&
                        !t.IsValid)
             .OrderBy(t => t.Email)
             .ThenBy(t => t.TransactionDate)

@@ -12,6 +12,12 @@ public interface IMessageTemplateService
     List<string> DetectExternalParticipants(string? participantsString, List<string> internalEmails);
     List<string> DetectInternalParticipants(string? participantsString, List<string> internalEmails);
     ParticipantAnalysis AnalyzeParticipants(string? participantsString, List<string> internalEmails);
+    
+    // Company domain management
+    void AddCompanyDomain(string domain);
+    void AddCompanyDomains(IEnumerable<string> domains);
+    IReadOnlyCollection<string> GetCompanyDomains();
+    bool IsCompanyEmail(string email);
 }
 
 public enum Priority
