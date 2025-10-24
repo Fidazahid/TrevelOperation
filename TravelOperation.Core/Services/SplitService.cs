@@ -91,7 +91,7 @@ public class SplitService : ISplitService
                 {
                     TransactionId = $"{transactionId}_SPLIT_{i + 1}",
                     OriginalTransactionId = transactionId,
-                    Source = originalTransaction.Source,
+                    SourceId = originalTransaction.SourceId,
                     Email = splitItem.Email,
                     TransactionDate = originalTransaction.TransactionDate,
                     AuthorizationDate = originalTransaction.AuthorizationDate,

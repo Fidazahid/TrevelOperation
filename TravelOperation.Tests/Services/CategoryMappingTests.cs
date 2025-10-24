@@ -1,7 +1,10 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Moq;
 using TravelOperation.Core.Data;
 using TravelOperation.Core.Models.Entities;
+using TravelOperation.Core.Models.Lookup;
 using TrevelOperation.Service;
 
 namespace TravelOperation.Tests.Services;
@@ -18,7 +21,8 @@ public class CategoryMappingTests : IDisposable
             .Options;
 
         _context = new TravelDbContext(options);
-        _service = new CsvImportService(_context);
+        var mockLogger = new Mock<ILogger<CsvImportService>>();
+        _service = new CsvImportService(_context, mockLogger.Object);
         SeedTestData();
     }
 

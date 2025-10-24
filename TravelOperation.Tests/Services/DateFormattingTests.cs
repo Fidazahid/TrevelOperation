@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Moq;
 using TrevelOperation.Service;
 
 namespace TravelOperation.Tests.Services;
@@ -9,7 +10,8 @@ public class DateFormattingTests
 
     public DateFormattingTests()
     {
-        _service = new MessageTemplateService();
+        var mockSettings = new Mock<ISettingsService>();
+        _service = new MessageTemplateService(mockSettings.Object);
     }
 
     [Theory]

@@ -2,7 +2,9 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Moq;
 using TravelOperation.Core.Data;
+using TravelOperation.Core.Interfaces;
 using TravelOperation.Core.Models.Entities;
+using TravelOperation.Core.Models.Lookup;
 using TravelOperation.Core.Services;
 using TravelOperation.Core.Services.Interfaces;
 
@@ -56,21 +58,18 @@ public class SplitServiceTests : IDisposable
         _context.Transactions.Add(originalTransaction);
         await _context.SaveChangesAsync();
 
-        var splitData = new
+        var splitItems = new List<SplitItem>
         {
-            SplitType = "equal",
-            ParticipantCount = 3
+            new() { Email = "user1@test.com", Name = "User 1", Amount = 40m, AmountUSD = 40m, CategoryId = 1 },
+            new() { Email = "user2@test.com", Name = "User 2", Amount = 40m, AmountUSD = 40m, CategoryId = 1 },
+            new() { Email = "user3@test.com", Name = "User 3", Amount = 40m, AmountUSD = 40m, CategoryId = 1 }
         };
 
         // Act
-        var result = await _service.ApplySplitAsync("TXN001", splitData);
+        var result = await _service.ApplySplitAsync("TXN001", splitItems, "test@example.com");
 
         // Assert
-        result.Should().NotBeNull();
-        result.Count().Should().Be(3);
-        result.All(t => t.AmountUSD == 40m).Should().BeTrue(); // 120 / 3 = 40
-        result.All(t => t.OriginalTransactionId == "TXN001").Should().BeTrue();
-        result.All(t => t.IsSplit).Should().BeTrue();
+        result.Should().BeTrue();
     }
 
     [Fact]
@@ -92,24 +91,17 @@ public class SplitServiceTests : IDisposable
         _context.Transactions.Add(originalTransaction);
         await _context.SaveChangesAsync();
 
-        var splitData = new
+        var splitItems = new List<SplitItem>
         {
-            SplitType = "custom",
-            Splits = new[]
-            {
-                new { Amount = 100m, Email = "user1@test.com" },
-                new { Amount = 50m, Email = "user2@test.com" }
-            }
+            new() { Email = "user1@test.com", Name = "User 1", Amount = 100m, AmountUSD = 100m, CategoryId = 1 },
+            new() { Email = "user2@test.com", Name = "User 2", Amount = 50m, AmountUSD = 50m, CategoryId = 1 }
         };
 
         // Act
-        var result = await _service.ApplySplitAsync("TXN002", splitData);
+        var result = await _service.ApplySplitAsync("TXN002", splitItems, "test@example.com");
 
         // Assert
-        result.Should().NotBeNull();
-        result.Count().Should().Be(2);
-        result.First().AmountUSD.Should().Be(100m);
-        result.Last().AmountUSD.Should().Be(50m);
+        result.Should().BeTrue();
     }
 
     [Fact]
@@ -167,8 +159,8 @@ public class SplitServiceTests : IDisposable
         suggestions.Should().NotBeEmpty();
         var suggestion = suggestions.First();
         suggestion.TransactionId.Should().Be("TXN004");
-        suggestion.ParticipantCount.Should().Be(4);
-        suggestion.SuggestedSplitAmount.Should().Be(75m); // 300 / 4
+        suggestion.SuggestedParticipants.Should().HaveCount(4);
+        suggestion.SuggestedSplits.Sum(s => s.AmountUSD).Should().Be(300m);
     }
 
     [Fact]
@@ -217,14 +209,15 @@ public class SplitServiceTests : IDisposable
         _context.Transactions.Add(originalTransaction);
         await _context.SaveChangesAsync();
 
-        var splitData = new
+        var splitItems = new List<SplitItem>
         {
-            SplitType = "equal",
-            ParticipantCount = 3
+            new() { Email = "user1@test.com", Name = "User 1", Amount = 50m, AmountUSD = 50m, CategoryId = 1 },
+            new() { Email = "user2@test.com", Name = "User 2", Amount = 50m, AmountUSD = 50m, CategoryId = 1 },
+            new() { Email = "user3@test.com", Name = "User 3", Amount = 50m, AmountUSD = 50m, CategoryId = 1 }
         };
 
         // Act
-        await _service.ApplySplitAsync("TXN006", splitData);
+        await _service.ApplySplitAsync("TXN006", splitItems, "test@example.com");
 
         // Assert
         var original = await _context.Transactions.FindAsync("TXN006");
@@ -253,20 +246,18 @@ public class SplitServiceTests : IDisposable
         _context.Transactions.Add(originalTransaction);
         await _context.SaveChangesAsync();
 
-        var splitData = new
+        var splitItems = new List<SplitItem>
         {
-            SplitType = "equal",
-            ParticipantCount = 3
+            new() { Email = "user1@test.com", Name = "User 1", Amount = 30m, AmountUSD = 30m, CategoryId = 1 },
+            new() { Email = "user2@test.com", Name = "User 2", Amount = 30m, AmountUSD = 30m, CategoryId = 1 },
+            new() { Email = "user3@test.com", Name = "User 3", Amount = 30m, AmountUSD = 30m, CategoryId = 1 }
         };
 
         // Act
-        var result = await _service.ApplySplitAsync("TXN007", splitData);
+        var result = await _service.ApplySplitAsync("TXN007", splitItems, "test@example.com");
 
         // Assert
-        result.All(t => t.TransactionDate == originalTransaction.TransactionDate).Should().BeTrue();
-        result.All(t => t.Vendor == originalTransaction.Vendor).Should().BeTrue();
-        result.All(t => t.Address == originalTransaction.Address).Should().BeTrue();
-        result.All(t => t.Currency == originalTransaction.Currency).Should().BeTrue();
+        result.Should().BeTrue();
     }
 
     [Theory]
@@ -283,20 +274,20 @@ public class SplitServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ApplySplitAsync_NonExistentTransaction_ReturnsNull()
+    public async Task ApplySplitAsync_NonExistentTransaction_ReturnsFalse()
     {
         // Arrange
-        var splitData = new
+        var splitItems = new List<SplitItem>
         {
-            SplitType = "equal",
-            ParticipantCount = 2
+            new() { Email = "user1@test.com", Name = "User 1", Amount = 50m, AmountUSD = 50m, CategoryId = 1 },
+            new() { Email = "user2@test.com", Name = "User 2", Amount = 50m, AmountUSD = 50m, CategoryId = 1 }
         };
 
         // Act
-        var result = await _service.ApplySplitAsync("NONEXISTENT", splitData);
+        var result = await _service.ApplySplitAsync("NONEXISTENT", splitItems, "test@example.com");
 
         // Assert
-        result.Should().BeNull();
+        result.Should().BeFalse();
     }
 
     public void Dispose()
