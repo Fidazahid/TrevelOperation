@@ -7,11 +7,12 @@
 @inject ITripService TripService
 @inject ITransactionService TransactionService
 @inject ITaxCalculationService TaxCalculationService
+@inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
 
 <AuthorizeRoleView RequiredRole="Finance">
-<div class="container mx-auto p-6">
-    <div class="flex justify-between items-center mb-6">
+<div class="container mx-auto">
+    <div class="flex justify-between items-center ">
         <div>
             <h1 class="text-3xl font-bold text-gray-900">📊 Travel Spend Report</h1>
             <p class="text-gray-600">Comprehensive spending analysis by trip with tax exposure</p>
@@ -134,80 +135,77 @@
 
     <!-- Travel Spend Table -->
     <div class="card bg-base-100 shadow-md">
-        <div class="card-body">
-            <div class="overflow-x-auto">
-                <table class="table table-zebra w-full">
-                    <thead>
+        <div class="card-body p-2">
+            <div style="max-height: 400px; min-height: 400px; overflow-y: auto; overflow-x: hidden; border: 1px solid #e5e7eb;">
+                <table class="table table-zebra table-pin-rows table-fixed" style="width: 100%; table-layout: fixed;">
+                    <thead style="position: sticky; top: 0; z-index: 10; background-color: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                         <tr>
-                            <th>Trip Details</th>
-                            <th>Traveler</th>
-                            <th>Duration</th>
-                            <th># Trans</th>
-                            <th>Total ($)</th>
-                            <th>Per Day</th>
-                            <th>Airfare</th>
-                            <th>Lodging</th>
-                            <th>Meals</th>
-                            <th>Transport</th>
-                            <th>Other</th>
-                            <th>Tax Exposure</th>
-                            <th>Actions</th>
+                            <th style="width: 10%; background-color: white;">Trip Details</th>
+                            <th style="width: 12%; background-color: white;">Traveler</th>
+                            <th style="width: 6%; background-color: white;">Duration</th>
+                            <th style="width: 5%; background-color: white;"># Trans</th>
+                            <th style="width: 8%; background-color: white;">Total ($)</th>
+                            <th style="width: 7%; background-color: white;">Per Day</th>
+                            <th style="width: 8%; background-color: white;">Airfare</th>
+                            <th style="width: 8%; background-color: white;">Lodging</th>
+                            <th style="width: 8%; background-color: white;">Meals</th>
+                            <th style="width: 8%; background-color: white;">Transport</th>
+                            <th style="width: 6%; background-color: white;">Other</th>
+                            <th style="width: 9%; background-color: white;">Tax Exposure</th>
+                            <th style="width: 5%; background-color: white;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var spend in filteredSpendData.Skip((currentPage - 1) * pageSize).Take(pageSize))
                         {
                             <tr class="hover" @ondblclick="() => ViewTripDetails(spend.TripId)">
-                                <td>
-                                    <div class="font-medium">@spend.TripName</div>
-                                    <div class="text-sm text-gray-500">@spend.Destination</div>
-                                    <div class="text-xs text-gray-400">@spend.StartDate.ToString("dd/MM/yyyy") - @spend.EndDate.ToString("dd/MM/yyyy")</div>
+                                <td style="width: 10%;">
+                                    <div class="font-medium text-xs truncate">@spend.TripName</div>
+                                    <div class="text-xs text-gray-500 truncate">@spend.Destination</div>
                                 </td>
-                                <td>@spend.Email</td>
-                                <td>
-                                    <div class="badge badge-info">@spend.Duration days</div>
+                                <td style="width: 12%;" class="text-xs truncate">@spend.Email</td>
+                                <td style="width: 6%;" class="text-xs">@spend.Duration d</td>
+                                <td style="width: 5%;" class="text-xs">@spend.TransactionCount</td>
+                                <td style="width: 8%;">
+                                    <div class="font-bold text-xs">$@spend.TotalAmount.ToString("N0")</div>
                                 </td>
-                                <td>@spend.TransactionCount</td>
-                                <td>
-                                    <div class="font-bold text-lg">$@spend.TotalAmount.ToString("N2")</div>
-                                </td>
-                                <td>$@spend.CostPerDay.ToString("N0")</td>
-                                <td>
-                                    <div>$@spend.AirfareAmount.ToString("N0")</div>
+                                <td style="width: 7%;" class="text-xs">$@spend.CostPerDay.ToString("N0")</td>
+                                <td style="width: 8%;" class="text-xs">
+                                    $@spend.AirfareAmount.ToString("N0")
                                     @if (!string.IsNullOrEmpty(spend.CabinClasses))
                                     {
-                                        <div class="text-xs text-gray-500">@spend.CabinClasses</div>
+                                        <div class="text-xs text-gray-500 truncate">@spend.CabinClasses</div>
                                     }
                                 </td>
-                                <td>
-                                    <div>$@spend.LodgingAmount.ToString("N0")</div>
-                                    <div class="text-xs text-gray-500">$@spend.LodgingPerNight.ToString("N0")/night</div>
+                                <td style="width: 8%;" class="text-xs">
+                                    $@spend.LodgingAmount.ToString("N0")
+                                    <div class="text-xs text-gray-500">$@spend.LodgingPerNight.ToString("N0")</div>
                                 </td>
-                                <td>
-                                    <div>$@spend.MealsAmount.ToString("N0")</div>
-                                    <div class="text-xs text-gray-500">$@spend.MealsPerDay.ToString("N0")/day</div>
+                                <td style="width: 8%;" class="text-xs">
+                                    $@spend.MealsAmount.ToString("N0")
+                                    <div class="text-xs text-gray-500">$@spend.MealsPerDay.ToString("N0")</div>
                                 </td>
-                                <td>
-                                    <div>$@spend.TransportationAmount.ToString("N0")</div>
-                                    <div class="text-xs text-gray-500">$@spend.TransportationPerDay.ToString("N0")/day</div>
+                                <td style="width: 8%;" class="text-xs">
+                                    $@spend.TransportationAmount.ToString("N0")
+                                    <div class="text-xs text-gray-500">$@spend.TransportationPerDay.ToString("N0")</div>
                                 </td>
-                                <td>$@spend.OtherAmount.ToString("N0")</td>
-                                <td>
+                                <td style="width: 6%;" class="text-xs">$@spend.OtherAmount.ToString("N0")</td>
+                                <td style="width: 9%;">
                                     @if (spend.TaxExposure > 0)
                                     {
-                                        <div class="badge badge-warning cursor-pointer" @onclick="() => ShowTaxBreakdown(spend.TripId)">
-                                            $@spend.TaxExposure.ToString("N2")
+                                        <div class="badge badge-warning cursor-pointer badge-xs" @onclick="() => ShowTaxBreakdown(spend.TripId)">
+                                            $@spend.TaxExposure.ToString("N0")
                                         </div>
                                     }
                                     else
                                     {
-                                        <div class="badge badge-success">$0</div>
+                                        <div class="badge badge-success badge-xs">$0</div>
                                     }
                                 </td>
-                                <td>
+                                <td style="width: 5%;">
                                     <div class="dropdown dropdown-end">
-                                        <label tabindex="0" class="btn btn-ghost btn-sm">⋮</label>
-                                        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52">
+                                        <label tabindex="0" class="btn btn-ghost btn-xs">⋮</label>
+                                        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52 z-20">
                                             <li><a @onclick="() => ViewTripDetails(spend.TripId)">👁️ View Details</a></li>
                                             <li><a @onclick="() => ViewTransactions(spend.TripId)">📋 View Transactions</a></li>
                                             <li><a @onclick="() => ShowTaxBreakdown(spend.TripId)">💼 Tax Breakdown</a></li>
@@ -478,14 +476,14 @@
         await JSRuntime.InvokeVoidAsync("alert", "Export functionality - Coming soon!");
     }
 
-    private async Task ViewTripDetails(int tripId)
+    private void ViewTripDetails(int tripId)
     {
-        await JSRuntime.InvokeVoidAsync("alert", $"Viewing trip details for ID {tripId} - Navigation pending");
+        NavigationManager.NavigateTo($"/trips/{tripId}");
     }
 
-    private async Task ViewTransactions(int tripId)
+    private void ViewTransactions(int tripId)
     {
-        await JSRuntime.InvokeVoidAsync("alert", $"Viewing transactions for trip ID {tripId} - Navigation pending");
+        NavigationManager.NavigateTo($"/transactions?tripId={tripId}");
     }
 
     private async Task ShowTaxBreakdown(int tripId)

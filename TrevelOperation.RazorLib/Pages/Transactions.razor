@@ -1,5 +1,6 @@
 @page "/transactions"
 
+@using Microsoft.AspNetCore.Components
 @using TravelOperation.Core.Services.Interfaces
 @using TravelOperation.Core.Models.Entities
 @using TravelOperation.Core.Models.Lookup
@@ -27,6 +28,16 @@
         <div>
             <h1 class="text-3xl font-bold text-base-content mb-2">💳 Transactions</h1>
             <p class="text-base-content/70">View, edit, and manage travel expense transactions</p>
+            @if (TripIdFilter.HasValue)
+            {
+                <div class="alert alert-info mt-2">
+                    <i class="fas fa-filter"></i>
+                    <span>Filtering transactions for Trip ID: <strong>@TripIdFilter</strong></span>
+                    <button class="btn btn-sm btn-ghost" @onclick="ClearTripFilter">
+                        <i class="fas fa-times"></i> Clear Filter
+                    </button>
+                </div>
+            }
         </div>
         <div class="flex gap-3">
             <button class="btn btn-outline btn-primary" @onclick="ImportTransactions">
@@ -350,6 +361,10 @@
                        OnTransactionCreated="RefreshTransactions" />
 
 @code {
+    // Query parameters
+    [SupplyParameterFromQuery(Name = "tripId")]
+    public int? TripIdFilter { get; set; }
+
     // Component state
     private bool isLoading = true;
     private List<Transaction> transactions = new();
@@ -392,6 +407,13 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadLookupData();
+        
+        // If tripId filter is provided, set the filter status to show only those transactions
+        if (TripIdFilter.HasValue)
+        {
+            filterStatus = "linked";
+        }
+        
         await LoadTransactions();
         isLoading = false;
     }
@@ -427,11 +449,24 @@
             
             // Load all transactions for statistics (without pagination)
             transactions = await TransactionService.GetAllTransactionsAsync(includeRelated: true);
+            
+            // If tripId filter is provided, filter by that trip
+            if (TripIdFilter.HasValue)
+            {
+                transactions = transactions.Where(t => t.TripId == TripIdFilter.Value).ToList();
+            }
+            
             UpdateStatistics();
             
             // Load paged transactions with filters
             pagedResult = await LoadPagedTransactionsAsync(paginationParams);
             filteredTransactions = pagedResult.Items;
+            
+            // Apply tripId filter to paged results as well
+            if (TripIdFilter.HasValue)
+            {
+                filteredTransactions = filteredTransactions.Where(t => t.TripId == TripIdFilter.Value).ToList();
+            }
         }
         catch (Exception ex)
         {
@@ -728,6 +763,11 @@
             JSRuntime.InvokeVoidAsync("console.error", "createModal is null!");
             JSRuntime.InvokeVoidAsync("alert", "Error: Create modal component not initialized. Please refresh the page.");
         }
+    }
+
+    private void ClearTripFilter()
+    {
+        Navigation.NavigateTo("/transactions");
     }
 
     private async Task ImportTransactions()
