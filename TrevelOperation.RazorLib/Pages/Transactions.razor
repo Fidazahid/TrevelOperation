@@ -3,6 +3,7 @@
 @using TravelOperation.Core.Services.Interfaces
 @using TravelOperation.Core.Models.Entities
 @using TravelOperation.Core.Models.Lookup
+@using TravelOperation.Core.Models
 @using TrevelOperation.RazorLib.Components
 @inject ITransactionService TransactionService
 @inject ILookupService LookupService
@@ -12,7 +13,15 @@
 
 <PageTitle>Transactions - Travel Expense Management</PageTitle>
 
-<div class="p-6 space-y-6">
+<style>
+    .table td, .table th {
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        white-space: normal !important;
+    }
+</style>
+
+<div class="">
     <!-- Page Header -->
     <div class="flex justify-between items-center">
         <div>
@@ -128,8 +137,8 @@
     </div>
 
     <!-- Transaction Table -->
-    <div class="card bg-base-100 shadow-lg">
-        <div class="card-body p-0">
+    <div class="card bg-base-100 shadow-lg" style="max-height: 600px; display: flex; flex-direction: column;">
+        <div class="card-body p-0" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
             @if (isLoading)
             {
                 <div class="flex justify-center items-center h-64">
@@ -138,34 +147,34 @@
             }
             else if (filteredTransactions?.Any() == true)
             {
-                <div class="overflow-x-auto">
-                    <table class="table table-zebra table-pin-rows">
-                        <thead class="bg-base-300">
-                            <tr class="bg-base-300">
-                                <th class="bg-base-300">
+                <div class="overflow-y-auto" style="flex: 1; overflow-x: hidden;">
+                    <table class="table table-zebra table-pin-rows" style="table-layout: fixed; width: 100%;">
+                        <thead class="bg-white sticky top-0 z-10">
+                            <tr class="bg-white">
+                                <th class="bg-white" style="width: 30px;">
                                     <input type="checkbox" class="checkbox checkbox-sm" 
                                            @onchange="ToggleSelectAll" 
                                            checked="@(selectedTransactions.Count == filteredTransactions.Count())" />
                                 </th>
-                                <th class="bg-base-300 cursor-pointer hover:bg-base-200" @onclick="() => SortBy(nameof(Transaction.TransactionId))">
+                                <th class="bg-white cursor-pointer hover:bg-base-200" style="width: 150px;" @onclick="() => SortBy(nameof(Transaction.TransactionId))">
                                     Transaction ID @GetSortIcon(nameof(Transaction.TransactionId))
                                 </th>
-                                <th class="bg-base-300 cursor-pointer hover:bg-base-200" @onclick="() => SortBy(nameof(Transaction.TransactionDate))">
+                                <th class="bg-white cursor-pointer hover:bg-base-200" style="width: 130px;" @onclick="() => SortBy(nameof(Transaction.TransactionDate))">
                                     Date @GetSortIcon(nameof(Transaction.TransactionDate))
                                 </th>
-                                <th class="bg-base-300">Source</th>
-                                <th class="bg-base-300">Email</th>
-                                <th class="bg-base-300">Vendor</th>
-                                <th class="bg-base-300 cursor-pointer hover:bg-base-200" @onclick="() => SortBy(nameof(Transaction.CategoryId))">
+                                <th class="bg-white" style="width: 80px;">Source</th>
+                                <th class="bg-white" style="width: 140px;">Email</th>
+                                <th class="bg-white" style="width: 120px;">Vendor</th>
+                                <th class="bg-white cursor-pointer hover:bg-base-200" style="width: 110px;" @onclick="() => SortBy(nameof(Transaction.CategoryId))">
                                     Category @GetSortIcon(nameof(Transaction.CategoryId))
                                 </th>
-                                <th class="bg-base-300 cursor-pointer hover:bg-base-200" @onclick="() => SortBy(nameof(Transaction.AmountUSD))">
-                                    Amount (USD) @GetSortIcon(nameof(Transaction.AmountUSD))
+                                <th class="bg-white cursor-pointer hover:bg-base-200" style="width: 95px;" @onclick="() => SortBy(nameof(Transaction.AmountUSD))">
+                                    Amount @GetSortIcon(nameof(Transaction.AmountUSD))
                                 </th>
-                                <th class="bg-base-300">Cabin Class</th>
-                                <th class="bg-base-300">Trip</th>
-                                <th class="bg-base-300">Status</th>
-                                <th class="bg-base-300">Actions</th>
+                                <th class="bg-white" style="width: 95px;">Cabin</th>
+                                <th class="bg-white" style="width: 110px;">Trip</th>
+                                <th class="bg-white" style="width: 70px;">Status</th>
+                                <th class="bg-white" style="width: 100px;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -182,19 +191,19 @@
                                     <td>
                                         @if (transaction.Source != null)
                                         {
-                                            <span class="badge badge-outline">@transaction.Source.Emoji @transaction.Source.Name</span>
+                                            <span class="text-sm font-medium @GetSourceColor(transaction.Source.Name)">@transaction.Source.Name</span>
                                         }
                                     </td>
                                     <td class="text-sm">@transaction.Email</td>
-                                    <td class="text-sm max-w-32 truncate" title="@transaction.Vendor">@transaction.Vendor</td>
+                                    <td class="text-sm">@transaction.Vendor</td>
                                     <td>
                                         @if (transaction.Category != null)
                                         {
-                                            <span class="badge badge-secondary">@transaction.Category.Emoji @transaction.Category.Name</span>
+                                            <span class="text-sm font-medium @GetCategoryColor(transaction.Category.Name)">@transaction.Category.Name</span>
                                         }
                                         else
                                         {
-                                            <span class="badge badge-warning">❓ Uncategorized</span>
+                                            <span class="text-sm font-medium text-orange-600">Uncategorized</span>
                                         }
                                     </td>
                                     <td class="text-right font-mono">
@@ -212,11 +221,11 @@
                                     <td>
                                         @if (transaction.CabinClass != null)
                                         {
-                                            <span class="badge badge-accent badge-sm">@transaction.CabinClass.Emoji @transaction.CabinClass.Name</span>
+                                            <span class="text-sm font-medium @GetCabinClassColor(transaction.CabinClass.Name)">@transaction.CabinClass.Name</span>
                                         }
                                         else if (transaction.Category?.Name == "Airfare")
                                         {
-                                            <span class="badge badge-error badge-sm">❗ Missing</span>
+                                            <span class="text-sm font-medium text-red-600">Missing</span>
                                         }
                                     </td>
                                     <td>
@@ -270,21 +279,31 @@
                 
                 <!-- Pagination -->
                 <div class="flex justify-between items-center p-4 border-t">
-                    <div class="text-sm text-base-content/70">
-                        Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, totalTransactions) of @totalTransactions transactions
+                    <div class="flex items-center gap-4">
+                        <div class="text-sm text-base-content/70">
+                            Showing @pagedResult.FirstItemOnPage to @pagedResult.LastItemOnPage of @pagedResult.TotalCount transactions
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-base-content/70">Per page:</span>
+                            <select class="select select-bordered select-sm w-20" @bind="pageSize" @bind:after="OnPageSizeChanged">
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="join">
-                        <button class="join-item btn btn-sm" @onclick="PreviousPage" disabled="@(currentPage <= 1)">
+                        <button class="join-item btn btn-sm" @onclick="PreviousPage" disabled="@(!pagedResult.HasPreviousPage)">
                             « Previous
                         </button>
-                        @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                        @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(pagedResult.TotalPages, currentPage + 2); i++)
                         {
                             <button class="join-item btn btn-sm @(i == currentPage ? "btn-primary" : "")" 
                                     @onclick="() => GoToPage(i)">
                                 @i
                             </button>
                         }
-                        <button class="join-item btn btn-sm" @onclick="NextPage" disabled="@(currentPage >= totalPages)">
+                        <button class="join-item btn btn-sm" @onclick="NextPage" disabled="@(!pagedResult.HasNextPage)">
                             Next »
                         </button>
                     </div>
@@ -335,6 +354,7 @@
     private bool isLoading = true;
     private List<Transaction> transactions = new();
     private IEnumerable<Transaction> filteredTransactions = new List<Transaction>();
+    private PagedResult<Transaction> pagedResult = new();
     private HashSet<string> selectedTransactions = new();
     
     // Lookup data
@@ -352,13 +372,12 @@
     // Pagination
     private int currentPage = 1;
     private int pageSize = 50;
-    private int totalPages = 1;
     
     // Sorting
     private string sortField = nameof(Transaction.TransactionDate);
     private bool sortAscending = false;
     
-    // Statistics
+    // Statistics (from all data, not paged)
     private int totalTransactions = 0;
     private int validTransactions = 0;
     private int linkedTransactions = 0;
@@ -397,14 +416,22 @@
         {
             isLoading = true;
             
-            // Load transactions with related data
-            transactions = await TransactionService.GetAllTransactionsAsync(includeRelated: true);
+            // Create pagination params
+            var paginationParams = new PaginationParams
+            {
+                PageNumber = currentPage,
+                PageSize = pageSize,
+                SortBy = sortField,
+                SortDirection = sortAscending ? "asc" : "desc"
+            };
             
-            // Calculate statistics
+            // Load all transactions for statistics (without pagination)
+            transactions = await TransactionService.GetAllTransactionsAsync(includeRelated: true);
             UpdateStatistics();
             
-            // Apply filters and sorting
-            ApplyFiltersAndSort();
+            // Load paged transactions with filters
+            pagedResult = await LoadPagedTransactionsAsync(paginationParams);
+            filteredTransactions = pagedResult.Items;
         }
         catch (Exception ex)
         {
@@ -414,6 +441,21 @@
         {
             isLoading = false;
         }
+    }
+
+    private async Task<PagedResult<Transaction>> LoadPagedTransactionsAsync(PaginationParams paginationParams)
+    {
+        // Apply filters server-side by using appropriate service method
+        if (!string.IsNullOrEmpty(filterStatus))
+        {
+            return filterStatus switch
+            {
+                "unlinked" => await TransactionService.GetUnlinkedTransactionsPagedAsync(paginationParams),
+                _ => await TransactionService.GetAllTransactionsPagedAsync(paginationParams)
+            };
+        }
+        
+        return await TransactionService.GetAllTransactionsPagedAsync(paginationParams);
     }
 
     private void UpdateStatistics()
@@ -426,80 +468,23 @@
         flaggedTransactions = transactions.Count(t => t.DataValidation || !t.IsValid);
     }
 
-    private void ApplyFiltersAndSort()
+    private async Task ApplyFiltersAndSort()
     {
-        var filtered = transactions.AsEnumerable();
-
-        // Apply filters
-        if (!string.IsNullOrEmpty(filterSource))
-        {
-            filtered = filtered.Where(t => t.SourceId.ToString() == filterSource);
-        }
-
-        if (!string.IsNullOrEmpty(filterCategory))
-        {
-            filtered = filtered.Where(t => t.CategoryId.ToString() == filterCategory);
-        }
-
-        if (filterDateFrom.HasValue)
-        {
-            filtered = filtered.Where(t => t.TransactionDate >= filterDateFrom.Value);
-        }
-
-        if (filterDateTo.HasValue)
-        {
-            filtered = filtered.Where(t => t.TransactionDate <= filterDateTo.Value);
-        }
-
-        if (!string.IsNullOrEmpty(filterStatus))
-        {
-            filtered = filterStatus switch
-            {
-                "valid" => filtered.Where(t => t.IsValid),
-                "invalid" => filtered.Where(t => !t.IsValid),
-                "linked" => filtered.Where(t => t.TripId.HasValue),
-                "unlinked" => filtered.Where(t => !t.TripId.HasValue),
-                _ => filtered
-            };
-        }
-
-        // Apply sorting
-        filtered = sortField switch
-        {
-            nameof(Transaction.TransactionId) => sortAscending ? 
-                filtered.OrderBy(t => t.TransactionId) : 
-                filtered.OrderByDescending(t => t.TransactionId),
-            nameof(Transaction.TransactionDate) => sortAscending ? 
-                filtered.OrderBy(t => t.TransactionDate) : 
-                filtered.OrderByDescending(t => t.TransactionDate),
-            nameof(Transaction.CategoryId) => sortAscending ? 
-                filtered.OrderBy(t => t.Category?.Name) : 
-                filtered.OrderByDescending(t => t.Category?.Name),
-            nameof(Transaction.AmountUSD) => sortAscending ? 
-                filtered.OrderBy(t => t.AmountUSD ?? 0) : 
-                filtered.OrderByDescending(t => t.AmountUSD ?? 0),
-            _ => filtered.OrderByDescending(t => t.TransactionDate)
-        };
-
-        // Pagination
-        var totalFiltered = filtered.Count();
-        totalPages = (int)Math.Ceiling((double)totalFiltered / pageSize);
+        // Reset to first page when filters change
+        currentPage = 1;
+        selectedTransactions.Clear();
         
-        filteredTransactions = filtered
-            .Skip((currentPage - 1) * pageSize)
-            .Take(pageSize)
-            .ToList();
+        // Reload with new filters
+        await LoadTransactions();
+        StateHasChanged();
     }
 
     private async Task ApplyFilters()
     {
-        currentPage = 1;
-        selectedTransactions.Clear();
-        ApplyFiltersAndSort();
-        StateHasChanged();
+        await ApplyFiltersAndSort();
     }
 
-    private void SortBy(string field)
+    private async Task SortBy(string field)
     {
         if (sortField == field)
         {
@@ -511,7 +496,7 @@
             sortAscending = true;
         }
         
-        ApplyFiltersAndSort();
+        await LoadTransactions();
         StateHasChanged();
     }
 
@@ -556,30 +541,37 @@
     }
 
     // Pagination methods
-    private void PreviousPage()
+    private async Task PreviousPage()
     {
-        if (currentPage > 1)
+        if (pagedResult.HasPreviousPage)
         {
             currentPage--;
-            ApplyFiltersAndSort();
+            await LoadTransactions();
             StateHasChanged();
         }
     }
 
-    private void NextPage()
+    private async Task NextPage()
     {
-        if (currentPage < totalPages)
+        if (pagedResult.HasNextPage)
         {
             currentPage++;
-            ApplyFiltersAndSort();
+            await LoadTransactions();
             StateHasChanged();
         }
     }
 
-    private void GoToPage(int page)
+    private async Task GoToPage(int page)
     {
         currentPage = page;
-        ApplyFiltersAndSort();
+        await LoadTransactions();
+        StateHasChanged();
+    }
+
+    private async Task OnPageSizeChanged()
+    {
+        currentPage = 1; // Reset to first page when changing page size
+        await LoadTransactions();
         StateHasChanged();
     }
 
@@ -784,5 +776,47 @@
     {
         // Remove focus from active element to close dropdown
         await JSRuntime.InvokeVoidAsync("eval", "document.activeElement?.blur()");
+    }
+
+    // Helper method to get color class for source
+    private string GetSourceColor(string sourceName)
+    {
+        return sourceName?.ToLower() switch
+        {
+            "navan" => "text-blue-600",
+            "agent" => "text-purple-600",
+            "manual" => "text-orange-600",
+            _ => "text-gray-600"
+        };
+    }
+
+    // Helper method to get color class for category
+    private string GetCategoryColor(string categoryName)
+    {
+        return categoryName?.ToLower() switch
+        {
+            "airfare" => "text-blue-600",
+            "lodging" => "text-purple-600",
+            "meals" => "text-green-600",
+            "transportation" => "text-yellow-600",
+            "communication" => "text-cyan-600",
+            "client entertainment" => "text-pink-600",
+            "other" => "text-gray-600",
+            "non-travel" => "text-red-600",
+            _ => "text-gray-600"
+        };
+    }
+
+    // Helper method to get color class for cabin class
+    private string GetCabinClassColor(string cabinClassName)
+    {
+        return cabinClassName?.ToLower() switch
+        {
+            "economy" => "text-green-600",
+            "premium economy" => "text-blue-600",
+            "business" => "text-purple-600",
+            "first" => "text-orange-600",
+            _ => "text-gray-600"
+        };
     }
 }

@@ -5,6 +5,8 @@ using Microsoft.Extensions.Logging;
 using TravelOperation.Core.Data;
 using TravelOperation.Core.Models.Entities;
 using TravelOperation.Core.Models.Lookup;
+using TravelOperation.Core.Interfaces;
+using TravelOperation.Core.Models;
 
 namespace TrevelOperation.Service;
 
@@ -12,11 +14,13 @@ public class SettingsService : ISettingsService
 {
     private readonly TravelDbContext _context;
     private readonly ILogger<SettingsService> _logger;
+    private readonly ICacheService _cacheService;
 
-    public SettingsService(TravelDbContext context, ILogger<SettingsService> logger)
+    public SettingsService(TravelDbContext context, ILogger<SettingsService> logger, ICacheService cacheService)
     {
         _context = context;
         _logger = logger;
+        _cacheService = cacheService;
     }
 
     #region Categories Management
@@ -572,7 +576,11 @@ public class SettingsService : ISettingsService
 
     public async Task<List<Tax>> GetTaxSettingsAsync()
     {
-        return await _context.TaxRules.OrderBy(t => t.FiscalYear).ThenBy(t => t.Country).ToListAsync();
+        return await _cacheService.GetOrCreateAsync(
+            CacheKeys.TaxSettingsAll,
+            async () => await _context.TaxRules.OrderBy(t => t.FiscalYear).ThenBy(t => t.Country).ToListAsync(),
+            30 // 30 minutes TTL
+        );
     }
 
     public async Task<Tax> CreateTaxSettingAsync(int fiscalYear, string country, string subsidiary, decimal mealsCap, decimal lodgingCap, decimal taxShield)
@@ -588,6 +596,10 @@ public class SettingsService : ISettingsService
         };
         _context.TaxRules.Add(tax);
         await _context.SaveChangesAsync();
+        
+        // Invalidate tax settings cache
+        _cacheService.RemoveByPattern("settings_tax*");
+        
         _logger.LogInformation("Created tax setting: {FiscalYear} {Country} {Subsidiary}", fiscalYear, country, subsidiary);
         return tax;
     }
@@ -605,6 +617,10 @@ public class SettingsService : ISettingsService
         tax.LodgingCap = lodgingCap;
         tax.TaxShield = taxShield;
         await _context.SaveChangesAsync();
+        
+        // Invalidate tax settings cache
+        _cacheService.RemoveByPattern("settings_tax*");
+        
         _logger.LogInformation("Updated tax setting: {TaxId} -> {FiscalYear} {Country} {Subsidiary}", taxId, fiscalYear, country, subsidiary);
         return tax;
     }
@@ -617,6 +633,10 @@ public class SettingsService : ISettingsService
 
         _context.TaxRules.Remove(tax);
         await _context.SaveChangesAsync();
+        
+        // Invalidate tax settings cache
+        _cacheService.RemoveByPattern("settings_tax*");
+        
         _logger.LogInformation("Deleted tax setting: {FiscalYear} {Country} {Subsidiary}", tax.FiscalYear, tax.Country, tax.Subsidiary);
     }
 
@@ -626,7 +646,11 @@ public class SettingsService : ISettingsService
 
     public async Task<List<Headcount>> GetHeadcountAsync()
     {
-        return await _context.Headcount.OrderByDescending(h => h.Period).ThenBy(h => h.LastName).ToListAsync();
+        return await _cacheService.GetOrCreateAsync(
+            CacheKeys.HeadcountAll,
+            async () => await _context.Headcount.OrderByDescending(h => h.Period).ThenBy(h => h.LastName).ToListAsync(),
+            30 // 30 minutes TTL
+        );
     }
 
     public async Task<Headcount?> GetHeadcountByEmailAsync(string email)
@@ -685,6 +709,10 @@ public class SettingsService : ISettingsService
         }
 
         await _context.SaveChangesAsync();
+        
+        // Invalidate headcount cache after import
+        _cacheService.Remove(CacheKeys.HeadcountAll);
+        
         _logger.LogInformation("Imported {Count} headcount records", lines.Count - 1);
     }
 
@@ -706,6 +734,10 @@ public class SettingsService : ISettingsService
         };
         _context.Headcount.Add(headcount);
         await _context.SaveChangesAsync();
+        
+        // Invalidate headcount cache after create
+        _cacheService.Remove(CacheKeys.HeadcountAll);
+        
         _logger.LogInformation("Created headcount: {FirstName} {LastName} ({Email})", firstName, lastName, email);
         return headcount;
     }
@@ -728,6 +760,10 @@ public class SettingsService : ISettingsService
         headcount.Domain = domain;
         headcount.CostCenter = costCenter;
         await _context.SaveChangesAsync();
+        
+        // Invalidate headcount cache after update
+        _cacheService.Remove(CacheKeys.HeadcountAll);
+        
         _logger.LogInformation("Updated headcount: {HeadcountId} -> {FirstName} {LastName}", headcountId, firstName, lastName);
         return headcount;
     }
@@ -740,6 +776,10 @@ public class SettingsService : ISettingsService
 
         _context.Headcount.Remove(headcount);
         await _context.SaveChangesAsync();
+        
+        // Invalidate headcount cache after delete
+        _cacheService.Remove(CacheKeys.HeadcountAll);
+        
         _logger.LogInformation("Deleted headcount: {FirstName} {LastName}", headcount.FirstName, headcount.LastName);
     }
 

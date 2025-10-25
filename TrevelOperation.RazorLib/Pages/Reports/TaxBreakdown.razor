@@ -1,9 +1,11 @@
 @page "/tax-breakdown/{TripId:int}"
 @using TrevelOperation.Service
 @using TravelOperation.Core.Models.Entities
+@using TrevelOperation.RazorLib.Components
 @inject ITaxCalculationService TaxCalculationService
 @inject NavigationManager Navigation
 
+<AuthorizeRoleView RequiredRole="Finance">
 <div class="container mx-auto p-6">
     <!-- Header -->
     <div class="flex items-center gap-4 mb-6">
@@ -273,3 +275,4 @@
         Navigation.NavigateTo("/travel-spend");
     }
 }
+</AuthorizeRoleView>

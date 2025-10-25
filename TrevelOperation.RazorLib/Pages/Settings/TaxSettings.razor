@@ -1,11 +1,13 @@
 @page "/settings/tax"
 @using TravelOperation.Core.Models.Entities
 @using TrevelOperation.Service
+@using TrevelOperation.RazorLib.Components
 @inject IJSRuntime JSRuntime
 @inject ISettingsService SettingsService
 
 <PageTitle>Tax Settings - Travel Expense Management</PageTitle>
 
+<AuthorizeRoleView RequiredRole="Finance">
 <div class="p-6">
     <div class="mb-6">
         <h1 class="text-3xl font-bold text-base-content mb-2">Tax settings</h1>
@@ -674,3 +676,4 @@
         await JSRuntime.InvokeVoidAsync("downloadFile", "tax-settings.csv", "text/csv", csv);
     }
 }
+</AuthorizeRoleView>

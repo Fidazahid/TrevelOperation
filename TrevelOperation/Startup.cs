@@ -32,6 +32,10 @@ public static class Startup
         services.AddBlazorWebViewDeveloperTools();
 #endif
 
+        // Add Memory Cache
+        services.AddMemoryCache();
+        services.AddSingleton<ICacheService, CacheService>();
+
         services.AddScoped<AuditInterceptor>();
         
         services.AddDbContext<TravelDbContext>((serviceProvider, options) =>

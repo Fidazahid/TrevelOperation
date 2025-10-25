@@ -1,7 +1,9 @@
 @page "/data-integrity/matching"
 @using TravelOperation.Core.Models.Entities
 @using TravelOperation.Core.Services.Interfaces
+@using TrevelOperation.RazorLib.Components
 
+<AuthorizeRoleView RequiredRole="Finance">
 <div class="container mx-auto p-6">
     <div class="flex justify-between items-center mb-6">
         <div>
@@ -286,3 +288,4 @@
         }
     }
 </div>
+</AuthorizeRoleView>

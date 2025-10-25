@@ -6,6 +6,7 @@
 @inject ITransactionService TransactionService
 @inject IJSRuntime JSRuntime
 
+<AuthorizeRoleView RequiredRole="Finance">
 <div class="container mx-auto p-6">
     <div class="flex justify-between items-center mb-6">
         <div>
@@ -296,5 +297,5 @@
 <TransactionEditModal 
     @ref="transactionEditModal"
     OnTransactionUpdated="HandleTransactionUpdated" />
-
+</AuthorizeRoleView>
 

@@ -1,5 +1,7 @@
 ﻿@page "/dashboard/manager"
+@using TrevelOperation.RazorLib.Components
 
+<AuthorizeRoleView RequiredRoles='new List<string> { "Finance", "Owner" }'>
 <div class="container mx-auto p-6">
     <div class="hero bg-gradient-to-r from-green-500 to-blue-600 text-white rounded-lg mb-6">
         <div class="hero-content text-center">
@@ -24,3 +26,4 @@
         </div>
     </div>
 </div>
+</AuthorizeRoleView>

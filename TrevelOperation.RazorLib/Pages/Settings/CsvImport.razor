@@ -2,10 +2,12 @@
 @using TrevelOperation.Service
 @using Microsoft.AspNetCore.Components.Forms
 @using System.Text.Json
+@using TrevelOperation.RazorLib.Components
 @inject ICsvImportService ImportService
 @inject IJSRuntime JSRuntime
 @inject NavigationManager NavigationManager
 
+<AuthorizeRoleView RequiredRole="Finance">
 <div class="container mx-auto p-6">
     <div class="mb-6">
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white">CSV Import</h1>
@@ -359,3 +361,4 @@
 
     private record FieldMapping(string FieldName, string ColumnName, bool IsRequired, string Format);
 }
+</AuthorizeRoleView>

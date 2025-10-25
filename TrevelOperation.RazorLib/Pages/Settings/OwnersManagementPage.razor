@@ -2,12 +2,14 @@
 @using TravelOperation.Core.Models.Entities
 @using TrevelOperation.Service
 @using TravelOperation.Core.Services.Interfaces
+@using TrevelOperation.RazorLib.Components
 @inject IJSRuntime JSRuntime
 @inject ISettingsService SettingsService
 @inject ITripService TripService
 
 <PageTitle>Owners - Travel Expense Management</PageTitle>
 
+<AuthorizeRoleView RequiredRole="Finance">
 <div class="p-6">
     <div class="mb-6">
         <h1 class="text-3xl font-bold text-base-content mb-2">Owners</h1>
@@ -784,3 +786,4 @@
         public DateTime? LastActivity { get; set; }
     }
 }
+</AuthorizeRoleView>

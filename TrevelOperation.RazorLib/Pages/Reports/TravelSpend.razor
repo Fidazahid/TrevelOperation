@@ -1,13 +1,15 @@
-@page "/travel-spend"
+@page "/reports/travel-spend"
 @using TravelOperation.Core.Models
 @using TravelOperation.Core.Services
 @using TravelOperation.Core.Services.Interfaces
 @using TrevelOperation.Service
+@using TrevelOperation.RazorLib.Components
 @inject ITripService TripService
 @inject ITransactionService TransactionService
 @inject ITaxCalculationService TaxCalculationService
 @inject IJSRuntime JSRuntime
 
+<AuthorizeRoleView RequiredRole="Finance">
 <div class="container mx-auto p-6">
     <div class="flex justify-between items-center mb-6">
         <div>
@@ -563,3 +565,4 @@
         public decimal TaxExposure { get; set; }
     }
 }
+</AuthorizeRoleView>

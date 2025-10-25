@@ -2,11 +2,13 @@
 @using TravelOperation.Core.Models.Entities
 @using Microsoft.AspNetCore.Components.Forms
 @using TrevelOperation.Service
+@using TrevelOperation.RazorLib.Components
 @inject IJSRuntime JSRuntime
 @inject ISettingsService SettingsService
 
 <PageTitle>Countries & Cities - Travel Expense Management</PageTitle>
 
+<AuthorizeRoleView RequiredRole="Finance">
 <div class="p-6">
     <div class="mb-6">
         <h1 class="text-3xl font-bold text-base-content mb-2">Countries & cities</h1>
@@ -491,3 +493,4 @@
         await JSRuntime.InvokeVoidAsync("downloadFile", "countries-cities.csv", "text/csv", csv);
     }
 }
+</AuthorizeRoleView>

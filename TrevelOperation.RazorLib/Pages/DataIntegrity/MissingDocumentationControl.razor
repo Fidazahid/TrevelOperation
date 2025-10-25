@@ -5,11 +5,13 @@
 @using TravelOperation.Core.Services
 @using TravelOperation.Core.Services.Interfaces
 @using TrevelOperation.Service
+@using TrevelOperation.RazorLib.Components
 @inject ITransactionService TransactionService
 @inject ILookupService LookupService
 @inject IMessageTemplateService MessageTemplateService
 @inject IJSRuntime JSRuntime
 
+<AuthorizeRoleView RequiredRole="Finance">
 <div class="container mx-auto p-6">
     <div class="flex justify-between items-center mb-6">
         <div>
@@ -163,7 +165,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var transaction in filteredTransactions.Skip((currentPage - 1) * pageSize).Take(pageSize))
+                        @foreach (var transaction in pagedResult.Items)
                         {
                             <tr class="hover @(GetRowHighlight(transaction))">
                                 <td>
@@ -237,15 +239,21 @@
             <!-- Pagination -->
             <div class="flex justify-between items-center mt-4">
                 <div class="text-sm text-gray-500">
-                    Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, filteredTransactions.Count) of @filteredTransactions.Count transactions
+                    Showing @pagedResult.FirstItemOnPage to @pagedResult.LastItemOnPage of @pagedResult.TotalCount transactions
+                    <select class="select select-bordered select-sm ml-4" @onchange="OnPageSizeChanged">
+                        <option value="25" selected="@(pageSize == 25)">25 per page</option>
+                        <option value="50" selected="@(pageSize == 50)">50 per page</option>
+                        <option value="100" selected="@(pageSize == 100)">100 per page</option>
+                    </select>
                 </div>
                 <div class="join">
-                    <button class="join-item btn btn-sm" disabled="@(currentPage <= 1)" @onclick="() => ChangePage(currentPage - 1)">«</button>
-                    @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                    <button class="join-item btn btn-sm" disabled="@(!pagedResult.HasPreviousPage)" @onclick="PreviousPage">«</button>
+                    @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(pagedResult.TotalPages, currentPage + 2); i++)
                     {
-                        <button class="join-item btn btn-sm @(i == currentPage ? "btn-active" : "")" @onclick="() => ChangePage(i)">@i</button>
+                        int pageNumber = i;
+                        <button class="join-item btn btn-sm @(i == currentPage ? "btn-active" : "")" @onclick="() => GoToPage(pageNumber)">@i</button>
                     }
-                    <button class="join-item btn btn-sm" disabled="@(currentPage >= totalPages)" @onclick="() => ChangePage(currentPage + 1)">»</button>
+                    <button class="join-item btn btn-sm" disabled="@(!pagedResult.HasNextPage)" @onclick="NextPage">»</button>
                 </div>
             </div>
         </div>
@@ -255,6 +263,7 @@
 @code {
     private List<Transaction> transactions = new();
     private List<Transaction> filteredTransactions = new();
+    private PagedResult<Transaction> pagedResult = new();
     private List<string> availableOwners = new();
     private HashSet<string> selectedTransactions = new();
     
@@ -267,8 +276,7 @@
     
     // Pagination
     private int currentPage = 1;
-    private int pageSize = 15;
-    private int totalPages => (int)Math.Ceiling((double)filteredTransactions.Count / pageSize);
+    private int pageSize = 25;
     
     // Summary data
     private int missingDocCount = 0;
@@ -286,8 +294,21 @@
 
     private async Task LoadMissingDocTransactions()
     {
+        // Load paged data from server
+        var paginationParams = new PaginationParams
+        {
+            PageNumber = currentPage,
+            PageSize = pageSize,
+            SortBy = "TransactionDate",
+            SortDirection = "desc"
+        };
+        
+        pagedResult = await TransactionService.GetTransactionsWithoutDocumentationPagedAsync(paginationParams);
+        
+        // Also get all for summary calculations
         var allMissing = await TransactionService.GetTransactionsWithoutDocumentationAsync();
         transactions = allMissing.ToList();
+        filteredTransactions = transactions;
         
         availableOwners = transactions
             .Where(t => t.Trip?.Owner?.Name != null)
@@ -307,21 +328,14 @@
         complianceRate = totalTransactions > 0 ? (150.0m / totalTransactions) * 100 : 0;
     }
 
-    private void FilterTransactions()
+    private async Task FilterTransactions()
     {
-        filteredTransactions = transactions.Where(t =>
-            (string.IsNullOrEmpty(selectedOwner) || (t.Trip?.Owner?.Name == selectedOwner)) &&
-            (string.IsNullOrEmpty(selectedCategory) || (t.Category?.Name == selectedCategory)) &&
-            (string.IsNullOrEmpty(searchText) || 
-             (t.Vendor?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false) ||
-             t.TransactionId.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
-            FilterByAmountRange(t) &&
-            FilterByAge(t)
-        ).OrderByDescending(t => GetPriority(t)).ThenByDescending(t => t.AmountUSD ?? 0).ToList();
-        
-        CalculateSummary();
         currentPage = 1;
         selectedTransactions.Clear();
+        
+        // Reload with server-side pagination
+        await LoadMissingDocTransactions();
+        CalculateSummary();
         StateHasChanged();
     }
 
@@ -447,11 +461,43 @@
             filteredTransactions.FirstOrDefault(t => t.TransactionId == id)?.AmountUSD ?? 0);
     }
 
-    private void ChangePage(int page)
+    private async Task PreviousPage()
     {
-        if (page >= 1 && page <= totalPages)
+        if (pagedResult.HasPreviousPage)
+        {
+            currentPage--;
+            await LoadMissingDocTransactions();
+            StateHasChanged();
+        }
+    }
+
+    private async Task NextPage()
+    {
+        if (pagedResult.HasNextPage)
+        {
+            currentPage++;
+            await LoadMissingDocTransactions();
+            StateHasChanged();
+        }
+    }
+
+    private async Task GoToPage(int page)
+    {
+        if (page >= 1 && page <= pagedResult.TotalPages)
         {
             currentPage = page;
+            await LoadMissingDocTransactions();
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var newSize))
+        {
+            pageSize = newSize;
+            currentPage = 1;
+            await LoadMissingDocTransactions();
             StateHasChanged();
         }
     }
@@ -461,7 +507,7 @@
         var isChecked = (bool)(e.Value ?? false);
         if (isChecked)
         {
-            foreach (var transaction in filteredTransactions.Skip((currentPage - 1) * pageSize).Take(pageSize))
+            foreach (var transaction in pagedResult.Items)
             {
                 selectedTransactions.Add(transaction.TransactionId);
             }
@@ -591,3 +637,4 @@ Thank you for your prompt attention to this matter!";
         return email;
     }
 }
+</AuthorizeRoleView>

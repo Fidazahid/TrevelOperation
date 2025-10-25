@@ -2,11 +2,13 @@
 @using TravelOperation.Core.Models.Entities
 @using TravelOperation.Core.Models.Lookup
 @using TravelOperation.Core.Services.Interfaces
+@using TrevelOperation.RazorLib.Components
 @inject ITripService TripService
 @inject ITransactionService TransactionService
 @inject TrevelOperation.Service.ISettingsService SettingsService
 @inject IJSRuntime JSRuntime
 
+<AuthorizeRoleView RequiredRoles='new List<string> { "Finance", "Owner" }'>
 <div class="container mx-auto p-6">
     <div class="flex justify-between items-center mb-6">
         <div>
@@ -588,3 +590,4 @@
         public int? SuggestedOwnerId { get; set; }
     }
 }
+</AuthorizeRoleView>

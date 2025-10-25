@@ -2,11 +2,13 @@
 @using TravelOperation.Core.Models
 @using TravelOperation.Core.Services
 @using TravelOperation.Core.Services.Interfaces
+@using TrevelOperation.RazorLib.Components
 @inject ILookupService LookupService
 @inject ITripService TripService
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
+<AuthorizeRoleView RequiredRoles='new List<string> { "Finance", "Owner" }'>
 <div class="container mx-auto p-6 max-w-4xl">
     <div class="card bg-base-100 shadow-lg">
         <div class="card-body">
@@ -515,3 +517,4 @@
         Navigation.NavigateTo("/trips");
     }
 }
+</AuthorizeRoleView>

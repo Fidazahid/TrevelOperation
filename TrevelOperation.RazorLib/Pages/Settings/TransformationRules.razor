@@ -1,8 +1,10 @@
 @page "/settings/transformation-rules"
 @using TrevelOperation.Service
 @using TransformationRule = TrevelOperation.Service.TransformationRule
+@using TrevelOperation.RazorLib.Components
 @inject ICsvImportService ImportService
 
+<AuthorizeRoleView RequiredRole="Finance">
 <div class="container mx-auto p-6">
     <div class="mb-6">
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Transformation Rules</h1>
@@ -347,3 +349,4 @@
         _testResult = false;
     }
 }
+</AuthorizeRoleView>

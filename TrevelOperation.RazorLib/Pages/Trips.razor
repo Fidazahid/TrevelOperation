@@ -1,13 +1,25 @@
 @page "/trips"
 @using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Models
 @using TravelOperation.Core.Services.Interfaces
 @inject ITripService TripService
 @inject ILookupService LookupService
 @inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
 @implements IDisposable
 
-<div class="container mx-auto p-6">
-    <div class="flex justify-between items-center mb-6">
+<PageTitle>Trips - Travel Expense Management</PageTitle>
+
+<style>
+    .table td, .table th {
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        white-space: normal !important;
+    }
+</style>
+
+<div class="container ">
+    <div class="flex justify-between items-center ">
         <h1 class="text-3xl font-bold text-gray-900">Trips</h1>
         <div class="flex gap-2">
             <button class="btn btn-primary" @onclick="OpenCreateModal">
@@ -23,7 +35,7 @@
     </div>
 
     <!-- Filters -->
-    <div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card bg-base-100 shadow-sm ">
         <div class="card-body">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div class="form-control">
@@ -96,78 +108,61 @@
         </div>
     </div>
 
-    <!-- Results Summary -->
-    <div class="flex justify-between items-center mb-4">
-        <div class="text-sm text-gray-600">
-            Showing @filteredTrips?.Count() of @allTrips?.Count() trips
-        </div>
-        <div class="flex gap-2 items-center">
-            <label class="label">
-                <span class="label-text">Per page:</span>
-            </label>
-            <select class="select select-bordered select-xs" @bind="pageSize" @oninput="UpdatePagination">
-                <option value="25">25</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-            </select>
-        </div>
-    </div>
-
     <!-- Trips Table -->
     <div class="card bg-base-100 shadow-sm">
-        <div class="card-body p-0">
-            <div class="overflow-x-auto">
-                <table class="table table-hover">
-                    <thead>
-                        <tr class="bg-base-200">
-                            <th>
-                                <label>
-                                    <input type="checkbox" class="checkbox checkbox-sm" 
-                                           checked="@isAllSelected"
-                                           @onchange="@((ChangeEventArgs e) => ToggleSelectAllChange((bool)e.Value!))" />
-                                </label>
-                            </th>
-                            <th class="cursor-pointer" @onclick='() => SortBy("TripName")'>
-                                Trip Name 
-                                @if (sortColumn == "TripName")
-                                {
-                                    <i class="fas @(sortAscending ? "fa-sort-up" : "fa-sort-down") ml-1"></i>
-                                }
-                            </th>
-                            <th class="cursor-pointer" @onclick='() => SortBy("Email")'>
-                                Email
-                                @if (sortColumn == "Email")
-                                {
-                                    <i class="fas @(sortAscending ? "fa-sort-up" : "fa-sort-down") ml-1"></i>
-                                }
-                            </th>
-                            <th class="cursor-pointer" @onclick='() => SortBy("StartDate")'>
-                                Start Date
-                                @if (sortColumn == "StartDate")
-                                {
-                                    <i class="fas @(sortAscending ? "fa-sort-up" : "fa-sort-down") ml-1"></i>
-                                }
-                            </th>
-                            <th class="cursor-pointer" @onclick='() => SortBy("EndDate")'>
-                                End Date
-                                @if (sortColumn == "EndDate")
-                                {
-                                    <i class="fas @(sortAscending ? "fa-sort-up" : "fa-sort-down") ml-1"></i>
-                                }
-                            </th>
-                            <th>Duration</th>
-                            <th>Destination</th>
-                            <th>Purpose</th>
-                            <th>Status</th>
-                            <th>Validation</th>
-                            <th>Owner</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
+        <!-- Table with fixed height -->
+        <div class="overflow-y-auto" style="height: 600px; overflow-x: hidden;">
+            <table class="table table-zebra table-pin-rows" style="table-layout: fixed; width: 100%;">
+                <thead class="bg-white sticky top-0 z-10">
+                    <tr class="bg-white">
+                        <th class="bg-white" style="width: 30px;">
+                            <label>
+                                <input type="checkbox" class="checkbox checkbox-sm" 
+                                       checked="@isAllSelected"
+                                       @onchange="@((ChangeEventArgs e) => ToggleSelectAllChange((bool)e.Value!))" />
+                            </label>
+                        </th>
+                        <th class="bg-white cursor-pointer hover:bg-base-200" style="width: 100px;" @onclick='() => SortBy("TripName")'>
+                            Trip Name 
+                            @if (sortColumn == "TripName")
+                            {
+                                <span>@(sortAscending ? "↑" : "↓")</span>
+                            }
+                        </th>
+                        <th class="bg-white cursor-pointer hover:bg-base-200" style="width: 140px;" @onclick='() => SortBy("Email")'>
+                            Email
+                            @if (sortColumn == "Email")
+                            {
+                                <span>@(sortAscending ? "↑" : "↓")</span>
+                            }
+                        </th>
+                        <th class="bg-white cursor-pointer hover:bg-base-200" style="width: 85px;" @onclick='() => SortBy("StartDate")'>
+                            Start
+                            @if (sortColumn == "StartDate")
+                            {
+                                <span>@(sortAscending ? "↑" : "↓")</span>
+                            }
+                        </th>
+                        <th class="bg-white cursor-pointer hover:bg-base-200" style="width: 85px;" @onclick='() => SortBy("EndDate")'>
+                            End
+                            @if (sortColumn == "EndDate")
+                            {
+                                <span>@(sortAscending ? "↑" : "↓")</span>
+                            }
+                        </th>
+                        <th class="bg-white" style="width: 90px;">Duration</th>
+                        <th class="bg-white" style="width: 130px;">Destination</th>
+                        <th class="bg-white" style="width: 100px;">Purpose</th>
+                        <th class="bg-white" style="width: 90px;">Status</th>
+                        <th class="bg-white" style="width: 90px;">Validation</th>
+                        <th class="bg-white" style="width: 100px;">Owner</th>
+                        <th class="bg-white" style="width: 100px;">Actions</th>
+                    </tr>
+                </thead>
                     <tbody>
-                        @if (pagedTrips != null)
+                        @if (pagedResult.Items.Any())
                         {
-                            @foreach (var trip in pagedTrips)
+                            @foreach (var trip in pagedResult.Items)
                             {
                                 <tr class="hover" @ondblclick="() => ViewTripDetails(trip.TripId)">
                                     <td @onclick:stopPropagation="true">
@@ -203,48 +198,44 @@
                                     <td>
                                         @if (trip.Purpose != null)
                                         {
-                                            <span class="badge badge-outline">@trip.Purpose.Emoji @trip.Purpose.Name</span>
+                                            <span class="text-sm font-medium @GetPurposeColor(trip.Purpose.Name)">@trip.Purpose.Name</span>
                                         }
                                     </td>
                                     <td>
                                         @if (trip.Status != null)
                                         {
-                                            <span class="badge @GetStatusBadgeClass(trip.Status.Name)">
-                                                @trip.Status.Emoji @trip.Status.Name
-                                            </span>
+                                            <span class="text-sm font-medium @GetStatusColor(trip.Status.Name)">@trip.Status.Name</span>
                                         }
                                     </td>
                                     <td>
                                         @if (trip.ValidationStatus != null)
                                         {
-                                            <span class="badge @GetValidationBadgeClass(trip.ValidationStatus.Name)">
-                                                @trip.ValidationStatus.Emoji @trip.ValidationStatus.Name
-                                            </span>
+                                            <span class="text-sm font-medium @GetValidationColor(trip.ValidationStatus.Name)">@trip.ValidationStatus.Name</span>
                                         }
                                     </td>
                                     <td>@trip.Owner?.Name</td>
                                     <td>
                                         <div class="dropdown dropdown-end">
-                                            <div tabindex="0" role="button" class="btn btn-ghost btn-xs">
-                                                <i class="fas fa-ellipsis-v"></i>
-                                            </div>
-                                            <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow">
-                                                <li><a @onclick="() => ViewTripDetails(trip.TripId)">
+                                            <button tabindex="0" class="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-900">
+                                                ⋮
+                                            </button>
+                                            <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow border border-base-300">
+                                                <li><a @onclick="() => ViewTripDetails(trip.TripId)" class="hover:bg-base-200">
                                                     <i class="fas fa-eye mr-2"></i>View Details
                                                 </a></li>
-                                                <li><a @onclick="() => EditTrip(trip)">
+                                                <li><a @onclick="() => EditTrip(trip)" class="hover:bg-base-200">
                                                     <i class="fas fa-edit mr-2"></i>Edit
                                                 </a></li>
-                                                <li><a @onclick="() => LinkTransactions(trip.TripId)">
+                                                <li><a @onclick="() => LinkTransactions(trip.TripId)" class="hover:bg-base-200">
                                                     <i class="fas fa-link mr-2"></i>Link Transactions
                                                 </a></li>
                                                 @if (trip.ValidationStatus?.Name == "Ready to validate")
                                                 {
-                                                    <li><a @onclick="() => ValidateTrip(trip.TripId)">
+                                                    <li><a @onclick="() => ValidateTrip(trip.TripId)" class="hover:bg-base-200">
                                                         <i class="fas fa-check mr-2"></i>Validate
                                                     </a></li>
                                                 }
-                                                <li><a @onclick="() => DeleteTrip(trip.TripId)" class="text-error">
+                                                <li><a @onclick="() => DeleteTrip(trip.TripId)" class="text-red-600 hover:bg-red-50">
                                                     <i class="fas fa-trash mr-2"></i>Delete
                                                 </a></li>
                                             </ul>
@@ -257,42 +248,48 @@
                 </table>
             </div>
         </div>
-    </div>
-
-    <!-- Pagination -->
-    @if (totalPages > 1)
-    {
-        <div class="flex justify-center mt-6">
-            <div class="btn-group">
-                <button class="btn btn-sm @(currentPage == 1 ? "btn-disabled" : "")" 
-                        @onclick="() => ChangePage(1)" disabled="@(currentPage == 1)">
-                    First
-                </button>
-                <button class="btn btn-sm @(currentPage == 1 ? "btn-disabled" : "")" 
-                        @onclick="() => ChangePage(currentPage - 1)" disabled="@(currentPage == 1)">
-                    Previous
-                </button>
-                
-                @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
-                {
-                    int page = i;
-                    <button class="btn btn-sm @(currentPage == page ? "btn-active" : "")" 
-                            @onclick="() => ChangePage(page)">
-                        @((MarkupString)page.ToString())
-                    </button>
-                }
-                
-                <button class="btn btn-sm @(currentPage == totalPages ? "btn-disabled" : "")" 
-                        @onclick="() => ChangePage(currentPage + 1)" disabled="@(currentPage == totalPages)">
-                    Next
-                </button>
-                <button class="btn btn-sm @(currentPage == totalPages ? "btn-disabled" : "")" 
-                        @onclick="() => ChangePage(totalPages)" disabled="@(currentPage == totalPages)">
-                    Last
-                </button>
+        
+        <!-- Pagination - Outside the scrolling area -->
+        @if (pagedResult.TotalCount > 0)
+        {
+            <div class="card-body border-t">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center gap-4">
+                        <div class="text-sm text-base-content/70">
+                            Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, pagedResult.TotalCount) of @pagedResult.TotalCount trips
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-base-content/70">Per page:</span>
+                            <select class="select select-bordered select-sm w-20" @bind="pageSize" @bind:after="UpdatePagination">
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                    </div>
+                    @if (pagedResult.TotalPages > 1)
+                    {
+                        <div class="join">
+                            <button class="join-item btn btn-sm" @onclick="() => ChangePage(currentPage - 1)" disabled="@(currentPage == 1)">
+                                « Previous
+                            </button>
+                            @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(pagedResult.TotalPages, currentPage + 2); i++)
+                            {
+                                int pageNum = i;
+                                <button class="join-item btn btn-sm @(currentPage == pageNum ? "btn-primary" : "")" 
+                                        @onclick="() => ChangePage(pageNum)">
+                                    @pageNum
+                                </button>
+                            }
+                            <button class="join-item btn btn-sm" @onclick="() => ChangePage(currentPage + 1)" disabled="@(currentPage == pagedResult.TotalPages)">
+                                Next »
+                            </button>
+                        </div>
+                    }
+                </div>
             </div>
-        </div>
-    }
+        }
+    </div>
 
     <!-- Bulk Actions (shown when trips are selected) -->
     @if (selectedTripIds.Any())
@@ -317,7 +314,7 @@
             </div>
         </div>
     }
-</div>
+
 
 <!-- Trip Edit Modal -->
 <TripEditModal IsVisible="showEditModal" 
@@ -332,10 +329,17 @@
                       OnClose="CloseSuggestionsModal"
                       OnTripsCreated="OnTripsCreated" />
 
+<!-- Link Transactions Modal -->
+<LinkTransactionsModal IsVisible="showLinkModal" 
+                       TripId="@(linkingTrip?.TripId ?? 0)" 
+                       Trip="linkingTrip"
+                       OnClose="CloseLinkModal" 
+                       OnTransactionsLinked="OnTransactionsLinked" />
+
 @code {
     private IEnumerable<Trip>? allTrips;
     private IEnumerable<Trip>? filteredTrips;
-    private IEnumerable<Trip>? pagedTrips;
+    private PagedResult<Trip> pagedResult = new();
     
     private IEnumerable<Purpose>? purposes;
     private IEnumerable<Status>? statuses;
@@ -356,7 +360,6 @@
     // Pagination
     private int currentPage = 1;
     private int pageSize = 25;
-    private int totalPages = 1;
 
     // Selection
     private HashSet<int> selectedTripIds = new();
@@ -370,6 +373,10 @@
     // Suggestions modal state
     private bool showSuggestionsModal = false;
     private IEnumerable<Trip>? tripSuggestions;
+
+    // Link transactions modal state
+    private bool showLinkModal = false;
+    private Trip? linkingTrip;
 
     protected override async Task OnInitializedAsync()
     {
@@ -463,13 +470,12 @@
         if (filteredTrips == null) return;
 
         var totalCount = filteredTrips.Count();
-        totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
-        currentPage = Math.Min(currentPage, Math.Max(1, totalPages));
-
-        pagedTrips = filteredTrips
+        var pagedItems = filteredTrips
             .Skip((currentPage - 1) * pageSize)
             .Take(pageSize)
             .ToList();
+
+        pagedResult = new PagedResult<Trip>(pagedItems, totalCount, currentPage, pageSize);
 
         // Update select all state when page changes
         UpdateSelectAllState();
@@ -519,9 +525,9 @@
         
         selectedTripIds.Clear();
         
-        if (isAllSelected && pagedTrips != null)
+        if (isAllSelected && pagedResult.Items != null)
         {
-            foreach (var trip in pagedTrips)
+            foreach (var trip in pagedResult.Items)
             {
                 selectedTripIds.Add(trip.TripId);
             }
@@ -530,9 +536,9 @@
 
     private void UpdateSelectAllState()
     {
-        if (pagedTrips == null) return;
+        if (pagedResult.Items == null) return;
         
-        var pageIds = pagedTrips.Select(t => t.TripId).ToHashSet();
+        var pageIds = pagedResult.Items.Select(t => t.TripId).ToHashSet();
         isAllSelected = pageIds.All(id => selectedTripIds.Contains(id)) && pageIds.Any();
         StateHasChanged();
     }
@@ -544,26 +550,43 @@
         StateHasChanged();
     }
 
-    private string GetStatusBadgeClass(string statusName)
+    // Helper methods for colored text
+    private string GetPurposeColor(string purposeName)
     {
-        return statusName switch
+        return purposeName?.ToLower() switch
         {
-            "Canceled" => "badge-error",
-            "Upcoming" => "badge-warning",
-            "Ongoing" => "badge-info",
-            "Completed" => "badge-success",
-            _ => "badge-outline"
+            "business trip" => "text-blue-600",
+            "onboarding" => "text-green-600",
+            "company trip" => "text-purple-600",
+            "bcp" => "text-orange-600",
+            _ => "text-gray-600"
         };
     }
 
-    private string GetValidationBadgeClass(string validationName)
+    private string GetStatusColor(string statusName)
     {
-        return validationName switch
+        // Remove emoji if present
+        var name = statusName?.Replace("🔴", "").Replace("⚪", "").Replace("🔵", "").Replace("🟢", "").Trim().ToLower();
+        return name switch
         {
-            "Not ready to validate" => "badge-outline",
-            "Ready to validate" => "badge-warning",
-            "Validated" => "badge-success",
-            _ => "badge-outline"
+            "canceled" or "cancelled" => "text-red-600",
+            "upcoming" => "text-gray-600",
+            "ongoing" => "text-blue-600",
+            "completed" => "text-green-600",
+            _ => "text-gray-600"
+        };
+    }
+
+    private string GetValidationColor(string validationName)
+    {
+        // Remove emoji if present
+        var name = validationName?.Replace("⚪", "").Replace("🟡", "").Replace("🟢", "").Trim().ToLower();
+        return name switch
+        {
+            "not ready to validate" => "text-gray-600",
+            "ready to validate" => "text-yellow-600",
+            "validated" => "text-green-600",
+            _ => "text-gray-600"
         };
     }
 
@@ -703,12 +726,30 @@
 
     private void ViewTripDetails(int tripId)
     {
-        // TODO: Navigate to trip details page or show modal
+        NavigationManager.NavigateTo($"/trips/{tripId}");
     }
 
     private void LinkTransactions(int tripId)
     {
-        // TODO: Open transaction linking modal
+        // Find the trip to pass to modal
+        var trip = pagedResult.Items.FirstOrDefault(t => t.TripId == tripId);
+        if (trip != null)
+        {
+            linkingTrip = trip;
+            showLinkModal = true;
+        }
+    }
+
+    private void CloseLinkModal()
+    {
+        showLinkModal = false;
+        linkingTrip = null;
+    }
+
+    private async Task OnTransactionsLinked()
+    {
+        await LoadData();
+        CloseLinkModal();
     }
 
     private async Task BulkValidate()

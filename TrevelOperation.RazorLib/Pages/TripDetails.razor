@@ -1,0 +1,458 @@
+@page "/trips/{TripId:int}"
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Services.Interfaces
+@using TrevelOperation.Service
+@inject ITripService TripService
+@inject ITransactionService TransactionService
+@inject ITaxCalculationService TaxCalculationService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Trip Details - Travel Expense Management</PageTitle>
+
+<div class="container mx-auto p-6">
+    @if (trip == null)
+    {
+        <div class="flex justify-center items-center h-64">
+            <span class="loading loading-spinner loading-lg"></span>
+        </div>
+    }
+    else
+    {
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <button class="btn btn-ghost btn-sm mb-2" @onclick="NavigateBack">
+                    <i class="fas fa-arrow-left mr-2"></i>Back to Trips
+                </button>
+                <h1 class="text-3xl font-bold text-gray-900">@trip.TripName</h1>
+            </div>
+            <div class="flex gap-2">
+                <button class="btn btn-primary" @onclick="OpenLinkTransactionsModal">
+                    <i class="fas fa-link mr-2"></i>Link Transactions
+                </button>
+                @if (trip.ValidationStatus?.Name == "Validated")
+                {
+                    <button class="btn btn-success" @onclick="ValidateTrip">
+                        <i class="fas fa-check-circle mr-2"></i>Re-validate Trip
+                    </button>
+                }
+                else
+                {
+                    <button class="btn btn-secondary" @onclick="ValidateTrip">
+                        <i class="fas fa-check mr-2"></i>Validate Trip
+                    </button>
+                }
+                <button class="btn btn-outline" @onclick="ExportTripData">
+                    <i class="fas fa-download mr-2"></i>Export
+                </button>
+            </div>
+        </div>
+
+        <!-- Trip Information -->
+        <div class="card bg-base-100 shadow-sm mb-6">
+            <div class="card-body">
+                <h2 class="card-title text-xl mb-4">Trip Information</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                        <label class="text-sm text-base-content/70">Traveler</label>
+                        <p class="font-medium">@trip.Email</p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-base-content/70">Dates</label>
+                        <p class="font-medium">@trip.StartDate.ToString("dd/MM/yyyy") - @trip.EndDate.ToString("dd/MM/yyyy")</p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-base-content/70">Duration</label>
+                        <p class="font-medium">@trip.Duration days</p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-base-content/70">Destination</label>
+                        <p class="font-medium">
+                            @if (!string.IsNullOrEmpty(trip.City1))
+                            {
+                                <text>@trip.City1, @trip.Country1</text>
+                            }
+                            else
+                            {
+                                <text>@trip.Country1</text>
+                            }
+                            @if (!string.IsNullOrEmpty(trip.Country2))
+                            {
+                                <text> | </text>
+                                @if (!string.IsNullOrEmpty(trip.City2))
+                                {
+                                    <text>@trip.City2, @trip.Country2</text>
+                                }
+                                else
+                                {
+                                    <text>@trip.Country2</text>
+                                }
+                            }
+                        </p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-base-content/70">Purpose</label>
+                        <p class="font-medium">@trip.Purpose?.Emoji @trip.Purpose?.Name</p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-base-content/70">Status</label>
+                        <p class="font-medium">@trip.Status?.Emoji @trip.Status?.Name</p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-base-content/70">Validation Status</label>
+                        <p class="font-medium">@trip.ValidationStatus?.Emoji @trip.ValidationStatus?.Name</p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-base-content/70">Owner</label>
+                        <p class="font-medium">@trip.Owner?.Name</p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-base-content/70">Trip Type</label>
+                        <p class="font-medium">@trip.TripType?.Emoji @trip.TripType?.Name</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Spending Summary -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="stat bg-base-100 shadow-sm rounded-lg">
+                <div class="stat-title">Total Spend</div>
+                <div class="stat-value text-primary">$@totalSpend.ToString("N2")</div>
+                <div class="stat-desc">@linkedTransactions.Count() transactions</div>
+            </div>
+            <div class="stat bg-base-100 shadow-sm rounded-lg">
+                <div class="stat-title">Cost per Day</div>
+                <div class="stat-value text-secondary">$@costPerDay.ToString("N2")</div>
+                <div class="stat-desc">Over @trip.Duration days</div>
+            </div>
+            <div class="stat bg-base-100 shadow-sm rounded-lg">
+                <div class="stat-title">Tax Exposure</div>
+                <div class="stat-value text-warning">$@taxExposure.ToString("N2")</div>
+                <div class="stat-desc cursor-pointer hover:underline" @onclick="ShowTaxBreakdown">View details</div>
+            </div>
+            <div class="stat bg-base-100 shadow-sm rounded-lg">
+                <div class="stat-title">Largest Expense</div>
+                <div class="stat-value text-accent">$@largestExpense.ToString("N2")</div>
+                <div class="stat-desc">@largestExpenseCategory</div>
+            </div>
+        </div>
+
+        <!-- Category Breakdown -->
+        <div class="card bg-base-100 shadow-sm mb-6">
+            <div class="card-body">
+                <h2 class="card-title text-xl mb-4">Category Breakdown</h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    @foreach (var category in categorySpend.OrderByDescending(c => c.Value))
+                    {
+                        <div class="text-center">
+                            <p class="text-sm text-base-content/70">@category.Key</p>
+                            <p class="text-lg font-bold">${category.Value:N2}</p>
+                            @if (trip.Duration > 0)
+                            {
+                                <p class="text-xs text-base-content/50">${(category.Value / trip.Duration):N2}/day</p>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Linked Transactions -->
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="card-title text-xl">Linked Transactions (@linkedTransactions.Count())</h2>
+                    <button class="btn btn-sm btn-outline" @onclick="OpenLinkTransactionsModal">
+                        <i class="fas fa-link mr-2"></i>Manage Links
+                    </button>
+                </div>
+                
+                @if (linkedTransactions.Any())
+                {
+                    <div class="overflow-x-auto">
+                        <table class="table table-zebra">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Category</th>
+                                    <th>Vendor</th>
+                                    <th>Amount</th>
+                                    <th>Amount (USD)</th>
+                                    <th>Document</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var transaction in linkedTransactions.OrderByDescending(t => t.TransactionDate))
+                                {
+                                    <tr>
+                                        <td>@transaction.TransactionDate.ToString("dd/MM/yyyy")</td>
+                                        <td>@transaction.Category?.Emoji @transaction.Category?.Name</td>
+                                        <td>@transaction.Vendor</td>
+                                        <td>@transaction.Currency @transaction.Amount.ToString("N2")</td>
+                                        <td>${transaction.AmountUSD.ToString("N2")}</td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(transaction.DocumentUrl))
+                                            {
+                                                <a href="@transaction.DocumentUrl" target="_blank" class="link link-primary">
+                                                    <i class="fas fa-file-pdf"></i>
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-base-content/30">N/A</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-ghost btn-xs" @onclick="() => UnlinkTransaction(transaction.TransactionId)">
+                                                <i class="fas fa-unlink"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-8 text-base-content/50">
+                        <i class="fas fa-inbox text-4xl mb-2"></i>
+                        <p>No transactions linked to this trip yet.</p>
+                        <button class="btn btn-sm btn-primary mt-4" @onclick="OpenLinkTransactionsModal">
+                            Link Transactions
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Link Transactions Modal -->
+<LinkTransactionsModal IsVisible="showLinkModal" 
+                       TripId="TripId" 
+                       Trip="trip"
+                       OnClose="CloseLinkModal" 
+                       OnTransactionsLinked="OnTransactionsLinked" />
+
+<!-- Tax Breakdown Modal -->
+@if (showTaxBreakdown)
+{
+    <div class="modal modal-open">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">Tax Exposure Breakdown</h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <p class="text-sm text-base-content/70">Meals Exposure</p>
+                    <p class="text-lg font-bold">$@taxBreakdown.MealsExposure.ToString("N2")</p>
+                    <p class="text-xs text-base-content/50">
+                        Actual: $@taxBreakdown.ActualMealsPerDay.ToString("N2")/day | Cap: $@taxBreakdown.MealsCap.ToString("N2")/day
+                    </p>
+                </div>
+                
+                <div>
+                    <p class="text-sm text-base-content/70">Lodging Exposure</p>
+                    <p class="text-lg font-bold">$@taxBreakdown.LodgingExposure.ToString("N2")</p>
+                    <p class="text-xs text-base-content/50">
+                        Actual: $@taxBreakdown.ActualLodgingPerNight.ToString("N2")/night | Cap: $@taxBreakdown.LodgingCap.ToString("N2")/night
+                    </p>
+                </div>
+                
+                @if (taxBreakdown.HasBusinessClassAirfare)
+                {
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span>Trip includes Business/First class airfare</span>
+                    </div>
+                }
+                
+                <div class="divider"></div>
+                
+                <div>
+                    <p class="text-sm text-base-content/70">Total Tax Exposure</p>
+                    <p class="text-2xl font-bold text-warning">$@taxExposure.ToString("N2")</p>
+                </div>
+            </div>
+            
+            <div class="modal-action">
+                <button class="btn" @onclick="() => showTaxBreakdown = false">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int TripId { get; set; }
+
+    private Trip? trip;
+    private IEnumerable<Transaction> linkedTransactions = new List<Transaction>();
+    private Dictionary<string, decimal> categorySpend = new();
+    
+    private decimal totalSpend;
+    private decimal costPerDay;
+    private decimal taxExposure;
+    private decimal largestExpense;
+    private string largestExpenseCategory = "";
+
+    private bool showLinkModal = false;
+    private bool showTaxBreakdown = false;
+    
+    private TaxBreakdownModel taxBreakdown = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTripData();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadTripData();
+    }
+
+    private async Task LoadTripData()
+    {
+        try
+        {
+            trip = await TripService.GetTripByIdAsync(TripId);
+            
+            if (trip != null)
+            {
+                linkedTransactions = await TransactionService.GetTransactionsByTripIdAsync(TripId);
+                totalSpend = await TripService.CalculateTotalSpendAsync(TripId);
+                categorySpend = await TripService.CalculateCategorySpendAsync(TripId);
+                taxExposure = await TripService.CalculateTaxExposureAsync(TripId);
+                
+                costPerDay = trip.Duration > 0 ? totalSpend / trip.Duration : 0;
+                
+                if (linkedTransactions.Any())
+                {
+                    var largest = linkedTransactions.OrderByDescending(t => Math.Abs(t.AmountUSD ?? 0)).First();
+                    largestExpense = Math.Abs(largest.AmountUSD ?? 0);
+                    largestExpenseCategory = largest.Category?.Name ?? "Unknown";
+                }
+                
+                await LoadTaxBreakdown();
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error loading trip data: {ex.Message}");
+        }
+    }
+
+    private async Task LoadTaxBreakdown()
+    {
+        if (trip == null) return;
+
+        try
+        {
+            var mealsSpend = categorySpend.ContainsKey("Meals") ? categorySpend["Meals"] : 0;
+            var lodgingSpend = categorySpend.ContainsKey("Lodging") ? categorySpend["Lodging"] : 0;
+            
+            taxBreakdown = new TaxBreakdownModel
+            {
+                ActualMealsPerDay = trip.Duration > 0 ? mealsSpend / trip.Duration : 0,
+                ActualLodgingPerNight = trip.Duration > 0 ? lodgingSpend / trip.Duration : 0,
+                MealsCap = 100, // This should come from TaxTable
+                LodgingCap = 200, // This should come from TaxTable
+                HasBusinessClassAirfare = linkedTransactions.Any(t => 
+                    t.Category?.Name == "Airfare" && 
+                    (t.CabinClass?.Name == "Business" || t.CabinClass?.Name == "First"))
+            };
+            
+            taxBreakdown.MealsExposure = trip.Duration > 0 && taxBreakdown.ActualMealsPerDay > taxBreakdown.MealsCap
+                ? trip.Duration * (taxBreakdown.ActualMealsPerDay - taxBreakdown.MealsCap)
+                : 0;
+                
+            taxBreakdown.LodgingExposure = trip.Duration > 0 && taxBreakdown.ActualLodgingPerNight > taxBreakdown.LodgingCap
+                ? trip.Duration * (taxBreakdown.ActualLodgingPerNight - taxBreakdown.LodgingCap)
+                : 0;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading tax breakdown: {ex.Message}");
+        }
+    }
+
+    private void NavigateBack()
+    {
+        NavigationManager.NavigateTo("/trips");
+    }
+
+    private void OpenLinkTransactionsModal()
+    {
+        showLinkModal = true;
+    }
+
+    private void CloseLinkModal()
+    {
+        showLinkModal = false;
+    }
+
+    private async Task OnTransactionsLinked()
+    {
+        await LoadTripData();
+        CloseLinkModal();
+        await JSRuntime.InvokeVoidAsync("showToast", "success", "Transactions linked successfully");
+    }
+
+    private async Task UnlinkTransaction(string transactionId)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+            "Are you sure you want to unlink this transaction from the trip?");
+        
+        if (confirmed)
+        {
+            try
+            {
+                await TransactionService.UnlinkTransactionFromTripAsync(transactionId);
+                await LoadTripData();
+                await JSRuntime.InvokeVoidAsync("showToast", "success", "Transaction unlinked successfully");
+            }
+            catch (Exception ex)
+            {
+                await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error unlinking transaction: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task ValidateTrip()
+    {
+        try
+        {
+            await TripService.ValidateTripAsync(TripId);
+            await LoadTripData();
+            await JSRuntime.InvokeVoidAsync("showToast", "success", "Trip validated successfully");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error validating trip: {ex.Message}");
+        }
+    }
+
+    private async Task ExportTripData()
+    {
+        await JSRuntime.InvokeVoidAsync("showToast", "info", "Export functionality coming soon");
+    }
+
+    private void ShowTaxBreakdown()
+    {
+        showTaxBreakdown = true;
+    }
+
+    private class TaxBreakdownModel
+    {
+        public decimal MealsExposure { get; set; }
+        public decimal LodgingExposure { get; set; }
+        public decimal MealsCap { get; set; }
+        public decimal LodgingCap { get; set; }
+        public decimal ActualMealsPerDay { get; set; }
+        public decimal ActualLodgingPerNight { get; set; }
+        public bool HasBusinessClassAirfare { get; set; }
+    }
+}

@@ -1,0 +1,381 @@
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Services.Interfaces
+@inject ITransactionService TransactionService
+@inject IJSRuntime JSRuntime
+
+@if (IsVisible)
+{
+    <div class="modal modal-open">
+        <div class="modal-box max-w-6xl">
+            <h3 class="font-bold text-lg mb-4">Link Transactions to Trip</h3>
+            
+            @if (Trip != null)
+            {
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-info-circle"></i>
+                    <div>
+                        <p class="font-semibold">@Trip.TripName</p>
+                        <p class="text-sm">@Trip.StartDate.ToString("dd/MM/yyyy") - @Trip.EndDate.ToString("dd/MM/yyyy") | @Trip.Email</p>
+                    </div>
+                </div>
+            }
+
+            <!-- Search and Filters -->
+            <div class="mb-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Search Transactions</span>
+                        </label>
+                        <input type="text" 
+                               placeholder="Vendor, amount, transaction ID..." 
+                               class="input input-bordered" 
+                               @bind="searchTerm" 
+                               @onkeyup="SearchTransactions" />
+                    </div>
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Date Range</span>
+                        </label>
+                        <div class="flex gap-2">
+                            <input type="date" 
+                                   class="input input-bordered flex-1" 
+                                   @bind="filterStartDate" 
+                                   @bind:after="FilterTransactions" />
+                            <input type="date" 
+                                   class="input input-bordered flex-1" 
+                                   @bind="filterEndDate" 
+                                   @bind:after="FilterTransactions" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs tabs-boxed mb-4">
+                <a class="tab @(activeTab == "unlinked" ? "tab-active" : "")" 
+                   @onclick='() => SwitchTab("unlinked")'>
+                    Unlinked (@unlinkedTransactions.Count())
+                </a>
+                <a class="tab @(activeTab == "linked" ? "tab-active" : "")" 
+                   @onclick='() => SwitchTab("linked")'>
+                    Linked (@linkedTransactions.Count())
+                </a>
+                <a class="tab @(activeTab == "all" ? "tab-active" : "")" 
+                   @onclick='() => SwitchTab("all")'>
+                    All (@allAvailableTransactions.Count())
+                </a>
+            </div>
+
+            <!-- Transactions Table -->
+            <div class="overflow-x-auto" style="max-height: 400px;">
+                @if (isLoading)
+                {
+                    <div class="flex justify-center items-center py-8">
+                        <span class="loading loading-spinner loading-lg"></span>
+                    </div>
+                }
+                else if (displayedTransactions.Any())
+                {
+                    <table class="table table-zebra table-pin-rows">
+                        <thead>
+                            <tr>
+                                <th>
+                                    <label>
+                                        <input type="checkbox" 
+                                               class="checkbox checkbox-sm" 
+                                               @onchange="ToggleSelectAll" 
+                                               checked="@isAllSelected" />
+                                    </label>
+                                </th>
+                                <th>Date</th>
+                                <th>Category</th>
+                                <th>Vendor</th>
+                                <th>Amount (USD)</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var transaction in displayedTransactions)
+                            {
+                                <tr>
+                                    <td>
+                                        <label>
+                                            <input type="checkbox" 
+                                                   class="checkbox checkbox-sm" 
+                                                   checked="@selectedTransactionIds.Contains(transaction.TransactionId)" 
+                                                   @onchange="(e) => ToggleTransaction(transaction.TransactionId, e)" />
+                                        </label>
+                                    </td>
+                                    <td>@transaction.TransactionDate.ToString("dd/MM/yyyy")</td>
+                                    <td>@transaction.Category?.Emoji @transaction.Category?.Name</td>
+                                    <td class="truncate max-w-xs">@transaction.Vendor</td>
+                                    <td>${transaction.AmountUSD.ToString("N2")}</td>
+                                    <td>
+                                        @if (transaction.TripId.HasValue)
+                                        {
+                                            @if (transaction.TripId == TripId)
+                                            {
+                                                <span class="badge badge-success badge-sm">Linked</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-warning badge-sm">Other Trip</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-ghost badge-sm">Unlinked</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="text-center py-8 text-base-content/50">
+                        <i class="fas fa-inbox text-4xl mb-2"></i>
+                        <p>No transactions found</p>
+                    </div>
+                }
+            </div>
+
+            <!-- Selection Info -->
+            @if (selectedTransactionIds.Any())
+            {
+                <div class="alert mt-4">
+                    <i class="fas fa-check-circle"></i>
+                    <span>@selectedTransactionIds.Count transaction(s) selected</span>
+                </div>
+            }
+
+            <!-- Actions -->
+            <div class="modal-action">
+                <button class="btn btn-ghost" @onclick="OnClose">Cancel</button>
+                @if (activeTab == "unlinked" || activeTab == "all")
+                {
+                    <button class="btn btn-primary" 
+                            @onclick="LinkSelectedTransactions" 
+                            disabled="@(!selectedTransactionIds.Any())">
+                        <i class="fas fa-link mr-2"></i>Link Selected
+                    </button>
+                }
+                @if (activeTab == "linked")
+                {
+                    <button class="btn btn-error" 
+                            @onclick="UnlinkSelectedTransactions" 
+                            disabled="@(!selectedTransactionIds.Any())">
+                        <i class="fas fa-unlink mr-2"></i>Unlink Selected
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public int TripId { get; set; }
+
+    [Parameter]
+    public Trip? Trip { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback OnTransactionsLinked { get; set; }
+
+    private List<Transaction> allAvailableTransactions = new();
+    private List<Transaction> unlinkedTransactions = new();
+    private List<Transaction> linkedTransactions = new();
+    private List<Transaction> displayedTransactions = new();
+    
+    private HashSet<string> selectedTransactionIds = new();
+    private bool isAllSelected = false;
+    private bool isLoading = false;
+
+    private string activeTab = "unlinked";
+    private string searchTerm = "";
+    private DateTime? filterStartDate;
+    private DateTime? filterEndDate;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && Trip != null)
+        {
+            // Set default date range to ±5 days from trip dates
+            filterStartDate = Trip.StartDate.AddDays(-5);
+            filterEndDate = Trip.EndDate.AddDays(5);
+            
+            await LoadTransactions();
+        }
+    }
+
+    private async Task LoadTransactions()
+    {
+        isLoading = true;
+        try
+        {
+            // Get all transactions for the trip's email within the date range
+            if (Trip != null && filterStartDate.HasValue && filterEndDate.HasValue)
+            {
+                allAvailableTransactions = (await TransactionService.GetTransactionsByEmailAndDateRangeAsync(
+                    Trip.Email, filterStartDate.Value, filterEndDate.Value)).ToList();
+            }
+            else
+            {
+                allAvailableTransactions = new List<Transaction>();
+            }
+
+            // Separate linked and unlinked
+            linkedTransactions = allAvailableTransactions.Where(t => t.TripId == TripId).ToList();
+            unlinkedTransactions = allAvailableTransactions.Where(t => !t.TripId.HasValue).ToList();
+
+            UpdateDisplayedTransactions();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error loading transactions: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void SwitchTab(string tab)
+    {
+        activeTab = tab;
+        selectedTransactionIds.Clear();
+        isAllSelected = false;
+        UpdateDisplayedTransactions();
+    }
+
+    private void UpdateDisplayedTransactions()
+    {
+        displayedTransactions = activeTab switch
+        {
+            "unlinked" => unlinkedTransactions,
+            "linked" => linkedTransactions,
+            "all" => allAvailableTransactions,
+            _ => new List<Transaction>()
+        };
+
+        // Apply search filter
+        if (!string.IsNullOrEmpty(searchTerm))
+        {
+            displayedTransactions = displayedTransactions.Where(t =>
+                (t.Vendor?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (t.TransactionId?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                t.AmountUSD.ToString().Contains(searchTerm)
+            ).ToList();
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task SearchTransactions()
+    {
+        UpdateDisplayedTransactions();
+    }
+
+    private async Task FilterTransactions()
+    {
+        await LoadTransactions();
+    }
+
+    private void ToggleTransaction(string transactionId, ChangeEventArgs e)
+    {
+        var isChecked = (bool)(e.Value ?? false);
+        if (isChecked)
+        {
+            selectedTransactionIds.Add(transactionId);
+        }
+        else
+        {
+            selectedTransactionIds.Remove(transactionId);
+        }
+
+        UpdateSelectAllState();
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        var isChecked = (bool)(e.Value ?? false);
+        isAllSelected = isChecked;
+
+        selectedTransactionIds.Clear();
+        if (isAllSelected)
+        {
+            foreach (var transaction in displayedTransactions)
+            {
+                selectedTransactionIds.Add(transaction.TransactionId);
+            }
+        }
+    }
+
+    private void UpdateSelectAllState()
+    {
+        if (!displayedTransactions.Any()) return;
+
+        var displayedIds = displayedTransactions.Select(t => t.TransactionId).ToHashSet();
+        isAllSelected = displayedIds.All(id => selectedTransactionIds.Contains(id));
+        StateHasChanged();
+    }
+
+    private async Task LinkSelectedTransactions()
+    {
+        if (!selectedTransactionIds.Any()) return;
+
+        try
+        {
+            foreach (var transactionId in selectedTransactionIds)
+            {
+                await TransactionService.LinkTransactionToTripAsync(transactionId, TripId);
+            }
+
+            selectedTransactionIds.Clear();
+            await LoadTransactions();
+            await OnTransactionsLinked.InvokeAsync();
+            await JSRuntime.InvokeVoidAsync("showToast", "success", $"Successfully linked {selectedTransactionIds.Count} transaction(s)");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error linking transactions: {ex.Message}");
+        }
+    }
+
+    private async Task UnlinkSelectedTransactions()
+    {
+        if (!selectedTransactionIds.Any()) return;
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
+            $"Are you sure you want to unlink {selectedTransactionIds.Count} transaction(s) from this trip?");
+
+        if (confirmed)
+        {
+            try
+            {
+                foreach (var transactionId in selectedTransactionIds)
+                {
+                    await TransactionService.UnlinkTransactionFromTripAsync(transactionId);
+                }
+
+                selectedTransactionIds.Clear();
+                await LoadTransactions();
+                await OnTransactionsLinked.InvokeAsync();
+                await JSRuntime.InvokeVoidAsync("showToast", "success", $"Successfully unlinked transactions");
+            }
+            catch (Exception ex)
+            {
+                await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error unlinking transactions: {ex.Message}");
+            }
+        }
+    }
+}
