@@ -35,7 +35,7 @@ namespace TravelOperation.Core.Services
                 var mockUsers = new Dictionary<string, (string Password, string Role, string Department)>
                 {
                     // FINANCE MANAGERS (1-2 users with full access to everything)
-                    { "admin@noras.com", ("admin123", "Finance", "Finance") },
+                    { "admin@corporate.com", ("admin123", "Finance", "Finance") },
                     { "martina.popinsk@wsc.com", ("finance123", "Finance", "Finance") },
                     { "maayan.chesler@wsc.com", ("finance123", "Finance", "Finance") },
                     

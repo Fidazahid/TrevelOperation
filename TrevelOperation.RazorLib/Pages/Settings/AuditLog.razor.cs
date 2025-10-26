@@ -5,7 +5,7 @@ using System.Text.Json;
 using TravelOperation.Core.Models.Entities;
 using TravelOperation.Core.Services.Interfaces;
 
-namespace TrevelOperation.RazorLib.Pages;
+namespace TrevelOperation.RazorLib.Pages.Settings;
 
 public partial class AuditLog
 {

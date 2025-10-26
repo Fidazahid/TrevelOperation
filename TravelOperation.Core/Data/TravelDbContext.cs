@@ -40,6 +40,7 @@ public class TravelDbContext : DbContext
     public DbSet<SystemSetting> SystemSettings { get; set; }
     public DbSet<AuditLog> AuditLogs { get; set; }
     public DbSet<TransformationRule> TransformationRules { get; set; }
+    public DbSet<Notification> Notifications { get; set; }
     
     // Approval Workflow entities
     public DbSet<Employee> Employees { get; set; }

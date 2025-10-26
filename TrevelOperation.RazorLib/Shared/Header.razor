@@ -1,15 +1,84 @@
 ﻿@using Microsoft.JSInterop
 @using TrevelOperation.RazorLib.Theme
 @using TravelOperation.Core.Services
+@using TravelOperation.Core.Services.Interfaces
 @inject IJSRuntime JSRuntime
 @inject IAuthenticationService AuthService
+@inject INotificationService NotificationService
 @inject NavigationManager Navigation
+@implements IDisposable
 
 <div class="navbar bg-white border-b border-base-300 h-16">
     <div class="flex-1">
         <h2 class="text-lg font-semibold">@PageTitle</h2>
     </div>
     <div class="flex-none gap-2">
+        <!-- Notification Bell -->
+        <div class="dropdown dropdown-end">
+            <label tabindex="0" class="btn btn-ghost btn-circle relative" @onclick="NavigateToNotifications">
+                <div class="indicator">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                    @if (unreadCount > 0)
+                    {
+                        <span class="badge badge-xs badge-error indicator-item font-bold">
+                            @(unreadCount > 99 ? "99+" : unreadCount.ToString())
+                        </span>
+                    }
+                </div>
+            </label>
+            <div tabindex="0" class="dropdown-content card card-compact shadow-lg bg-base-100 rounded-box w-96 mt-3 max-h-[500px] overflow-y-auto">
+                <div class="card-body">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="card-title text-base">Notifications</h3>
+                        @if (unreadCount > 0)
+                        {
+                            <span class="badge badge-primary badge-sm">@unreadCount unread</span>
+                        }
+                    </div>
+                    
+                    @if (recentNotifications.Any())
+                    {
+                        <div class="space-y-2">
+                            @foreach (var notification in recentNotifications.Take(5))
+                            {
+                                <div class="p-3 hover:bg-base-200 rounded-lg cursor-pointer @(!notification.IsRead ? "bg-primary/5" : "")" 
+                                     @onclick="() => NavigateToNotification(notification)">
+                                    <div class="flex gap-2">
+                                        <div class="text-2xl">@notification.Icon</div>
+                                        <div class="flex-1">
+                                            <div class="font-semibold text-sm @(!notification.IsRead ? "text-primary" : "")">
+                                                @notification.Title
+                                            </div>
+                                            <div class="text-xs text-gray-500 line-clamp-2">@notification.Message</div>
+                                            <div class="text-xs text-gray-400 mt-1">@GetTimeAgo(notification.CreatedAt)</div>
+                                        </div>
+                                        @if (!notification.IsRead)
+                                        {
+                                            <div class="badge badge-primary badge-xs">New</div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="divider my-2"></div>
+                        <button class="btn btn-sm btn-block btn-ghost" @onclick="NavigateToNotifications">
+                            View All Notifications
+                        </button>
+                    }
+                    else
+                    {
+                        <div class="text-center py-8 text-gray-500">
+                            <div class="text-4xl mb-2">📭</div>
+                            <p class="text-sm">No notifications</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+        
         <!-- User Avatar Dropdown -->
         <div class="dropdown dropdown-end">
             @if (!string.IsNullOrEmpty(currentUserEmail))
@@ -103,6 +172,9 @@
     private bool IsDarkMode { get; set; } = true;
     private string currentUserEmail = string.Empty;
     private string currentUserRole = string.Empty;
+    private int unreadCount = 0;
+    private List<TravelOperation.Core.Models.Entities.Notification> recentNotifications = new();
+    private System.Threading.Timer? notificationTimer;
 
     protected override async Task OnInitializedAsync()
     {
@@ -114,6 +186,19 @@
 
         // Load current user information
         await LoadUserInfo();
+        
+        // Load notifications
+        await LoadNotifications();
+        
+        // Set up timer to refresh notifications every 30 seconds
+        notificationTimer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadNotifications();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
     }
 
     private async Task LoadUserInfo()
@@ -127,6 +212,26 @@
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading user info: {ex.Message}");
+        }
+    }
+
+    private async Task LoadNotifications()
+    {
+        if (string.IsNullOrEmpty(currentUserEmail))
+            return;
+            
+        try
+        {
+            unreadCount = await NotificationService.GetUnreadCountAsync(currentUserEmail);
+            var allNotifications = await NotificationService.GetNotificationsByEmailAsync(currentUserEmail);
+            recentNotifications = allNotifications
+                .OrderByDescending(n => n.CreatedAt)
+                .Take(5)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading notifications: {ex.Message}");
         }
     }
 
@@ -155,6 +260,47 @@
         {
             Console.WriteLine($"Logout error: {ex.Message}");
         }
+    }
+
+    private void NavigateToNotifications()
+    {
+        Navigation.NavigateTo("/notifications");
+    }
+
+    private async Task NavigateToNotification(TravelOperation.Core.Models.Entities.Notification notification)
+    {
+        // Mark as read
+        if (!notification.IsRead)
+        {
+            await NotificationService.MarkAsReadAsync(notification.NotificationId);
+            await LoadNotifications();
+        }
+        
+        // Navigate to action URL or notifications page
+        if (!string.IsNullOrEmpty(notification.ActionUrl))
+        {
+            Navigation.NavigateTo(notification.ActionUrl);
+        }
+        else
+        {
+            Navigation.NavigateTo("/notifications");
+        }
+    }
+
+    private string GetTimeAgo(DateTime dateTime)
+    {
+        var timeSpan = DateTime.UtcNow - dateTime;
+
+        if (timeSpan.TotalMinutes < 1)
+            return "Just now";
+        if (timeSpan.TotalMinutes < 60)
+            return $"{(int)timeSpan.TotalMinutes}m ago";
+        if (timeSpan.TotalHours < 24)
+            return $"{(int)timeSpan.TotalHours}h ago";
+        if (timeSpan.TotalDays < 7)
+            return $"{(int)timeSpan.TotalDays}d ago";
+        
+        return dateTime.ToString("MMM dd");
     }
 
     private string GetDisplayName(string email)
@@ -187,5 +333,10 @@
             "Employee" => "👤 Employee",
             _ => "User"
         };
+    }
+
+    public void Dispose()
+    {
+        notificationTimer?.Dispose();
     }
 }

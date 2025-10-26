@@ -12,15 +12,18 @@ public class TransactionService : ITransactionService
     private readonly TravelDbContext _context;
     private readonly IAuditService _auditService;
     private readonly IAuthenticationService _authService;
+    private readonly INotificationService _notificationService;
 
     public TransactionService(
         TravelDbContext context, 
         IAuditService auditService, 
-        IAuthenticationService authService)
+        IAuthenticationService authService,
+        INotificationService notificationService)
     {
         _context = context;
         _auditService = auditService;
         _authService = authService;
+        _notificationService = notificationService;
     }
 
     public async Task<IEnumerable<Transaction>> GetAllTransactionsAsync()
@@ -235,6 +238,32 @@ public class TransactionService : ITransactionService
         };
 
         await _auditService.LogActionAsync("System", "Create", "Transactions", transaction.TransactionId, null, auditData);
+        
+        // Check if notification should be sent for high-value transactions ($1000+)
+        try
+        {
+            if (!string.IsNullOrEmpty(transaction.Email) && 
+                transaction.AmountUSD.HasValue && 
+                Math.Abs(transaction.AmountUSD.Value) >= 1000)
+            {
+                var categoryName = await _context.Categories
+                    .Where(c => c.CategoryId == transaction.CategoryId)
+                    .Select(c => c.Name)
+                    .FirstOrDefaultAsync() ?? "Unknown";
+                    
+                await _notificationService.NotifyHighValueTransactionAsync(
+                    transaction.Email,
+                    transaction.TransactionId,
+                    transaction.AmountUSD.Value,
+                    categoryName
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log but don't fail transaction creation if notification fails
+            Console.WriteLine($"Failed to send high-value transaction notification: {ex.Message}");
+        }
         
         return transaction;
     }

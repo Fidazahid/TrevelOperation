@@ -25,7 +25,7 @@ namespace TravelOperation.Core.Services
             _users = new List<User>
             {
                 // FINANCE MANAGERS
-                new User { Email = "admin@noras.com", Password = "admin123", Role = "Finance", Department = "Finance", FirstName = "Admin", LastName = "User", IsActive = true },
+                new User { Email = "admin@corporate.com", Password = "admin123", Role = "Finance", Department = "Finance", FirstName = "Admin", LastName = "User", IsActive = true },
                 new User { Email = "martina.popinsk@wsc.com", Password = "finance123", Role = "Finance", Department = "Finance", FirstName = "Martina", LastName = "Popinsk", IsActive = true },
                 new User { Email = "maayan.chesler@wsc.com", Password = "finance123", Role = "Finance", Department = "Finance", FirstName = "Maayan", LastName = "Chesler", IsActive = true },
                 

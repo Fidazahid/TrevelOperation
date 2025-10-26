@@ -1,0 +1,284 @@
+@page "/notifications"
+@using TravelOperation.Core.Models.Entities
+@using TravelOperation.Core.Services
+@using TravelOperation.Core.Services.Interfaces
+@inject INotificationService NotificationService
+@inject IAuthenticationService AuthService
+@inject NavigationManager NavigationManager
+
+<div class="container mx-auto p-6">
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">🔔 Notifications</h1>
+            <p class="text-gray-600">View and manage your notifications</p>
+        </div>
+        <div class="flex gap-2">
+            <button class="btn btn-sm btn-ghost" @onclick="RefreshNotifications">
+                🔄 Refresh
+            </button>
+            @if (unreadCount > 0)
+            {
+                <button class="btn btn-sm btn-primary" @onclick="MarkAllAsRead">
+                    ✓ Mark All Read (@unreadCount)
+                </button>
+            }
+            @if (notifications.Any(n => n.IsRead))
+            {
+                <button class="btn btn-sm btn-outline" @onclick="DeleteAllRead">
+                    🗑️ Clear Read
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Filter Tabs -->
+    <div class="tabs tabs-boxed mb-6">
+        <a class="tab @(selectedFilter == "all" ? "tab-active" : "")" @onclick='() => SelectFilter("all")'>
+            All (@notifications.Count)
+        </a>
+        <a class="tab @(selectedFilter == "unread" ? "tab-active" : "")" @onclick='() => SelectFilter("unread")'>
+            Unread (@unreadCount)
+        </a>
+        <a class="tab @(selectedFilter == "transaction" ? "tab-active" : "")" @onclick='() => SelectFilter("transaction")'>
+            Transactions
+        </a>
+        <a class="tab @(selectedFilter == "trip" ? "tab-active" : "")" @onclick='() => SelectFilter("trip")'>
+            Trips
+        </a>
+        <a class="tab @(selectedFilter == "policy" ? "tab-active" : "")" @onclick='() => SelectFilter("policy")'>
+            Policy
+        </a>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="flex justify-center items-center py-20">
+            <span class="loading loading-spinner loading-lg"></span>
+        </div>
+    }
+    else if (!filteredNotifications.Any())
+    {
+        <div class="card bg-base-100 shadow-md">
+            <div class="card-body text-center py-20">
+                <div class="text-6xl mb-4">📭</div>
+                <h3 class="text-xl font-semibold mb-2">No Notifications</h3>
+                <p class="text-gray-500">
+                    @if (selectedFilter == "unread")
+                    {
+                        <text>You're all caught up! No unread notifications.</text>
+                    }
+                    else
+                    {
+                        <text>You don't have any notifications yet.</text>
+                    }
+                </p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="space-y-4">
+            @foreach (var notification in filteredNotifications)
+            {
+                <div class="card bg-base-100 shadow @(!notification.IsRead ? "border-l-4 border-primary" : "") hover:shadow-lg transition-shadow">
+                    <div class="card-body p-4">
+                        <div class="flex gap-4">
+                            <!-- Icon -->
+                            <div class="flex-shrink-0">
+                                <div class="text-3xl">@notification.Icon</div>
+                            </div>
+
+                            <!-- Content -->
+                            <div class="flex-1">
+                                <div class="flex items-start justify-between mb-2">
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="font-semibold @(!notification.IsRead ? "text-gray-900" : "text-gray-600")">
+                                            @notification.Title
+                                        </h3>
+                                        @if (!notification.IsRead)
+                                        {
+                                            <span class="badge badge-primary badge-sm">New</span>
+                                        }
+                                        @switch (notification.Priority)
+                                        {
+                                            case "Urgent":
+                                                <span class="badge badge-error badge-sm">Urgent</span>
+                                                break;
+                                            case "High":
+                                                <span class="badge badge-warning badge-sm">High Priority</span>
+                                                break;
+                                        }
+                                    </div>
+
+                                    <!-- Actions -->
+                                    <div class="dropdown dropdown-end">
+                                        <label tabindex="0" class="btn btn-ghost btn-xs btn-circle">⋮</label>
+                                        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52">
+                                            @if (!notification.IsRead)
+                                            {
+                                                <li><a @onclick="() => MarkAsRead(notification.NotificationId)">✓ Mark as Read</a></li>
+                                            }
+                                            <li><a @onclick="() => DeleteNotification(notification.NotificationId)" class="text-error">🗑️ Delete</a></li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <p class="text-sm @(!notification.IsRead ? "text-gray-700" : "text-gray-500") mb-3">
+                                    @notification.Message
+                                </p>
+
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-4 text-xs text-gray-500">
+                                        <span class="badge badge-ghost badge-sm">@notification.Category</span>
+                                        <span>@GetTimeAgo(notification.CreatedAt)</span>
+                                    </div>
+
+                                    @if (!string.IsNullOrEmpty(notification.ActionUrl))
+                                    {
+                                        <button class="btn btn-sm btn-primary" @onclick="() => NavigateToAction(notification)">
+                                            @(notification.ActionLabel ?? "View")
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Pagination -->
+        @if (filteredNotifications.Count > 10)
+        {
+            <div class="flex justify-center mt-6">
+                <div class="join">
+                    <button class="join-item btn btn-sm">«</button>
+                    <button class="join-item btn btn-sm btn-active">1</button>
+                    <button class="join-item btn btn-sm">»</button>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<Notification> notifications = new();
+    private List<Notification> filteredNotifications = new();
+    private int unreadCount = 0;
+    private string selectedFilter = "all";
+    private bool isLoading = false;
+    private string currentUserEmail = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = await AuthService.GetCurrentUserAsync();
+        if (user != null)
+        {
+            currentUserEmail = user.Email;
+            await LoadNotifications();
+        }
+    }
+
+    private async Task LoadNotifications()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            notifications = await NotificationService.GetNotificationsByEmailAsync(currentUserEmail);
+            unreadCount = await NotificationService.GetUnreadCountAsync(currentUserEmail);
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+            Console.WriteLine($"Error loading notifications: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void SelectFilter(string filter)
+    {
+        selectedFilter = filter;
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        filteredNotifications = selectedFilter switch
+        {
+            "unread" => notifications.Where(n => !n.IsRead).ToList(),
+            "transaction" => notifications.Where(n => n.Category == NotificationCategory.Transaction).ToList(),
+            "trip" => notifications.Where(n => n.Category == NotificationCategory.Trip).ToList(),
+            "policy" => notifications.Where(n => n.Category == NotificationCategory.PolicyViolation).ToList(),
+            _ => notifications
+        };
+        StateHasChanged();
+    }
+
+    private async Task RefreshNotifications()
+    {
+        await LoadNotifications();
+    }
+
+    private async Task MarkAsRead(int notificationId)
+    {
+        await NotificationService.MarkAsReadAsync(notificationId);
+        await LoadNotifications();
+    }
+
+    private async Task MarkAllAsRead()
+    {
+        await NotificationService.MarkAllAsReadAsync(currentUserEmail);
+        await LoadNotifications();
+    }
+
+    private async Task DeleteNotification(int notificationId)
+    {
+        await NotificationService.DeleteNotificationAsync(notificationId);
+        await LoadNotifications();
+    }
+
+    private async Task DeleteAllRead()
+    {
+        await NotificationService.DeleteAllReadAsync(currentUserEmail);
+        await LoadNotifications();
+    }
+
+    private async Task NavigateToAction(Notification notification)
+    {
+        // Mark as read before navigating
+        if (!notification.IsRead)
+        {
+            await MarkAsRead(notification.NotificationId);
+        }
+
+        if (!string.IsNullOrEmpty(notification.ActionUrl))
+        {
+            NavigationManager.NavigateTo(notification.ActionUrl);
+        }
+    }
+
+    private string GetTimeAgo(DateTime dateTime)
+    {
+        var timeSpan = DateTime.UtcNow - dateTime;
+
+        if (timeSpan.TotalMinutes < 1)
+            return "Just now";
+        if (timeSpan.TotalMinutes < 60)
+            return $"{(int)timeSpan.TotalMinutes}m ago";
+        if (timeSpan.TotalHours < 24)
+            return $"{(int)timeSpan.TotalHours}h ago";
+        if (timeSpan.TotalDays < 7)
+            return $"{(int)timeSpan.TotalDays}d ago";
+        if (timeSpan.TotalDays < 30)
+            return $"{(int)(timeSpan.TotalDays / 7)}w ago";
+        
+        return dateTime.ToString("MMM dd, yyyy");
+    }
+}

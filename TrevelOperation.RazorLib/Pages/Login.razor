@@ -7,15 +7,16 @@
 @inject NavigationManager Navigation
 
 <div class="login-container">
-    <div class="login-card">
-        <!-- Logo and Title -->
-        <div class="logo-section">
-            <h1 class="logo-title">NORAS</h1>
-            <p class="logo-subtitle">MONEY MATRIX</p>
-        </div>
+    <div class="login-wrapper">
+        <div class="login-card">
+            <!-- Logo and Title -->
+            <div class="logo-section">
+                <h1 class="logo-title">CORPORATE TRAVEL SYSTEM</h1>
+                <p class="logo-subtitle">EXPENSE MANAGEMENT</p>
+            </div>
 
-        <!-- Login Form -->
-        <EditForm Model="loginModel" OnValidSubmit="HandleLogin" class="login-form">
+            <!-- Login Form -->
+            <EditForm Model="loginModel" OnValidSubmit="HandleLogin" class="login-form">
             <DataAnnotationsValidator />
 
             <!-- Email Field -->
@@ -26,7 +27,7 @@
                     <InputText @bind-value="loginModel.Email" 
                                class="form-input" 
                                id="email" 
-                               placeholder="Try: admin@noras.com, sales.manager@wsc.com, or john.doe@wsc.com" 
+                               placeholder="Try: admin@corporate.com, sales.manager@wsc.com, or john.doe@wsc.com" 
                                autocomplete="email" />
                 </div>
                 <ValidationMessage For="@(() => loginModel.Email)" class="validation-error" />
@@ -79,41 +80,47 @@
                     <span>Sign In</span>
                 }
             </button>
-
-            <!-- Forgot Password Link -->
-            <div class="forgot-password">
-                <a href="#" @onclick="HandleForgotPassword" @onclick:preventDefault="true">
-                    Forgot password?
-                </a>
-            </div>
-
-            <!-- Test Credentials Hint -->
-            <div class="test-credentials">
-                <div class="test-title">Quick Test Logins:</div>
-                <div class="test-item">
-                    <strong>Finance:</strong> admin@noras.com / admin123
-                    <button type="button" class="auto-fill-btn" @onclick='() => AutoFillCredentials("admin@noras.com", "admin123")'>
-                        Auto-Fill
-                    </button>
-                </div>
-                <div class="test-item">
-                    <strong>Owner:</strong> sales.manager@wsc.com / manager123
-                    <button type="button" class="auto-fill-btn" @onclick='() => AutoFillCredentials("sales.manager@wsc.com", "manager123")'>
-                        Auto-Fill
-                    </button>
-                </div>
-                <div class="test-item">
-                    <strong>Employee:</strong> john.doe@wsc.com / emp123
-                    <button type="button" class="auto-fill-btn" @onclick='() => AutoFillCredentials("john.doe@wsc.com", "emp123")'>
-                        Auto-Fill
-                    </button>
-                </div>
-            </div>
         </EditForm>
 
         <!-- Footer -->
         <div class="login-footer">
-            © 2025 NORAS Money Matrix. All rights reserved.
+            © 2025 Corporate Travel System. All rights reserved.
+        </div>
+        </div>
+
+        <!-- Test Credentials Hint - Side Panel -->
+        <div class="test-credentials">
+            <div class="test-title">Quick Test Logins</div>
+            <div class="test-item">
+                <div class="test-role">
+                    <span class="role-badge">Finance</span>
+                    <span class="test-email">admin@corporate.com</span>
+                    <span class="test-pass">admin123</span>
+                </div>
+                <button type="button" class="auto-fill-btn" @onclick='() => AutoFillCredentials("admin@corporate.com", "admin123")'>
+                    Auto-Fill
+                </button>
+            </div>
+            <div class="test-item">
+                <div class="test-role">
+                    <span class="role-badge">Owner</span>
+                    <span class="test-email">sales.manager@wsc.com</span>
+                    <span class="test-pass">manager123</span>
+                </div>
+                <button type="button" class="auto-fill-btn" @onclick='() => AutoFillCredentials("sales.manager@wsc.com", "manager123")'>
+                    Auto-Fill
+                </button>
+            </div>
+            <div class="test-item">
+                <div class="test-role">
+                    <span class="role-badge">Employee</span>
+                    <span class="test-email">john.doe@wsc.com</span>
+                    <span class="test-pass">emp123</span>
+                </div>
+                <button type="button" class="auto-fill-btn" @onclick='() => AutoFillCredentials("john.doe@wsc.com", "emp123")'>
+                    Auto-Fill
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -131,39 +138,63 @@
         justify-content: center;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         z-index: 9999;
+        padding: 2rem;
+    }
+
+    .login-wrapper {
+        display: flex;
+        gap: 2rem;
+        align-items: center;
+        max-width: 1000px;
+        width: 100%;
     }
 
     .login-card {
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 20px;
-        padding: 3rem;
+        background: rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(30px);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 24px;
+        padding: 3rem 2.5rem;
         width: 100%;
-        max-width: 420px;
-        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+        max-width: 480px;
+        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
         text-align: center;
+        animation: fadeInUp 0.6s ease-out;
+    }
+
+    @@keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 
     .logo-section {
         margin-bottom: 2.5rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
     }
 
     .logo-title {
-        font-size: 3rem;
+        font-size: 2rem;
         font-weight: 700;
         color: white;
         margin: 0;
-        letter-spacing: 0.1em;
-        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        letter-spacing: 0.05em;
+        text-shadow: 0 2px 15px rgba(0, 0, 0, 0.4);
+        line-height: 1.2;
     }
 
     .logo-subtitle {
-        font-size: 1rem;
-        color: rgba(255, 255, 255, 0.8);
-        margin: 0.5rem 0 0 0;
-        font-weight: 300;
-        letter-spacing: 0.2em;
+        font-size: 0.875rem;
+        color: rgba(255, 255, 255, 0.85);
+        margin: 0.75rem 0 0 0;
+        font-weight: 400;
+        letter-spacing: 0.15em;
         text-transform: uppercase;
     }
 
@@ -199,21 +230,22 @@
 
     .form-input {
         width: 100%;
-        padding: 0.875rem 1rem 0.875rem 3rem;
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 10px;
+        padding: 1rem 1rem 1rem 3rem;
+        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 12px;
         color: white;
-        font-size: 1rem;
+        font-size: 0.95rem;
         transition: all 0.3s ease;
         backdrop-filter: blur(10px);
     }
 
     .form-input:focus {
         outline: none;
-        border-color: rgba(255, 255, 255, 0.4);
-        background: rgba(255, 255, 255, 0.15);
-        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.5);
+        background: rgba(255, 255, 255, 0.18);
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
+        transform: translateY(-1px);
     }
 
     .form-input::placeholder {
@@ -260,8 +292,8 @@
         background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
         color: white;
         border: none;
-        padding: 1rem;
-        border-radius: 10px;
+        padding: 1.125rem;
+        border-radius: 12px;
         font-size: 1rem;
         font-weight: 600;
         cursor: pointer;
@@ -270,14 +302,16 @@
         align-items: center;
         justify-content: center;
         gap: 0.5rem;
-        margin-bottom: 1rem;
-        box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+        margin-bottom: 1.5rem;
+        margin-top: 0.5rem;
+        box-shadow: 0 4px 20px rgba(59, 130, 246, 0.35);
+        letter-spacing: 0.02em;
     }
 
     .signin-button:hover:not(:disabled) {
         background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-        transform: translateY(-1px);
-        box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(59, 130, 246, 0.45);
     }
 
     .signin-button:disabled {
@@ -291,94 +325,155 @@
         height: 16px;
         border: 2px solid rgba(255, 255, 255, 0.3);
         border-top: 2px solid white;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-    }
-
-    @@keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-
-    .forgot-password {
-        text-align: center;
-        margin-bottom: 1.5rem;
-    }
-
-    .forgot-password a {
-        color: rgba(255, 255, 255, 0.8);
-        text-decoration: none;
-        font-size: 0.875rem;
-        transition: color 0.3s ease;
-    }
-
-    .forgot-password a:hover {
-        color: white;
-        text-decoration: underline;
-    }
-
     .test-credentials {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 1.5rem;
-        font-size: 0.75rem;
+        background: rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(30px);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 20px;
+        padding: 2rem;
+        min-width: 320px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        animation: fadeInRight 0.6s ease-out;
+    }
+
+    @@keyframes fadeInRight {
+        from {
+            opacity: 0;
+            transform: translateX(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
     }
 
     .test-title {
-        color: rgba(255, 255, 255, 0.9);
+        color: rgba(255, 255, 255, 0.95);
         font-weight: 600;
-        margin-bottom: 0.5rem;
+        margin-bottom: 1.5rem;
         text-align: center;
+        font-size: 1rem;
+        letter-spacing: 0.02em;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
     }
 
     .test-item {
-        color: rgba(255, 255, 255, 0.7);
-        margin-bottom: 0.25rem;
+        margin-bottom: 1.25rem;
         display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .test-item strong {
-        color: rgba(255, 255, 255, 0.9);
-        min-width: 60px;
-    }
-
-    .auto-fill-btn {
-        background: rgba(59, 130, 246, 0.3);
-        border: 1px solid rgba(59, 130, 246, 0.5);
-        color: rgba(255, 255, 255, 0.9);
-        padding: 0.25rem 0.5rem;
-        border-radius: 4px;
-        font-size: 0.7rem;
-        cursor: pointer;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
         transition: all 0.3s ease;
-        margin-left: 0.5rem;
+    }
+
+    .test-item:hover {
+        background: rgba(255, 255, 255, 0.08);
+        transform: translateX(4px);
+    }
+
+    .test-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .test-role {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+    }
+
+    .role-badge {
+        color: rgba(255, 255, 255, 0.95);
+        font-weight: 600;
+        font-size: 0.875rem;
+        display: inline-block;
+    }
+
+    .test-email {
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 0.8rem;
+        font-family: 'Courier New', monospace;
+    }
+
+    .test-pass {
+        color: rgba(255, 255, 255, 0.7);
+    /* Mobile responsiveness */
+    @@media (max-width: 968px) {
+        .login-wrapper {
+            flex-direction: column;
+        }
+
+        .test-credentials {
+            width: 100%;
+            min-width: auto;
+            max-width: 480px;
+        }
+    }
+
+    @@media (max-width: 480px) {
+        .login-container {
+            padding: 1rem;
+        }
+
+        .login-card {
+            padding: 2rem 1.5rem;
+            max-width: 100%;
+        }
+
+        .logo-title {
+            font-size: 1.5rem;
+        }
+
+        .logo-subtitle {
+            font-size: 0.75rem;
+        }
+
+        .test-credentials {
+            padding: 1.5rem;
+        }
+    }   width: 100%;
     }
 
     .auto-fill-btn:hover {
-        background: rgba(59, 130, 246, 0.5);
+        background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+    }   margin-left: 0.5rem;
+        font-weight: 500;
+    }
+
+    .auto-fill-btn:hover {
+        background: rgba(59, 130, 246, 0.55);
         color: white;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
     }
 
     .login-footer {
-        color: rgba(255, 255, 255, 0.6);
+        color: rgba(255, 255, 255, 0.65);
         font-size: 0.75rem;
         text-align: center;
-        margin-top: 1rem;
+        margin-top: 0.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
     }
 
     /* Mobile responsiveness */
     @@media (max-width: 480px) {
         .login-card {
             margin: 1rem;
-            padding: 2rem;
+            padding: 2rem 1.5rem;
+            max-width: 380px;
         }
 
         .logo-title {
-            font-size: 2.5rem;
+            font-size: 1.5rem;
+        }
+
+        .logo-subtitle {
+            font-size: 0.75rem;
         }
     }
 </style>
@@ -417,20 +512,21 @@
             if (await AuthService.LoginAsync(loginModel.Email, loginModel.Password))
             {
                 // Successful login - redirect to main application
+                // Keep loading state active - MainLayout will handle the transition
                 Navigation.NavigateTo("/dashboard");
+                // Don't set isLoading = false here - let the navigation complete
             }
             else
             {
                 errorMessage = "Invalid email or password. Please try again.";
+                isLoading = false;
+                StateHasChanged();
             }
         }
         catch (Exception ex)
         {
             errorMessage = "An error occurred during login. Please try again.";
             Console.WriteLine($"Login error: {ex.Message}");
-        }
-        finally
-        {
             isLoading = false;
             StateHasChanged();
         }

@@ -9,13 +9,15 @@ public class PolicyComplianceService : IPolicyComplianceService
 {
     private readonly TravelDbContext _context;
     private readonly IAuditService _auditService;
+    private readonly INotificationService _notificationService;
     private PolicyRules _cachedRules;
     private DateTime _cacheExpiry;
 
-    public PolicyComplianceService(TravelDbContext context, IAuditService auditService)
+    public PolicyComplianceService(TravelDbContext context, IAuditService auditService, INotificationService notificationService)
     {
         _context = context;
         _auditService = auditService;
+        _notificationService = notificationService;
         _cachedRules = new PolicyRules();
         _cacheExpiry = DateTime.MinValue;
     }
@@ -41,6 +43,26 @@ public class PolicyComplianceService : IPolicyComplianceService
         await CheckCurrencyPolicyAsync(transaction, rules, result);
 
         result.IsCompliant = !result.Violations.Any();
+
+        // Send notification if there are policy violations
+        if (!result.IsCompliant && !string.IsNullOrEmpty(transaction.Email))
+        {
+            try
+            {
+                var violationSummary = string.Join(", ", result.Violations.Select(v => v.Description));
+                await _notificationService.NotifyPolicyViolationAsync(
+                    transaction.Email,
+                    transaction.TransactionId,
+                    violationSummary,
+                    $"/transactions?id={transaction.TransactionId}"
+                );
+            }
+            catch (Exception ex)
+            {
+                // Log but don't fail compliance check if notification fails
+                Console.WriteLine($"Failed to send policy violation notification: {ex.Message}");
+            }
+        }
 
         return result;
     }
