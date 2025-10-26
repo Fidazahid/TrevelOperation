@@ -1,0 +1,83 @@
+@* Alert Dialog - For showing messages with just OK button *@
+
+@if (IsVisible)
+{
+    <div class="modal modal-open" style="display: flex !important; align-items: center !important; justify-content: center !important;">
+        <div class="modal-box max-w-md relative">
+            <!-- Icon and Title -->
+            <div class="flex items-start gap-4 mb-4">
+                <div class="text-4xl flex-shrink-0">
+                    @GetIcon()
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-bold text-xl mb-2">@Title</h3>
+                    <p class="text-gray-600 whitespace-pre-line">@Message</p>
+                </div>
+            </div>
+            
+            <!-- OK Button -->
+            <div class="pt-4 mt-4 flex justify-center">
+                <button class="btn @GetButtonClass() w-[300px]" @onclick="HandleOk">
+                    @OkButtonText
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string Title { get; set; } = "Alert";
+    [Parameter] public string Message { get; set; } = "";
+    [Parameter] public AlertType Type { get; set; } = AlertType.Info;
+    [Parameter] public string OkButtonText { get; set; } = "OK";
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        Console.WriteLine($"AlertDialog - IsVisible: {IsVisible}, Title: {Title}");
+        base.OnParametersSet();
+    }
+
+    public enum AlertType
+    {
+        Success,
+        Error,
+        Warning,
+        Info
+    }
+
+    private string GetIcon()
+    {
+        return Type switch
+        {
+            AlertType.Success => "✅",
+            AlertType.Error => "❌",
+            AlertType.Warning => "⚠️",
+            AlertType.Info => "ℹ️",
+            _ => "ℹ️"
+        };
+    }
+
+    private string GetButtonClass()
+    {
+        return Type switch
+        {
+            AlertType.Success => "btn-success",
+            AlertType.Error => "btn-error",
+            AlertType.Warning => "btn-warning",
+            AlertType.Info => "btn-info",
+            _ => "btn-primary"
+        };
+    }
+
+    private async Task HandleOk()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleClose()
+    {
+        await OnClose.InvokeAsync();
+    }
+}

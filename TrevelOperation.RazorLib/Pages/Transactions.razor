@@ -5,9 +5,11 @@
 @using TravelOperation.Core.Models.Entities
 @using TravelOperation.Core.Models.Lookup
 @using TravelOperation.Core.Models
+@using TravelOperation.Core.Interfaces
 @using TrevelOperation.RazorLib.Components
 @inject ITransactionService TransactionService
 @inject ILookupService LookupService
+@inject ITripService TripService
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 @inject TrevelOperation.Service.IMessageTemplateService MessageTemplateService
@@ -22,7 +24,7 @@
     }
 </style>
 
-<div class="">
+<div class="flex flex-col gap-4">
     <!-- Page Header -->
     <div class="flex justify-between items-center">
         <div>
@@ -148,8 +150,8 @@
     </div>
 
     <!-- Transaction Table -->
-    <div class="card bg-base-100 shadow-lg" style="max-height: 600px; display: flex; flex-direction: column;">
-        <div class="card-body p-0" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+    <div class="card bg-base-100 shadow-lg" style="min-height: 600px;">
+        <div class="card-body p-0">
             @if (isLoading)
             {
                 <div class="flex justify-center items-center h-64">
@@ -158,7 +160,7 @@
             }
             else if (filteredTransactions?.Any() == true)
             {
-                <div class="overflow-y-auto" style="flex: 1; overflow-x: hidden;">
+                <div class="overflow-y-auto" style="max-height: 600px;">
                     <table class="table table-zebra table-pin-rows" style="table-layout: fixed; width: 100%;">
                         <thead class="bg-white sticky top-0 z-10">
                             <tr class="bg-white">
@@ -167,10 +169,10 @@
                                            @onchange="ToggleSelectAll" 
                                            checked="@(selectedTransactions.Count == filteredTransactions.Count())" />
                                 </th>
-                                <th class="bg-white cursor-pointer hover:bg-base-200" style="width: 150px;" @onclick="() => SortBy(nameof(Transaction.TransactionId))">
+                                <th class="bg-white cursor-pointer hover:bg-base-200" style="width: 100px;" @onclick="() => SortBy(nameof(Transaction.TransactionId))">
                                     Transaction ID @GetSortIcon(nameof(Transaction.TransactionId))
                                 </th>
-                                <th class="bg-white cursor-pointer hover:bg-base-200" style="width: 130px;" @onclick="() => SortBy(nameof(Transaction.TransactionDate))">
+                                <th class="bg-white cursor-pointer hover:bg-base-200" style="width: 120px;" @onclick="() => SortBy(nameof(Transaction.TransactionDate))">
                                     Date @GetSortIcon(nameof(Transaction.TransactionDate))
                                 </th>
                                 <th class="bg-white" style="width: 80px;">Source</th>
@@ -360,6 +362,36 @@
 <TransactionCreateModal @ref="createModal" 
                        OnTransactionCreated="RefreshTransactions" />
 
+<LinkTransactionsModal IsVisible="@showLinkModal"
+                      TripId="@selectedTripIdForLink"
+                      Trip="@selectedTripForLink"
+                      OnClose="CloseLinkModal"
+                      OnTransactionsLinked="OnTransactionsLinked" />
+
+<TransactionSplitModal ShowModal="@showSplitModal"
+                      Transaction="@selectedTransactionForSplit"
+                      Categories="@categories"
+                      AvailableParticipants="@availableParticipants"
+                      OnSplitSaved="OnSplitSaved"
+                      OnCancel="CloseSplitModal" />
+
+<!-- Dialog Components -->
+<AlertDialog IsVisible="@showAlertDialog"
+            Title="@alertTitle"
+            Message="@alertMessage"
+            Type="@alertType"
+            OkButtonText="@alertOkText"
+            OnClose="CloseAlertDialog" />
+
+<ConfirmDialog IsVisible="@showConfirmDialog"
+              Title="@confirmTitle"
+              Message="@confirmMessage"
+              Icon="@confirmIcon"
+              ConfirmButtonText="@confirmButtonText"
+              CancelButtonText="@cancelButtonText"
+              ConfirmButtonClass="@confirmButtonClass"
+              OnResult="HandleConfirmResult" />
+
 @code {
     // Query parameters
     [SupplyParameterFromQuery(Name = "tripId")]
@@ -371,6 +403,23 @@
     private IEnumerable<Transaction> filteredTransactions = new List<Transaction>();
     private PagedResult<Transaction> pagedResult = new();
     private HashSet<string> selectedTransactions = new();
+    
+    // AlertDialog state
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+    private string alertOkText = "OK";
+    
+    // ConfirmDialog state
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "";
+    private string confirmButtonText = "Confirm";
+    private string cancelButtonText = "Cancel";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction;
     
     // Lookup data
     private List<Source>? sources;
@@ -403,6 +452,16 @@
     // Components
     private TransactionEditModal? editModal;
     private TransactionCreateModal? createModal;
+    
+    // Link to Trip modal state
+    private bool showLinkModal = false;
+    private int selectedTripIdForLink = 0;
+    private Trip? selectedTripForLink = null;
+    
+    // Split modal state
+    private bool showSplitModal = false;
+    private Transaction? selectedTransactionForSplit = null;
+    private List<string>? availableParticipants = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -438,35 +497,40 @@
         {
             isLoading = true;
             
-            // Create pagination params
-            var paginationParams = new PaginationParams
-            {
-                PageNumber = currentPage,
-                PageSize = pageSize,
-                SortBy = sortField,
-                SortDirection = sortAscending ? "asc" : "desc"
-            };
+            Console.WriteLine("🔄 LoadTransactions started");
             
-            // Load all transactions for statistics (without pagination)
-            transactions = await TransactionService.GetAllTransactionsAsync(includeRelated: true);
+            // Load all transactions for statistics and filtering
+            var allTransactions = await TransactionService.GetAllTransactionsAsync(includeRelated: true);
+            Console.WriteLine($"📥 Loaded {allTransactions.Count} transactions from database");
             
-            // If tripId filter is provided, filter by that trip
-            if (TripIdFilter.HasValue)
-            {
-                transactions = transactions.Where(t => t.TripId == TripIdFilter.Value).ToList();
-            }
+            // Apply filters
+            transactions = ApplyFiltersToTransactions(allTransactions);
             
+            // Update statistics based on filtered data
             UpdateStatistics();
             
-            // Load paged transactions with filters
-            pagedResult = await LoadPagedTransactionsAsync(paginationParams);
-            filteredTransactions = pagedResult.Items;
+            // Apply sorting
+            var sortedTransactions = ApplySorting(transactions);
             
-            // Apply tripId filter to paged results as well
-            if (TripIdFilter.HasValue)
+            // Apply pagination
+            var totalCount = sortedTransactions.Count();
+            var skip = (currentPage - 1) * pageSize;
+            
+            filteredTransactions = sortedTransactions
+                .Skip(skip)
+                .Take(pageSize)
+                .ToList();
+            
+            Console.WriteLine($"📄 Page {currentPage}: Showing {filteredTransactions.Count()} of {totalCount} transactions");
+            
+            // Update paged result (TotalPages is calculated automatically)
+            pagedResult = new PagedResult<Transaction>
             {
-                filteredTransactions = filteredTransactions.Where(t => t.TripId == TripIdFilter.Value).ToList();
-            }
+                Items = filteredTransactions.ToList(),
+                PageNumber = currentPage,
+                PageSize = pageSize,
+                TotalCount = totalCount
+            };
         }
         catch (Exception ex)
         {
@@ -477,20 +541,98 @@
             isLoading = false;
         }
     }
-
-    private async Task<PagedResult<Transaction>> LoadPagedTransactionsAsync(PaginationParams paginationParams)
+    
+    private List<Transaction> ApplyFiltersToTransactions(List<Transaction> allTransactions)
     {
-        // Apply filters server-side by using appropriate service method
-        if (!string.IsNullOrEmpty(filterStatus))
+        var filtered = allTransactions.AsEnumerable();
+        
+        Console.WriteLine($"📊 Before filtering: {allTransactions.Count} transactions");
+        
+        // Apply tripId filter if provided
+        if (TripIdFilter.HasValue)
         {
-            return filterStatus switch
-            {
-                "unlinked" => await TransactionService.GetUnlinkedTransactionsPagedAsync(paginationParams),
-                _ => await TransactionService.GetAllTransactionsPagedAsync(paginationParams)
-            };
+            filtered = filtered.Where(t => t.TripId == TripIdFilter.Value);
+            Console.WriteLine($"✅ TripId filter applied: {TripIdFilter.Value}");
         }
         
-        return await TransactionService.GetAllTransactionsPagedAsync(paginationParams);
+        // Apply source filter
+        if (!string.IsNullOrEmpty(filterSource))
+        {
+            if (int.TryParse(filterSource, out int sourceId))
+            {
+                filtered = filtered.Where(t => t.SourceId == sourceId);
+                Console.WriteLine($"✅ Source filter applied: {sourceId}");
+            }
+        }
+        
+        // Apply category filter
+        if (!string.IsNullOrEmpty(filterCategory))
+        {
+            if (int.TryParse(filterCategory, out int categoryId))
+            {
+                filtered = filtered.Where(t => t.CategoryId == categoryId);
+                Console.WriteLine($"✅ Category filter applied: {categoryId}");
+            }
+        }
+        
+        // Apply date from filter
+        if (filterDateFrom.HasValue)
+        {
+            filtered = filtered.Where(t => t.TransactionDate >= filterDateFrom.Value);
+            Console.WriteLine($"✅ DateFrom filter applied: {filterDateFrom.Value:dd/MM/yyyy}");
+        }
+        
+        // Apply date to filter
+        if (filterDateTo.HasValue)
+        {
+            filtered = filtered.Where(t => t.TransactionDate <= filterDateTo.Value);
+            Console.WriteLine($"✅ DateTo filter applied: {filterDateTo.Value:dd/MM/yyyy}");
+        }
+        
+        // Apply status filter
+        if (!string.IsNullOrEmpty(filterStatus))
+        {
+            filtered = filterStatus switch
+            {
+                "valid" => filtered.Where(t => t.IsValid),
+                "invalid" => filtered.Where(t => !t.IsValid),
+                "linked" => filtered.Where(t => t.TripId.HasValue),
+                "unlinked" => filtered.Where(t => !t.TripId.HasValue),
+                _ => filtered
+            };
+            Console.WriteLine($"✅ Status filter applied: {filterStatus}");
+        }
+        
+        var result = filtered.ToList();
+        Console.WriteLine($"📊 After filtering: {result.Count} transactions");
+        
+        return result;
+    }
+    
+    private IEnumerable<Transaction> ApplySorting(List<Transaction> transactionsToSort)
+    {
+        var sorted = transactionsToSort.AsEnumerable();
+        
+        sorted = sortField switch
+        {
+            nameof(Transaction.TransactionId) => sortAscending 
+                ? sorted.OrderBy(t => t.TransactionId) 
+                : sorted.OrderByDescending(t => t.TransactionId),
+            nameof(Transaction.TransactionDate) => sortAscending 
+                ? sorted.OrderBy(t => t.TransactionDate) 
+                : sorted.OrderByDescending(t => t.TransactionDate),
+            nameof(Transaction.CategoryId) => sortAscending 
+                ? sorted.OrderBy(t => t.Category?.Name) 
+                : sorted.OrderByDescending(t => t.Category?.Name),
+            nameof(Transaction.AmountUSD) => sortAscending 
+                ? sorted.OrderBy(t => t.AmountUSD ?? 0) 
+                : sorted.OrderByDescending(t => t.AmountUSD ?? 0),
+            _ => sortAscending 
+                ? sorted.OrderBy(t => t.TransactionDate) 
+                : sorted.OrderByDescending(t => t.TransactionDate)
+        };
+        
+        return sorted;
     }
 
     private void UpdateStatistics()
@@ -516,6 +658,14 @@
 
     private async Task ApplyFilters()
     {
+        await JSRuntime.InvokeVoidAsync("console.log", "🔍 ApplyFilters called");
+        await JSRuntime.InvokeVoidAsync("console.log", "Filter values:", new {
+            filterSource,
+            filterCategory,
+            filterDateFrom,
+            filterDateTo,
+            filterStatus
+        });
         await ApplyFiltersAndSort();
     }
 
@@ -627,21 +777,97 @@
 
     private async Task LinkToTrip(Transaction transaction)
     {
-        // TODO: Implement link to trip modal - Need to create TripLinkModal component
-        await JSRuntime.InvokeVoidAsync("alert", $"Link transaction {transaction.TransactionId} to trip\n\nFeature coming soon! This will allow you to:\n• Select a trip from available trips\n• Link this transaction to that trip\n• Group expenses by trip for reporting");
+        try
+        {
+            // Validate transaction has email
+            if (string.IsNullOrEmpty(transaction.Email))
+            {
+                ShowAlert("Missing Email", "Transaction does not have an email address.", "Error");
+                return;
+            }
+
+            // If transaction is already linked to a trip, open that trip's modal
+            if (transaction.TripId.HasValue)
+            {
+                var existingTrip = await TripService.GetTripByIdAsync(transaction.TripId.Value);
+                if (existingTrip != null)
+                {
+                    selectedTripIdForLink = existingTrip.TripId;
+                    selectedTripForLink = existingTrip;
+                    showLinkModal = true;
+                    StateHasChanged();
+                    return;
+                }
+            }
+
+            // If not linked, we need to let user select a trip
+            // Get all trips for the transaction's email
+            var trips = await TripService.GetTripsByEmailAsync(transaction.Email);
+            
+            if (!trips.Any())
+            {
+                ShowAlert("No Trips Found", 
+                    $"No trips found for {transaction.Email}.\n\n" +
+                    $"Please create a trip first or use the Matching Engine to link transactions automatically.", 
+                    "Warning");
+                return;
+            }
+
+            // If only one trip, use it automatically
+            if (trips.Count() == 1)
+            {
+                var trip = trips.First();
+                selectedTripIdForLink = trip.TripId;
+                selectedTripForLink = trip;
+                showLinkModal = true;
+                StateHasChanged();
+                return;
+            }
+
+            // Multiple trips - need trip selection modal (could be enhanced with a TripSelectorModal)
+            // For now, show alert with options
+            var tripOptions = string.Join("\n", trips.Select(t => 
+                $"• {t.TripName} ({t.StartDate:dd/MM/yyyy} - {t.EndDate:dd/MM/yyyy})"));
+            
+            ShowAlert("Multiple Trips Found", 
+                $"Multiple trips found for {transaction.Email}:\n\n{tripOptions}\n\n" +
+                $"Please use the Trip Suggestions page to link transactions, or navigate to Trips page and use 'Link Transactions' action.", 
+                "Info");
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"An error occurred: {ex.Message}", "Error");
+        }
     }
 
     private async Task SplitTransaction(Transaction transaction)
     {
-        // The TransactionSplitModal uses parameters, not a Show method
-        // For now, navigate to Split Engine page or show info
-        await JSRuntime.InvokeVoidAsync("alert", $"Split Transaction: {transaction.TransactionId}\n\n" +
-            $"This feature allows you to divide one transaction into multiple parts.\n\n" +
-            $"Options:\n" +
-            $"• Equal Split: Divide amount equally\n" +
-            $"• Custom Split: Specify exact amounts\n" +
-            $"• Percentage Split: Assign percentages\n\n" +
-            $"To use this feature, go to:\nData Integrity → Split Engine");
+        selectedTransactionForSplit = transaction;
+        showSplitModal = true;
+        StateHasChanged();
+    }
+    
+    private void CloseSplitModal()
+    {
+        showSplitModal = false;
+        selectedTransactionForSplit = null;
+        StateHasChanged();
+    }
+    
+    private async Task OnSplitSaved(List<SplitItem> splitItems)
+    {
+        try
+        {
+            // The split logic should be handled in the service layer
+            ShowAlert("Success", "Transaction split successfully!", "Success");
+            showSplitModal = false;
+            selectedTransactionForSplit = null;
+            await RefreshTransactions();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Failed to split transaction: {ex.Message}", "Error");
+        }
     }
 
     private async Task GenerateMessage(Transaction transaction)
@@ -699,11 +925,11 @@
             
             // Copy to clipboard
             await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", message);
-            await JSRuntime.InvokeVoidAsync("alert", "✅ Message copied to clipboard!\n\nYou can now paste it into your email client.");
+            ShowAlert("Success", "✅ Message copied to clipboard!\n\nYou can now paste it into your email client.", "Success");
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"Failed to generate message: {ex.Message}");
+            ShowAlert("Error", $"Failed to generate message: {ex.Message}", "Error");
         }
     }
 
@@ -715,7 +941,7 @@
         }
         else
         {
-            await JSRuntime.InvokeVoidAsync("alert", "No documents available for this transaction");
+            ShowAlert("No Documents", "No documents available for this transaction", "Warning");
         }
     }
 
@@ -734,21 +960,27 @@
 
     private async Task DeleteTransaction(Transaction transaction)
     {
-        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-            $"Are you sure you want to delete transaction {transaction.TransactionId}?");
-        
-        if (confirmed)
-        {
-            try
+        ShowConfirm(
+            "Delete Transaction",
+            $"Are you sure you want to delete transaction {transaction.TransactionId}?\n\nThis action cannot be undone.",
+            async () =>
             {
-                await TransactionService.DeleteAsync(transaction.TransactionId);
-                await RefreshTransactions();
-            }
-            catch (Exception ex)
-            {
-                await JSRuntime.InvokeVoidAsync("console.error", "Failed to delete transaction:", ex.Message);
-            }
-        }
+                try
+                {
+                    await TransactionService.DeleteAsync(transaction.TransactionId);
+                    await RefreshTransactions();
+                    ShowAlert("Success", "Transaction deleted successfully", "Success");
+                }
+                catch (Exception ex)
+                {
+                    ShowAlert("Error", $"Failed to delete transaction: {ex.Message}", "Error");
+                }
+            },
+            icon: "🗑️",
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            confirmClass: "btn-error"
+        );
     }
 
     private void CreateTransaction()
@@ -760,8 +992,7 @@
         }
         else
         {
-            JSRuntime.InvokeVoidAsync("console.error", "createModal is null!");
-            JSRuntime.InvokeVoidAsync("alert", "Error: Create modal component not initialized. Please refresh the page.");
+            ShowAlert("Error", "Create modal component not initialized. Please refresh the page.", "Error");
         }
     }
 
@@ -778,14 +1009,106 @@
     private async Task ExportTransactions()
     {
         // TODO: Implement export functionality
-        await JSRuntime.InvokeVoidAsync("alert", "Export functionality coming soon");
+        ShowAlert("Coming Soon", "Export functionality coming soon", "Info");
+    }
+    
+    // Link to Trip modal handlers
+    private void CloseLinkModal()
+    {
+        showLinkModal = false;
+        selectedTripIdForLink = 0;
+        selectedTripForLink = null;
+        StateHasChanged();
+    }
+
+    private async Task OnTransactionsLinked()
+    {
+        // Refresh the transactions list after linking
+        await RefreshTransactions();
+        CloseLinkModal();
     }
 
     // Bulk actions
     private async Task BulkLinkToTrip()
     {
-        // TODO: Implement bulk link to trip
-        await JSRuntime.InvokeVoidAsync("alert", $"Link {selectedTransactions.Count} transactions to trip");
+        try
+        {
+            if (!selectedTransactions.Any())
+            {
+                ShowAlert("No Selection", "Please select at least one transaction.", "Warning");
+                return;
+            }
+
+            // Get the first transaction's email (for finding trips)
+            var firstTransaction = filteredTransactions.FirstOrDefault(t => selectedTransactions.Contains(t.TransactionId));
+            if (firstTransaction == null)
+            {
+                ShowAlert("Error", "Could not find selected transaction.", "Error");
+                return;
+            }
+
+            // Validate email exists
+            if (string.IsNullOrEmpty(firstTransaction.Email))
+            {
+                ShowAlert("Missing Email", "Selected transaction does not have an email address.", "Error");
+                return;
+            }
+
+            // Check if all selected transactions have the same email
+            var selectedTransactionList = filteredTransactions.Where(t => selectedTransactions.Contains(t.TransactionId)).ToList();
+            var emails = selectedTransactionList.Select(t => t.Email).Where(e => !string.IsNullOrEmpty(e)).Distinct().ToList();
+            
+            if (emails.Count == 0)
+            {
+                ShowAlert("Missing Email", "Selected transactions do not have email addresses.", "Error");
+                return;
+            }
+            
+            if (emails.Count > 1)
+            {
+                ShowAlert("Multiple Employees", 
+                    $"Selected transactions belong to different employees: {string.Join(", ", emails)}\n\n" +
+                    $"Please select transactions from the same employee only.", 
+                    "Warning");
+                return;
+            }
+
+            // Get all trips for the email
+            var trips = await TripService.GetTripsByEmailAsync(firstTransaction.Email);
+            
+            if (!trips.Any())
+            {
+                ShowAlert("No Trips Found", 
+                    $"No trips found for {firstTransaction.Email}.\n\n" +
+                    $"Please create a trip first or use the Matching Engine to link transactions automatically.", 
+                    "Warning");
+                return;
+            }
+
+            // If only one trip, use it automatically
+            if (trips.Count() == 1)
+            {
+                var trip = trips.First();
+                selectedTripIdForLink = trip.TripId;
+                selectedTripForLink = trip;
+                showLinkModal = true;
+                StateHasChanged();
+                return;
+            }
+
+            // Multiple trips - show options
+            var tripOptions = string.Join("\n", trips.Select(t => 
+                $"• {t.TripName} ({t.StartDate:dd/MM/yyyy} - {t.EndDate:dd/MM/yyyy})"));
+            
+            ShowAlert("Multiple Trips Found", 
+                $"Multiple trips found for {firstTransaction.Email}:\n\n{tripOptions}\n\n" +
+                $"Please use the Matching Engine for bulk operations with multiple trips, or navigate to Trips page and use 'Link Transactions' action.", 
+                "Info");
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"An error occurred: {ex.Message}", "Error");
+        }
     }
 
     private async Task BulkMarkValid()
@@ -808,7 +1131,7 @@
     private async Task BulkExport()
     {
         // TODO: Implement bulk export
-        await JSRuntime.InvokeVoidAsync("alert", $"Export {selectedTransactions.Count} transactions");  
+        ShowAlert("Coming Soon", $"Export {selectedTransactions.Count} transactions", "Info");
     }
 
     // Helper method to close dropdown menus
@@ -858,5 +1181,57 @@
             "first" => "text-orange-600",
             _ => "text-gray-600"
         };
+    }
+    
+    // AlertDialog Helper Methods
+    private void ShowAlert(string title, string message, string type = "Info", string okText = "OK")
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type switch
+        {
+            "Success" => AlertDialog.AlertType.Success,
+            "Error" => AlertDialog.AlertType.Error,
+            "Warning" => AlertDialog.AlertType.Warning,
+            _ => AlertDialog.AlertType.Info
+        };
+        alertOkText = okText;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+    
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+    
+    // ConfirmDialog Helper Methods
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, 
+        string icon = "⚠️", string confirmText = "Confirm", string cancelText = "Cancel", 
+        string confirmClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = confirmText;
+        cancelButtonText = cancelText;
+        confirmButtonClass = confirmClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+    
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction.Invoke();
+        }
+        
+        pendingConfirmAction = null;
+        StateHasChanged();
     }
 }

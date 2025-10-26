@@ -195,7 +195,31 @@ public class TripService : ITripService
         _context.Trips.Add(trip);
         await _context.SaveChangesAsync();
 
-        await _auditService.LogActionAsync("System", "Create", "Trips", trip.TripId.ToString(), null, trip);
+        // Create a clean copy without navigation properties for audit log
+        var auditData = new
+        {
+            trip.TripId,
+            trip.TripName,
+            trip.Email,
+            trip.StartDate,
+            trip.EndDate,
+            trip.Duration,
+            trip.Country1,
+            trip.City1,
+            trip.Country2,
+            trip.City2,
+            trip.PurposeId,
+            trip.TripTypeId,
+            trip.StatusId,
+            trip.ValidationStatusId,
+            trip.IsManual,
+            trip.OwnerId,
+            trip.CreatedAt,
+            trip.ModifiedAt,
+            trip.ModifiedBy
+        };
+
+        await _auditService.LogActionAsync("System", "Create", "Trips", trip.TripId.ToString(), null, auditData);
         
         return trip;
     }
@@ -212,10 +236,57 @@ public class TripService : ITripService
         trip.Duration = await CalculateTripDurationAsync(trip.StartDate, trip.EndDate);
         trip.ModifiedAt = DateTime.UtcNow;
         
+        // Create clean copies without navigation properties for audit log
+        var oldData = new
+        {
+            existing.TripId,
+            existing.TripName,
+            existing.Email,
+            existing.StartDate,
+            existing.EndDate,
+            existing.Duration,
+            existing.Country1,
+            existing.City1,
+            existing.Country2,
+            existing.City2,
+            existing.PurposeId,
+            existing.TripTypeId,
+            existing.StatusId,
+            existing.ValidationStatusId,
+            existing.IsManual,
+            existing.OwnerId,
+            existing.CreatedAt,
+            existing.ModifiedAt,
+            existing.ModifiedBy
+        };
+
+        var newData = new
+        {
+            trip.TripId,
+            trip.TripName,
+            trip.Email,
+            trip.StartDate,
+            trip.EndDate,
+            trip.Duration,
+            trip.Country1,
+            trip.City1,
+            trip.Country2,
+            trip.City2,
+            trip.PurposeId,
+            trip.TripTypeId,
+            trip.StatusId,
+            trip.ValidationStatusId,
+            trip.IsManual,
+            trip.OwnerId,
+            trip.CreatedAt,
+            trip.ModifiedAt,
+            trip.ModifiedBy
+        };
+        
         _context.Entry(existing).CurrentValues.SetValues(trip);
         await _context.SaveChangesAsync();
 
-        await _auditService.LogActionAsync("System", "Edit", "Trips", trip.TripId.ToString(), existing, trip);
+        await _auditService.LogActionAsync("System", "Edit", "Trips", trip.TripId.ToString(), oldData, newData);
     }
 
     /// <summary>
@@ -336,6 +407,30 @@ public class TripService : ITripService
         if (trip == null)
             throw new ArgumentException($"Trip with ID {tripId} not found");
 
+        // Create clean copy for audit log before deleting
+        var oldData = new
+        {
+            trip.TripId,
+            trip.TripName,
+            trip.Email,
+            trip.StartDate,
+            trip.EndDate,
+            trip.Duration,
+            trip.Country1,
+            trip.City1,
+            trip.Country2,
+            trip.City2,
+            trip.PurposeId,
+            trip.TripTypeId,
+            trip.StatusId,
+            trip.ValidationStatusId,
+            trip.IsManual,
+            trip.OwnerId,
+            trip.CreatedAt,
+            trip.ModifiedAt,
+            trip.ModifiedBy
+        };
+
         // Unlink all transactions from this trip
         var linkedTransactions = await _context.Transactions
             .Where(t => t.TripId == tripId)
@@ -349,7 +444,7 @@ public class TripService : ITripService
         _context.Trips.Remove(trip);
         await _context.SaveChangesAsync();
 
-        await _auditService.LogActionAsync("System", "Delete", "Trips", tripId.ToString(), trip, null);
+        await _auditService.LogActionAsync("System", "Delete", "Trips", tripId.ToString(), oldData, null);
     }
 
     public async Task<IEnumerable<Trip>> SuggestTripsFromTransactionsAsync()

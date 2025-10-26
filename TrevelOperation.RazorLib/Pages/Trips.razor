@@ -2,8 +2,10 @@
 @using TravelOperation.Core.Models.Entities
 @using TravelOperation.Core.Models
 @using TravelOperation.Core.Services.Interfaces
+@using TravelOperation.Core.Interfaces
 @inject ITripService TripService
 @inject ILookupService LookupService
+@inject IExportService ExportService
 @inject IJSRuntime JSRuntime
 @inject NavigationManager NavigationManager
 @implements IDisposable
@@ -105,14 +107,19 @@
                     <input type="date" class="input input-bordered" @bind="startDateTo" @oninput="FilterTrips" />
                 </div>
             </div>
+            <div class="flex justify-end mt-4">
+                <button class="btn btn-outline btn-sm" @onclick="RefreshAndClearFilters">
+                    <i class="fas fa-sync-alt mr-2"></i>Clear Filters & Refresh
+                </button>
+            </div>
         </div>
     </div>
 
     <!-- Trips Table -->
     <div class="card bg-base-100 shadow-sm">
-        <!-- Table with fixed height -->
-        <div class="overflow-y-auto" style="height: 600px; overflow-x: hidden;">
-            <table class="table table-zebra table-pin-rows" style="table-layout: fixed; width: 100%;">
+        <!-- Table with fixed height and horizontal scroll -->
+        <div class="overflow-auto" style="height: 600px;">
+            <table class="table table-zebra table-pin-rows" style="min-width: 1400px;">
                 <thead class="bg-white sticky top-0 z-10">
                     <tr class="bg-white">
                         <th class="bg-white" style="width: 30px;">
@@ -136,14 +143,14 @@
                                 <span>@(sortAscending ? "↑" : "↓")</span>
                             }
                         </th>
-                        <th class="bg-white cursor-pointer hover:bg-base-200" style="width: 85px;" @onclick='() => SortBy("StartDate")'>
+                        <th class="bg-white cursor-pointer hover:bg-base-200" style="width: 150px;" @onclick='() => SortBy("StartDate")'>
                             Start
                             @if (sortColumn == "StartDate")
                             {
                                 <span>@(sortAscending ? "↑" : "↓")</span>
                             }
                         </th>
-                        <th class="bg-white cursor-pointer hover:bg-base-200" style="width: 85px;" @onclick='() => SortBy("EndDate")'>
+                        <th class="bg-white cursor-pointer hover:bg-base-200" style="width: 150px;" @onclick='() => SortBy("EndDate")'>
                             End
                             @if (sortColumn == "EndDate")
                             {
@@ -219,7 +226,7 @@
                                             <button tabindex="0" class="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-900">
                                                 ⋮
                                             </button>
-                                            <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow border border-base-300">
+                                            <ul tabindex="0" class="dropdown-content menu bg-white rounded-box z-[1] w-52 p-2 shadow border border-base-300">
                                                 <li><a @onclick="() => ViewTripDetails(trip.TripId)" class="hover:bg-base-200">
                                                     <i class="fas fa-eye mr-2"></i>View Details
                                                 </a></li>
@@ -294,7 +301,7 @@
     <!-- Bulk Actions (shown when trips are selected) -->
     @if (selectedTripIds.Any())
     {
-        <div class="fixed bottom-4 right-4 bg-base-100 rounded-lg shadow-lg p-4 border z-[1000]">
+        <div class="fixed bottom-4 right-4 bg-white rounded-lg shadow-lg p-4 border z-[1000]">
             <div class="flex items-center gap-4">
                 <span class="text-sm font-medium">@selectedTripIds.Count selected</span>
                 <div class="flex gap-2">
@@ -336,6 +343,24 @@
                        OnClose="CloseLinkModal" 
                        OnTransactionsLinked="OnTransactionsLinked" />
 
+<!-- Alert Dialog -->
+<AlertDialog IsVisible="@showAlertDialog"
+             Title="@alertTitle"
+             Message="@alertMessage"
+             Type="@alertType"
+             OkButtonText="@alertOkText"
+             OnClose="CloseAlertDialog" />
+
+<!-- Confirmation Dialog -->
+<ConfirmDialog IsVisible="@showConfirmDialog"
+               Title="@confirmTitle"
+               Message="@confirmMessage"
+               Icon="@confirmIcon"
+               ConfirmButtonText="@confirmButtonText"
+               CancelButtonText="@cancelButtonText"
+               ConfirmButtonClass="@confirmButtonClass"
+               OnResult="HandleConfirmResult" />
+
 @code {
     private IEnumerable<Trip>? allTrips;
     private IEnumerable<Trip>? filteredTrips;
@@ -344,6 +369,23 @@
     private IEnumerable<Purpose>? purposes;
     private IEnumerable<Status>? statuses;
     private IEnumerable<Owner>? owners;
+
+    // Alert Dialog state
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+    private string alertOkText = "OK";
+    
+    // Confirmation Dialog state
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "❓";
+    private string confirmButtonText = "Yes";
+    private string cancelButtonText = "No";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction = null;
 
     // Filtering
     private string searchTerm = "";
@@ -591,15 +633,21 @@
     }
 
     // Modal and CRUD operations
-    private void OpenCreateModal()
+    private async Task OpenCreateModal()
     {
+        // Load validation statuses to set default
+        var validationStatuses = await LookupService.GetValidationStatusesAsync();
+        var defaultValidationStatus = validationStatuses.FirstOrDefault(v => v.Name.Contains("Not ready"));
+        
         editingTrip = new Trip
         {
             StartDate = DateTime.Today,
             EndDate = DateTime.Today.AddDays(1),
+            Duration = 1,
             CreatedAt = DateTime.UtcNow,
             ModifiedAt = DateTime.UtcNow,
-            IsManual = true
+            IsManual = true,
+            ValidationStatusId = defaultValidationStatus?.ValidationStatusId ?? 1 // Set default validation status
         };
         isEditMode = false;
         showEditModal = true;
@@ -622,6 +670,37 @@
     {
         try
         {
+            // Validate foreign keys before saving
+            if (trip.PurposeId <= 0)
+            {
+                ShowAlert("Validation Error", "Please select a valid Purpose", AlertDialog.AlertType.Error);
+                return;
+            }
+            
+            if (trip.TripTypeId <= 0)
+            {
+                ShowAlert("Validation Error", "Please select a valid Trip Type", AlertDialog.AlertType.Error);
+                return;
+            }
+            
+            if (trip.StatusId <= 0)
+            {
+                ShowAlert("Validation Error", "Please select a valid Status", AlertDialog.AlertType.Error);
+                return;
+            }
+            
+            if (trip.ValidationStatusId <= 0)
+            {
+                ShowAlert("Validation Error", "Please select a valid Validation Status", AlertDialog.AlertType.Error);
+                return;
+            }
+            
+            if (trip.OwnerId <= 0)
+            {
+                ShowAlert("Validation Error", "Please select a valid Owner", AlertDialog.AlertType.Error);
+                return;
+            }
+
             if (isEditMode)
             {
                 await TripService.UpdateTripAsync(trip);
@@ -632,35 +711,55 @@
             }
 
             await LoadData();
+            
+            // Close modal only on success (no exception)
             CloseEditModal();
             
-            await JSRuntime.InvokeVoidAsync("showToast", "success", 
-                isEditMode ? "Trip updated successfully" : "Trip created successfully");
+            ShowAlert("Success", isEditMode ? "Trip updated successfully" : "Trip created successfully", AlertDialog.AlertType.Success);
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error saving trip: {ex.Message}");
+            // Don't close modal on error - let user see the error and fix the issue
+            var errorMessage = ex.Message;
+            
+            // Provide more user-friendly error messages for common issues
+            if (ex.Message.Contains("FOREIGN KEY constraint"))
+            {
+                errorMessage = "Invalid data: One or more selected values are not valid. Please check:\n" +
+                              "• Purpose is selected\n" +
+                              "• Trip Type is selected\n" +
+                              "• Status is selected\n" +
+                              "• Validation Status is selected\n" +
+                              "• Owner is assigned";
+            }
+            
+            ShowAlert("Error", $"Error saving trip: {errorMessage}", AlertDialog.AlertType.Error);
         }
     }
 
-    private async Task DeleteTrip(int tripId)
+    private void DeleteTrip(int tripId)
     {
-        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-            "Are you sure you want to delete this trip? This will unlink all associated transactions.");
-        
-        if (confirmed)
-        {
-            try
+        ShowConfirm(
+            "Delete Trip",
+            "Are you sure you want to delete this trip? This will unlink all associated transactions.",
+            async () =>
             {
-                await TripService.DeleteTripAsync(tripId);
-                await LoadData();
-                await JSRuntime.InvokeVoidAsync("showToast", "success", "Trip deleted successfully");
-            }
-            catch (Exception ex)
-            {
-                await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error deleting trip: {ex.Message}");
-            }
-        }
+                try
+                {
+                    await TripService.DeleteTripAsync(tripId);
+                    await LoadData();
+                    ShowAlert("Success", "Trip deleted successfully", AlertDialog.AlertType.Success);
+                }
+                catch (Exception ex)
+                {
+                    ShowAlert("Error", $"Error deleting trip: {ex.Message}", AlertDialog.AlertType.Error);
+                }
+            },
+            "🗑️",
+            "Delete",
+            "Cancel",
+            "btn-error"
+        );
     }
 
     private async Task ValidateTrip(int tripId)
@@ -669,11 +768,11 @@
         {
             await TripService.ValidateTripAsync(tripId);
             await LoadData();
-            await JSRuntime.InvokeVoidAsync("showToast", "success", "Trip validated successfully");
+            ShowAlert("Success", "Trip validated successfully", AlertDialog.AlertType.Success);
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error validating trip: {ex.Message}");
+            ShowAlert("Error", $"Error validating trip: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
@@ -689,26 +788,12 @@
             }
             else
             {
-                try
-                {
-                    await JSRuntime.InvokeVoidAsync("showToast", "info", "No trip suggestions found");
-                }
-                catch
-                {
-                    Console.WriteLine("No trip suggestions found");
-                }
+                ShowAlert("No Suggestions", "No trip suggestions found", AlertDialog.AlertType.Info);
             }
         }
         catch (Exception ex)
         {
-            try
-            {
-                await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error generating suggestions: {ex.Message}");
-            }
-            catch
-            {
-                Console.WriteLine($"Error generating suggestions: {ex.Message}");
-            }
+            ShowAlert("Error", $"Error generating suggestions: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
@@ -752,18 +837,12 @@
         CloseLinkModal();
     }
 
-    private async Task BulkValidate()
+    private void BulkValidate()
     {
-        try
-        {
-            Console.WriteLine($"BulkValidate called with {selectedTripIds.Count} trips");
-            
-            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-                $"Are you sure you want to validate {selectedTripIds.Count} selected trips?");
-            
-            Console.WriteLine($"Confirmation result: {confirmed}");
-            
-            if (confirmed)
+        ShowConfirm(
+            "Validate Trips",
+            $"Are you sure you want to validate {selectedTripIds.Count} selected trips?",
+            async () =>
             {
                 try
                 {
@@ -774,69 +853,65 @@
                     
                     await LoadData();
                     ClearSelection();
-                    
-                    try
-                    {
-                        await JSRuntime.InvokeVoidAsync("showToast", "success", "Selected trips validated successfully");
-                    }
-                    catch
-                    {
-                        Console.WriteLine("Selected trips validated successfully");
-                    }
+                    ShowAlert("Success", "Selected trips validated successfully", AlertDialog.AlertType.Success);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error validating trips: {ex.Message}");
-                    try
-                    {
-                        await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error validating trips: {ex.Message}");
-                    }
-                    catch
-                    {
-                        // Fallback
-                    }
+                    ShowAlert("Error", $"Error validating trips: {ex.Message}", AlertDialog.AlertType.Error);
                 }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"BulkValidate exception: {ex.Message}");
-        }
+            },
+            "✅",
+            "Validate",
+            "Cancel",
+            "btn-success"
+        );
     }
 
-    private async Task BulkExport()
+    private void BulkExport()
     {
-        try
-        {
-            Console.WriteLine($"BulkExport called with {selectedTripIds.Count} trips");
-            
-            try
+        ShowConfirm(
+            "Export Selected Trips",
+            $"Export {selectedTripIds.Count} selected trips to CSV?",
+            async () =>
             {
-                await JSRuntime.InvokeVoidAsync("showToast", "info", "Export functionality coming soon");
-            }
-            catch
-            {
-                Console.WriteLine("Export functionality coming soon");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"BulkExport exception: {ex.Message}");
-        }
+                try
+                {
+                    // Get selected trips
+                    var selectedTrips = pagedResult.Items.Where(t => selectedTripIds.Contains(t.TripId)).ToList();
+                    
+                    if (!selectedTrips.Any())
+                    {
+                        ShowAlert("No Data", "No trips selected for export", AlertDialog.AlertType.Warning);
+                        return;
+                    }
+                    
+                    // Export to CSV
+                    var csvData = await ExportService.ExportTripsToCsvAsync(selectedTrips);
+                    var fileName = await ExportService.GetExportFileName("SelectedTrips", "csv");
+                    
+                    // Download file
+                    await DownloadFile(csvData, fileName, "text/csv");
+                    
+                    ShowAlert("Success", $"{selectedTrips.Count} trips exported successfully", AlertDialog.AlertType.Success);
+                }
+                catch (Exception ex)
+                {
+                    ShowAlert("Error", $"Error exporting trips: {ex.Message}", AlertDialog.AlertType.Error);
+                }
+            },
+            "📥",
+            "Export",
+            "Cancel",
+            "btn-primary"
+        );
     }
 
-    private async Task BulkDelete()
+    private void BulkDelete()
     {
-        try
-        {
-            Console.WriteLine($"BulkDelete called with {selectedTripIds.Count} trips");
-            
-            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-                $"Are you sure you want to delete {selectedTripIds.Count} selected trips? This will unlink all associated transactions.");
-            
-            Console.WriteLine($"Delete confirmation result: {confirmed}");
-            
-            if (confirmed)
+        ShowConfirm(
+            "Delete Trips",
+            $"Are you sure you want to delete {selectedTripIds.Count} selected trips? This will unlink all associated transactions.",
+            async () =>
             {
                 try
                 {
@@ -847,39 +922,115 @@
                     
                     await LoadData();
                     ClearSelection();
-                    
-                    try
-                    {
-                        await JSRuntime.InvokeVoidAsync("showToast", "success", "Selected trips deleted successfully");
-                    }
-                    catch
-                    {
-                        Console.WriteLine("Selected trips deleted successfully");
-                    }
+                    ShowAlert("Success", "Selected trips deleted successfully", AlertDialog.AlertType.Success);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error deleting trips: {ex.Message}");
-                    try
-                    {
-                        await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error deleting trips: {ex.Message}");
-                    }
-                    catch
-                    {
-                        // Fallback
-                    }
+                    ShowAlert("Error", $"Error deleting trips: {ex.Message}", AlertDialog.AlertType.Error);
                 }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"BulkDelete exception: {ex.Message}");
-        }
+            },
+            "🗑️",
+            "Delete",
+            "Cancel",
+            "btn-error"
+        );
     }
 
     private async Task ExportData()
     {
-        // TODO: Implement export functionality
-        await JSRuntime.InvokeVoidAsync("showToast", "info", "Export functionality coming soon");
+        try
+        {
+            // Export filtered trips (what user currently sees)
+            var tripsToExport = filteredTrips?.ToList() ?? new List<Trip>();
+            
+            if (!tripsToExport.Any())
+            {
+                ShowAlert("No Data", "No trips to export", AlertDialog.AlertType.Warning);
+                return;
+            }
+            
+            // Export to CSV
+            var csvData = await ExportService.ExportTripsToCsvAsync(tripsToExport);
+            var fileName = await ExportService.GetExportFileName("Trips", "csv");
+            
+            // Download file
+            await DownloadFile(csvData, fileName, "text/csv");
+            
+            ShowAlert("Success", $"{tripsToExport.Count} trips exported successfully", AlertDialog.AlertType.Success);
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error exporting trips: {ex.Message}", AlertDialog.AlertType.Error);
+        }
+    }
+
+    private async Task DownloadFile(byte[] fileData, string fileName, string contentType)
+    {
+        var base64 = Convert.ToBase64String(fileData);
+        await JSRuntime.InvokeVoidAsync("downloadFileBase64", base64, fileName, contentType);
+    }
+
+    private async Task RefreshAndClearFilters()
+    {
+        // Clear all filter values
+        searchTerm = "";
+        selectedPurposeId = "";
+        selectedStatusId = "";
+        selectedOwnerId = "";
+        startDateFrom = null;
+        startDateTo = null;
+        
+        // Reset pagination
+        currentPage = 1;
+        
+        // Reload data from database
+        await LoadData();
+        
+        StateHasChanged();
+    }
+
+    // Alert Dialog Methods
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type = AlertDialog.AlertType.Info, string okText = "OK")
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        alertOkText = okText;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+
+    // Confirmation Dialog Methods
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "❓", 
+        string confirmText = "Yes", string cancelText = "No", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = confirmText;
+        cancelButtonText = cancelText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction.Invoke();
+        }
+        
+        pendingConfirmAction = null;
+        StateHasChanged();
     }
 }

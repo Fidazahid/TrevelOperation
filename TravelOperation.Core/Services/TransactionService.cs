@@ -197,7 +197,44 @@ public class TransactionService : ITransactionService
         _context.Transactions.Add(transaction);
         await _context.SaveChangesAsync();
 
-        await _auditService.LogActionAsync("System", "Create", "Transactions", transaction.TransactionId, null, transaction);
+        // Create a clean copy without navigation properties for audit log
+        var auditData = new
+        {
+            transaction.TransactionId,
+            transaction.SourceId,
+            transaction.Email,
+            transaction.TransactionDate,
+            transaction.AuthorizationDate,
+            transaction.TransactionType,
+            transaction.CategoryId,
+            transaction.Vendor,
+            transaction.MerchantCategory,
+            transaction.Address,
+            transaction.SourceTripId,
+            transaction.BookingId,
+            transaction.BookingStatusId,
+            transaction.BookingStartDate,
+            transaction.BookingEndDate,
+            transaction.BookingTypeId,
+            transaction.Policy,
+            transaction.Currency,
+            transaction.Amount,
+            transaction.AmountUSD,
+            transaction.ExchangeRate,
+            transaction.CabinClassId,
+            transaction.Participants,
+            transaction.DocumentUrl,
+            transaction.Notes,
+            transaction.TripId,
+            transaction.DataValidation,
+            transaction.ParticipantsValidated,
+            transaction.IsValid,
+            transaction.CreatedAt,
+            transaction.ModifiedAt,
+            transaction.ModifiedBy
+        };
+
+        await _auditService.LogActionAsync("System", "Create", "Transactions", transaction.TransactionId, null, auditData);
         
         return transaction;
     }
@@ -213,10 +250,83 @@ public class TransactionService : ITransactionService
         
         transaction.ModifiedAt = DateTime.UtcNow;
         
+        // Create clean copies without navigation properties for audit log
+        var oldData = new
+        {
+            existing.TransactionId,
+            existing.SourceId,
+            existing.Email,
+            existing.TransactionDate,
+            existing.AuthorizationDate,
+            existing.TransactionType,
+            existing.CategoryId,
+            existing.Vendor,
+            existing.MerchantCategory,
+            existing.Address,
+            existing.SourceTripId,
+            existing.BookingId,
+            existing.BookingStatusId,
+            existing.BookingStartDate,
+            existing.BookingEndDate,
+            existing.BookingTypeId,
+            existing.Policy,
+            existing.Currency,
+            existing.Amount,
+            existing.AmountUSD,
+            existing.ExchangeRate,
+            existing.CabinClassId,
+            existing.Participants,
+            existing.DocumentUrl,
+            existing.Notes,
+            existing.TripId,
+            existing.DataValidation,
+            existing.ParticipantsValidated,
+            existing.IsValid,
+            existing.CreatedAt,
+            existing.ModifiedAt,
+            existing.ModifiedBy
+        };
+
+        var newData = new
+        {
+            transaction.TransactionId,
+            transaction.SourceId,
+            transaction.Email,
+            transaction.TransactionDate,
+            transaction.AuthorizationDate,
+            transaction.TransactionType,
+            transaction.CategoryId,
+            transaction.Vendor,
+            transaction.MerchantCategory,
+            transaction.Address,
+            transaction.SourceTripId,
+            transaction.BookingId,
+            transaction.BookingStatusId,
+            transaction.BookingStartDate,
+            transaction.BookingEndDate,
+            transaction.BookingTypeId,
+            transaction.Policy,
+            transaction.Currency,
+            transaction.Amount,
+            transaction.AmountUSD,
+            transaction.ExchangeRate,
+            transaction.CabinClassId,
+            transaction.Participants,
+            transaction.DocumentUrl,
+            transaction.Notes,
+            transaction.TripId,
+            transaction.DataValidation,
+            transaction.ParticipantsValidated,
+            transaction.IsValid,
+            transaction.CreatedAt,
+            transaction.ModifiedAt,
+            transaction.ModifiedBy
+        };
+        
         _context.Entry(existing).CurrentValues.SetValues(transaction);
         await _context.SaveChangesAsync();
 
-        await _auditService.LogActionAsync("System", "Edit", "Transactions", transaction.TransactionId, existing, transaction);
+        await _auditService.LogActionAsync("System", "Edit", "Transactions", transaction.TransactionId, oldData, newData);
     }
 
     /// <summary>
@@ -330,10 +440,47 @@ public class TransactionService : ITransactionService
         if (transaction == null)
             throw new ArgumentException($"Transaction with ID {transactionId} not found");
 
+        // Create clean copy for audit log before deleting
+        var oldData = new
+        {
+            transaction.TransactionId,
+            transaction.SourceId,
+            transaction.Email,
+            transaction.TransactionDate,
+            transaction.AuthorizationDate,
+            transaction.TransactionType,
+            transaction.CategoryId,
+            transaction.Vendor,
+            transaction.MerchantCategory,
+            transaction.Address,
+            transaction.SourceTripId,
+            transaction.BookingId,
+            transaction.BookingStatusId,
+            transaction.BookingStartDate,
+            transaction.BookingEndDate,
+            transaction.BookingTypeId,
+            transaction.Policy,
+            transaction.Currency,
+            transaction.Amount,
+            transaction.AmountUSD,
+            transaction.ExchangeRate,
+            transaction.CabinClassId,
+            transaction.Participants,
+            transaction.DocumentUrl,
+            transaction.Notes,
+            transaction.TripId,
+            transaction.DataValidation,
+            transaction.ParticipantsValidated,
+            transaction.IsValid,
+            transaction.CreatedAt,
+            transaction.ModifiedAt,
+            transaction.ModifiedBy
+        };
+
         _context.Transactions.Remove(transaction);
         await _context.SaveChangesAsync();
 
-        await _auditService.LogActionAsync("System", "Delete", "Transactions", transactionId, transaction, null);
+        await _auditService.LogActionAsync("System", "Delete", "Transactions", transactionId, oldData, null);
     }
 
     public async Task LinkTransactionToTripAsync(string transactionId, int tripId)
@@ -374,6 +521,19 @@ public class TransactionService : ITransactionService
         if (originalTransaction == null)
             throw new ArgumentException($"Transaction with ID {transactionId} not found");
 
+        // Create clean copy of original for audit log
+        var originalData = new
+        {
+            originalTransaction.TransactionId,
+            originalTransaction.SourceId,
+            originalTransaction.Email,
+            originalTransaction.TransactionDate,
+            originalTransaction.Amount,
+            originalTransaction.AmountUSD,
+            originalTransaction.CategoryId,
+            originalTransaction.Vendor
+        };
+
         foreach (var split in splitTransactions)
         {
             split.TransactionId = $"{transactionId}_split_{Guid.NewGuid().ToString("N")[..8]}";
@@ -386,8 +546,18 @@ public class TransactionService : ITransactionService
 
         await _context.SaveChangesAsync();
 
+        // Create clean array of split data for audit log
+        var splitData = splitTransactions.Select(s => new
+        {
+            s.TransactionId,
+            s.Amount,
+            s.AmountUSD,
+            s.CategoryId,
+            s.Notes
+        }).ToList();
+
         await _auditService.LogActionAsync("System", "Split", "Transactions", transactionId, 
-            originalTransaction, splitTransactions);
+            originalData, splitData);
 
         return splitTransactions;
     }
@@ -665,15 +835,16 @@ public class TransactionService : ITransactionService
         if (transaction == null)
             throw new ArgumentException($"Transaction with ID {transactionId} not found");
 
-        var oldTransaction = new Transaction
+        // Create clean copy of old state for audit log
+        var oldData = new
         {
-            TransactionId = transaction.TransactionId,
-            CategoryId = transaction.CategoryId,
-            CabinClassId = transaction.CabinClassId,
-            Participants = transaction.Participants,
-            Notes = transaction.Notes,
-            IsValid = transaction.IsValid,
-            DataValidation = transaction.DataValidation
+            transaction.TransactionId,
+            transaction.CategoryId,
+            transaction.CabinClassId,
+            transaction.Participants,
+            transaction.Notes,
+            transaction.IsValid,
+            transaction.DataValidation
         };
 
         // Update properties from DTO
@@ -692,8 +863,20 @@ public class TransactionService : ITransactionService
         transaction.ModifiedAt = DateTime.UtcNow;
         transaction.ModifiedBy = "System"; // TODO: Get current user
 
+        // Create clean copy of new state for audit log
+        var newData = new
+        {
+            transaction.TransactionId,
+            transaction.CategoryId,
+            transaction.CabinClassId,
+            transaction.Participants,
+            transaction.Notes,
+            transaction.IsValid,
+            transaction.DataValidation
+        };
+
         await _context.SaveChangesAsync();
 
-        await _auditService.LogActionAsync("System", "Edit", "Transactions", transactionId, oldTransaction, transaction);
+        await _auditService.LogActionAsync("System", "Edit", "Transactions", transactionId, oldData, newData);
     }
 }

@@ -6,7 +6,7 @@
 @inject IJSRuntime JSRuntime
 
 <!-- Create Transaction Modal -->
-<div class="modal @(isVisible ? "modal-open" : "")" id="transactionCreateModal">
+<div class="modal @(isVisible ? "modal-open" : "") flex items-center justify-center" id="transactionCreateModal">
     <div class="modal-box w-11/12 max-w-6xl max-h-[90vh] overflow-y-auto">
         <form method="dialog">
             <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @onclick="Hide">✕</button>
@@ -131,82 +131,99 @@
                 </div>
 
                 <!-- Amount Information Section -->
-                <div class="card bg-base-200">
-                    <div class="card-body">
-                        <h4 class="font-semibold text-lg mb-4">💰 Amount Information</h4>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <!-- Currency -->
-                            <div class="form-control">
-                                <label class="label">
-                                    <span class="label-text font-semibold">Currency *</span>
-                                </label>
-                                <select class="select select-bordered" @bind="createForm.Currency" @bind:after="CalculateUSDAmount" required>
-                                    <option value="">Select...</option>
-                                    <option value="USD">USD - US Dollar</option>
-                                    <option value="EUR">EUR - Euro</option>
-                                    <option value="ILS">ILS - Israeli Shekel</option>
-                                    <option value="GBP">GBP - British Pound</option>
-                                    <option value="JPY">JPY - Japanese Yen</option>
-                                    <option value="CAD">CAD - Canadian Dollar</option>
-                                    <option value="AUD">AUD - Australian Dollar</option>
-                                </select>
-                            </div>
+                <div class="card bg-base-100 border border-base-300 shadow-sm">
+                    <div class="card-body p-6">
+                        <h4 class="font-semibold text-lg mb-4 flex items-center gap-2">
+                            <span class="text-2xl">💰</span>
+                            <span>Amount Information</span>
+                        </h4>
+                        
+                        <!-- First Row: Currency and Amount -->
+                        <div class="card bg-error/5 border border-error/20 mb-4">
+                            <div class="card-body p-4">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <!-- Currency -->
+                                    <div class="form-control">
+                                        <label class="label">
+                                            <span class="label-text font-semibold">Currency *</span>
+                                        </label>
+                                        <select class="select select-bordered select-sm" @bind="createForm.Currency" @bind:after="CalculateUSDAmount" required>
+                                            <option value="">Select...</option>
+                                            <option value="USD">USD - US Dollar</option>
+                                            <option value="EUR">EUR - Euro</option>
+                                            <option value="ILS">ILS - Israeli Shekel</option>
+                                            <option value="GBP">GBP - British Pound</option>
+                                            <option value="JPY">JPY - Japanese Yen</option>
+                                            <option value="CAD">CAD - Canadian Dollar</option>
+                                            <option value="AUD">AUD - Australian Dollar</option>
+                                        </select>
+                                    </div>
 
-                            <!-- Amount -->
-                            <div class="form-control">
-                                <label class="label">
-                                    <span class="label-text font-semibold">Amount *</span>
-                                </label>
-                                <input type="number" 
-                                       step="0.01"
-                                       class="input input-bordered" 
-                                       @bind="createForm.Amount" 
-                                       @bind:after="CalculateUSDAmount"
-                                       placeholder="0.00"
-                                       required />
-                            </div>
-
-                            <!-- Exchange Rate -->
-                            <div class="form-control">
-                                <label class="label">
-                                    <span class="label-text font-semibold">Exchange Rate (to USD)</span>
-                                </label>
-                                <input type="number" 
-                                       step="0.0001"
-                                       class="input input-bordered" 
-                                       @bind="createForm.ExchangeRate"
-                                       @bind:after="CalculateUSDAmount"
-                                       placeholder="1.0000" />
-                            </div>
-
-                            <!-- Amount USD (calculated) -->
-                            <div class="form-control md:col-span-3">
-                                <label class="label">
-                                    <span class="label-text font-semibold">Amount (USD)</span>
-                                </label>
-                                <div class="flex items-center gap-2">
-                                    <input type="number" 
-                                           step="0.01"
-                                           class="input input-bordered flex-1 bg-base-300" 
-                                           @bind="createForm.AmountUSD"
-                                           placeholder="0.00" />
-                                    <span class="text-sm text-base-content/60">
-                                        @if (createForm.Currency == "USD")
-                                        {
-                                            <span>Same as amount</span>
-                                        }
-                                        else if (createForm.Amount > 0 && createForm.ExchangeRate > 0)
-                                        {
-                                            <span>Auto-calculated</span>
-                                        }
-                                        else
-                                        {
-                                            <span>Enter exchange rate</span>
-                                        }
-                                    </span>
+                                    <!-- Amount -->
+                                    <div class="form-control">
+                                        <label class="label">
+                                            <span class="label-text font-semibold">Amount *</span>
+                                        </label>
+                                        <input type="number" 
+                                               step="0.01"
+                                               class="input input-bordered input-sm" 
+                                               @bind="createForm.Amount" 
+                                               @bind:after="CalculateUSDAmount"
+                                               placeholder="0"
+                                               required />
+                                    </div>
                                 </div>
                             </div>
                         </div>
+<div class="card bg-error/5 border border-error/20">
+                            <div class="card-body p-4">
+                                <div class="form-control">
+                                    <label class="label">
+                                        <span class="label-text font-semibold">Exchange Rate (to USD)</span>
+                                    </label>
+                                    <input type="number" 
+                                           step="0.0001"
+                                           class="input input-bordered input-sm" 
+                                           @bind="createForm.ExchangeRate"
+                                           @bind:after="CalculateUSDAmount"
+                                           placeholder="1.0" />
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Second Row: Amount USD -->
+                        <div class="card bg-error/5 border border-error/20 mb-4">
+                            <div class="card-body p-4">
+                                <div class="form-control">
+                                    <label class="label">
+                                        <span class="label-text font-semibold">Amount (USD)</span>
+                                    </label>
+                                    <div class="flex items-center gap-3">
+                                        <input type="number" 
+                                               step="0.01"
+                                               class="input input-bordered input-sm flex-1" 
+                                               @bind="createForm.AmountUSD"
+                                               placeholder="0" />
+                                        <span class="text-sm text-base-content/60 whitespace-nowrap">
+                                            @if (createForm.Currency == "USD")
+                                            {
+                                                <span>Same as amount</span>
+                                            }
+                                            else if (createForm.Amount > 0 && createForm.ExchangeRate > 0)
+                                            {
+                                                <span>Auto-calculated</span>
+                                            }
+                                            else
+                                            {
+                                                <span>Enter exchange rate</span>
+                                            }
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Third Row: Exchange Rate -->
+                        
                     </div>
                 </div>
 
@@ -394,34 +411,37 @@
                 </div>
 
                 <!-- Validation Flags Section -->
-                <div class="card bg-base-200">
-                    <div class="card-body">
-                        <h4 class="font-semibold text-lg mb-4">✅ Validation Settings</h4>
-                        <div class="flex flex-col gap-3">
+                <div class="card bg-base-100 border border-success/20 shadow-sm">
+                    <div class="card-body p-6">
+                        <h4 class="font-semibold text-lg mb-4 flex items-center gap-2">
+                            <span class="text-2xl">✅</span>
+                            <span>Validation Settings</span>
+                        </h4>
+                        <div class="flex flex-col gap-4">
                             <div class="form-control">
-                                <label class="label cursor-pointer justify-start gap-3">
-                                    <input type="checkbox" class="checkbox" @bind="createForm.IsValid" />
-                                    <div>
-                                        <span class="label-text font-semibold">Mark as Valid</span>
-                                        <p class="text-xs text-base-content/60">Transaction has been reviewed and validated</p>
+                                <label class="label cursor-pointer justify-start gap-4 hover:bg-base-200/50 rounded-lg p-3 transition-colors">
+                                    <input type="checkbox" class="checkbox checkbox-sm" @bind="createForm.IsValid" />
+                                    <div class="flex-1">
+                                        <div class="font-semibold text-base">Mark as Valid</div>
+                                        <p class="text-sm text-base-content/60 mt-0.5">Transaction has been reviewed and validated</p>
                                     </div>
                                 </label>
                             </div>
                             <div class="form-control">
-                                <label class="label cursor-pointer justify-start gap-3">
-                                    <input type="checkbox" class="checkbox checkbox-warning" @bind="createForm.DataValidation" />
-                                    <div>
-                                        <span class="label-text font-semibold">Requires Data Validation</span>
-                                        <p class="text-xs text-base-content/60">Flag for additional review</p>
+                                <label class="label cursor-pointer justify-start gap-4 hover:bg-base-200/50 rounded-lg p-3 transition-colors">
+                                    <input type="checkbox" class="checkbox checkbox-sm checkbox-warning" @bind="createForm.DataValidation" />
+                                    <div class="flex-1">
+                                        <div class="font-semibold text-base">Requires Data Validation</div>
+                                        <p class="text-sm text-base-content/60 mt-0.5">Flag for additional review</p>
                                     </div>
                                 </label>
                             </div>
                             <div class="form-control">
-                                <label class="label cursor-pointer justify-start gap-3">
-                                    <input type="checkbox" class="checkbox checkbox-info" @bind="createForm.ParticipantsValidated" />
-                                    <div>
-                                        <span class="label-text font-semibold">Participants Validated</span>
-                                        <p class="text-xs text-base-content/60">Participant list has been confirmed</p>
+                                <label class="label cursor-pointer justify-start gap-4 hover:bg-base-200/50 rounded-lg p-3 transition-colors">
+                                    <input type="checkbox" class="checkbox checkbox-sm checkbox-info" @bind="createForm.ParticipantsValidated" />
+                                    <div class="flex-1">
+                                        <div class="font-semibold text-base">Participants Validated</div>
+                                        <p class="text-sm text-base-content/60 mt-0.5">Participant list has been confirmed</p>
                                     </div>
                                 </label>
                             </div>

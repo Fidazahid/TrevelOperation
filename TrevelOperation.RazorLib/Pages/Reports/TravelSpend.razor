@@ -8,7 +8,6 @@
 @inject ITransactionService TransactionService
 @inject ITaxCalculationService TaxCalculationService
 @inject NavigationManager NavigationManager
-@inject IJSRuntime JSRuntime
 
 <AuthorizeRoleView RequiredRole="Finance">
 <div class="container mx-auto">
@@ -18,8 +17,16 @@
             <p class="text-gray-600">Comprehensive spending analysis by trip with tax exposure</p>
         </div>
         <div class="flex gap-2">
-            <button class="btn btn-secondary" @onclick="RefreshData">
-                🔄 Refresh
+            <button class="btn btn-secondary" @onclick="RefreshData" disabled="@isLoading">
+                @if (isLoading)
+                {
+                    <span class="loading loading-spinner loading-sm"></span>
+                    <text>Refreshing...</text>
+                }
+                else
+                {
+                    <text>🔄 Refresh</text>
+                }
             </button>
             <button class="btn btn-primary" @onclick="ExportReport">
                 📊 Export Report
@@ -205,7 +212,7 @@
                                 <td style="width: 5%;">
                                     <div class="dropdown dropdown-end">
                                         <label tabindex="0" class="btn btn-ghost btn-xs">⋮</label>
-                                        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52 z-20">
+                                        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-white rounded-box w-52 z-20">
                                             <li><a @onclick="() => ViewTripDetails(spend.TripId)">👁️ View Details</a></li>
                                             <li><a @onclick="() => ViewTransactions(spend.TripId)">📋 View Transactions</a></li>
                                             <li><a @onclick="() => ShowTaxBreakdown(spend.TripId)">💼 Tax Breakdown</a></li>
@@ -379,7 +386,8 @@
                 }
                 catch (Exception ex)
                 {
-                    await JSRuntime.InvokeVoidAsync("console.error", $"Error processing trip {trip.TripId}: {ex.Message}");
+                    // Log error to console but continue processing other trips
+                    Console.WriteLine($"Error processing trip {trip.TripId}: {ex.Message}");
                 }
             }
             
@@ -403,7 +411,11 @@
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error loading travel spend data: {ex.Message}");
+            ShowAlert(
+                "Error Loading Data",
+                $"Failed to load travel spend data: {ex.Message}",
+                AlertDialog.AlertType.Error
+            );
         }
         finally
         {
@@ -467,13 +479,28 @@
 
     private async Task RefreshData()
     {
+        isLoading = true;
+        StateHasChanged();
+        
         await LoadSpendData();
-        FilterTrips();
+        
+        isLoading = false;
+        StateHasChanged();
+        
+        ShowAlert(
+            "Data Refreshed",
+            "Travel spend data has been refreshed successfully!",
+            AlertDialog.AlertType.Success
+        );
     }
 
     private async Task ExportReport()
     {
-        await JSRuntime.InvokeVoidAsync("alert", "Export functionality - Coming soon!");
+        ShowAlert(
+            "Export Report",
+            "Export functionality coming soon!",
+            AlertDialog.AlertType.Info
+        );
     }
 
     private void ViewTripDetails(int tripId)
@@ -518,18 +545,31 @@
                 message += $"\n--- TOTAL TAX EXPOSURE ---\n";
                 message += $"${breakdown.Summary.TotalTaxExposure:N2}";
                 
-                await JSRuntime.InvokeVoidAsync("alert", message);
+                ShowAlert(
+                    $"💼 Tax Breakdown - {spend.TripName}",
+                    message,
+                    AlertDialog.AlertType.Info,
+                    "Close"
+                );
             }
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error loading tax breakdown: {ex.Message}");
+            ShowAlert(
+                "Error Loading Tax Breakdown",
+                $"Failed to load tax breakdown: {ex.Message}",
+                AlertDialog.AlertType.Error
+            );
         }
     }
 
     private async Task ExportTripReport(int tripId)
     {
-        await JSRuntime.InvokeVoidAsync("alert", $"Exporting report for trip ID {tripId} - Coming soon!");
+        ShowAlert(
+            "Export Trip Report",
+            $"Export functionality for trip ID {tripId} coming soon!",
+            AlertDialog.AlertType.Info
+        );
     }
 
     public class TravelSpendData
@@ -562,5 +602,87 @@
         public decimal LodgingTaxExposure { get; set; }
         public decimal TaxExposure { get; set; }
     }
+    
+    // Alert Dialog state
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+    private string alertOkText = "OK";
+    
+    // Confirmation Dialog state
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "❓";
+    private string confirmButtonText = "Yes";
+    private string cancelButtonText = "No";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction = null;
+    
+    // Alert Dialog Methods
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type = AlertDialog.AlertType.Info, string okText = "OK")
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        alertOkText = okText;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+
+    // Confirmation Dialog Methods
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "❓", 
+        string confirmText = "Yes", string cancelText = "No", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = confirmText;
+        cancelButtonText = cancelText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction.Invoke();
+        }
+        
+        pendingConfirmAction = null;
+        StateHasChanged();
+    }
 }
 </AuthorizeRoleView>
+
+<!-- Alert Dialog (for messages) -->
+<AlertDialog 
+    IsVisible="showAlertDialog"
+    Title="@alertTitle"
+    Message="@alertMessage"
+    Type="@alertType"
+    OkButtonText="@alertOkText"
+    OnClose="CloseAlertDialog" />
+
+<!-- Confirmation Dialog (for confirmations) -->
+<ConfirmDialog 
+    IsVisible="showConfirmDialog"
+    Title="@confirmTitle"
+    Message="@confirmMessage"
+    Icon="@confirmIcon"
+    ConfirmButtonText="@confirmButtonText"
+    CancelButtonText="@cancelButtonText"
+    ConfirmButtonClass="@confirmButtonClass"
+    OnResult="HandleConfirmResult" />

@@ -6,7 +6,6 @@
 @inject ITripService TripService
 @inject ITransactionService TransactionService
 @inject TrevelOperation.Service.ISettingsService SettingsService
-@inject IJSRuntime JSRuntime
 
 <AuthorizeRoleView RequiredRoles='new List<string> { "Finance", "Owner" }'>
 <div class="container mx-auto p-6">
@@ -16,14 +15,35 @@
             <p class="text-gray-600">Auto-detect trips from transaction patterns</p>
         </div>
         <div class="flex gap-2">
-            <button class="btn btn-secondary" @onclick="RefreshSuggestions">
-                🔄 Refresh
+            <button class="btn btn-secondary" @onclick="RefreshSuggestions" disabled="@isLoading">
+                @if (isLoading)
+                {
+                    <span class="loading loading-spinner loading-sm"></span>
+                    <text>Refreshing...</text>
+                }
+                else
+                {
+                    <text>🔄 Refresh</text>
+                }
             </button>
-            <button class="btn btn-primary" @onclick="ApproveAllSuggestions">
-                ✅ Approve All
+            <button class="btn btn-primary" @onclick="ApproveAllSuggestions" disabled="@(isLoading || !tripSuggestions.Any())">
+                ✅ Approve All (@tripSuggestions.Count)
             </button>
         </div>
     </div>
+
+    <!-- Error Display -->
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-error mb-6">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <div>
+                <h3 class="font-bold">Error</h3>
+                <p>@errorMessage</p>
+            </div>
+            <button class="btn btn-sm btn-ghost" @onclick="() => errorMessage = string.Empty">✕</button>
+        </div>
+    }
 
     <!-- Algorithm Info -->
     <div class="alert alert-info mb-6">
@@ -390,73 +410,114 @@
     private async Task RefreshSuggestions()
     {
         await GenerateTripSuggestions();
-        StateHasChanged();
+        
+        ShowAlert(
+            "Suggestions Refreshed",
+            $"Found {tripSuggestions.Count} trip suggestions",
+            AlertDialog.AlertType.Success
+        );
     }
 
     private async Task ApproveSuggestion(TripSuggestion suggestion)
     {
-        // Create actual trip from suggestion
-        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Create trip '{suggestion.SuggestedTripName}'?");
-        if (confirmed)
-        {
-            try
+        ShowConfirm(
+            "Create Trip",
+            $"Create trip '{suggestion.SuggestedTripName}'?\n\n" +
+            $"📅 {suggestion.DateRange}\n" +
+            $"📍 {suggestion.Destination}, {suggestion.DetectedCountry}\n" +
+            $"💰 ${suggestion.TotalAmount:N2} ({suggestion.TransactionCount} transactions)",
+            async () =>
             {
-                // Create trip from suggestion
-                var trip = new Trip
+                try
                 {
-                    TripName = suggestion.SuggestedTripName,
-                    Email = suggestion.Email,
-                    StartDate = suggestion.StartDate,
-                    EndDate = suggestion.EndDate,
-                    Duration = suggestion.Duration,
-                    Country1 = suggestion.DetectedCountry,
-                    City1 = suggestion.Destination,
-                    PurposeId = suggestion.SuggestedPurposeId ?? 1, // Default to Business trip
-                    TripTypeId = suggestion.SuggestedTripTypeId ?? 1, // Default to Domestic
-                    StatusId = suggestion.SuggestedStatusId ?? 2, // Default to Upcoming
-                    ValidationStatusId = 1, // "Not ready to validate"
-                    IsManual = false,
-                    OwnerId = suggestion.SuggestedOwnerId ?? 1, // Default to first owner
-                    CreatedAt = DateTime.Now,
-                    ModifiedAt = DateTime.Now,
-                    ModifiedBy = "System"
-                };
-
-                // Create the trip
-                var createdTrip = await TripService.CreateTripAsync(trip);
-
-                // Link selected transactions to the trip
-                foreach (var transactionId in suggestion.SelectedTransactionIds)
-                {
-                    var transaction = await TransactionService.GetByIdAsync(transactionId);
-                    if (transaction != null)
+                    // Create trip from suggestion
+                    var trip = new Trip
                     {
-                        await TransactionService.LinkTransactionToTripAsync(transactionId, createdTrip.TripId);
-                    }
-                }
+                        TripName = suggestion.SuggestedTripName,
+                        Email = suggestion.Email,
+                        StartDate = suggestion.StartDate,
+                        EndDate = suggestion.EndDate,
+                        Duration = suggestion.Duration,
+                        Country1 = suggestion.DetectedCountry,
+                        City1 = suggestion.Destination,
+                        PurposeId = suggestion.SuggestedPurposeId ?? 1, // Default to Business trip
+                        TripTypeId = suggestion.SuggestedTripTypeId ?? 1, // Default to Domestic
+                        StatusId = suggestion.SuggestedStatusId ?? 2, // Default to Upcoming
+                        ValidationStatusId = 1, // "Not ready to validate"
+                        IsManual = false,
+                        OwnerId = suggestion.SuggestedOwnerId ?? 1, // Default to first owner
+                        CreatedAt = DateTime.Now,
+                        ModifiedAt = DateTime.Now,
+                        ModifiedBy = "System"
+                    };
 
-                // Remove from suggestions list
-                tripSuggestions.Remove(suggestion);
-                await JSRuntime.InvokeVoidAsync("alert", "Trip created successfully!");
-                StateHasChanged();
-            }
-            catch (Exception ex)
-            {
-                errorMessage = $"Error creating trip: {ex.Message}";
-                await JSRuntime.InvokeVoidAsync("alert", $"Error: {ex.Message}");
-                StateHasChanged();
-            }
-        }
+                    // Create the trip
+                    var createdTrip = await TripService.CreateTripAsync(trip);
+
+                    // Link selected transactions to the trip
+                    foreach (var transactionId in suggestion.SelectedTransactionIds)
+                    {
+                        var transaction = await TransactionService.GetByIdAsync(transactionId);
+                        if (transaction != null)
+                        {
+                            await TransactionService.LinkTransactionToTripAsync(transactionId, createdTrip.TripId);
+                        }
+                    }
+
+                    // Remove from suggestions list
+                    tripSuggestions.Remove(suggestion);
+                    
+                    ShowAlert(
+                        "Trip Created",
+                        $"Trip '{suggestion.SuggestedTripName}' created successfully with {suggestion.SelectedTransactionIds.Count} transactions!",
+                        AlertDialog.AlertType.Success
+                    );
+                    
+                    StateHasChanged();
+                }
+                catch (Exception ex)
+                {
+                    errorMessage = $"Error creating trip: {ex.Message}";
+                    
+                    ShowAlert(
+                        "Error Creating Trip",
+                        $"Failed to create trip: {ex.Message}",
+                        AlertDialog.AlertType.Error
+                    );
+                    
+                    StateHasChanged();
+                }
+            },
+            "🧳",
+            "Create Trip",
+            "Cancel",
+            "btn-success"
+        );
     }
 
     private async Task RejectSuggestion(TripSuggestion suggestion)
     {
-        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Reject suggestion '{suggestion.SuggestedTripName}'?");
-        if (confirmed)
-        {
-            tripSuggestions.Remove(suggestion);
-            StateHasChanged();
-        }
+        ShowConfirm(
+            "Reject Suggestion",
+            $"Reject suggestion '{suggestion.SuggestedTripName}'?\n\n" +
+            $"This will remove it from the suggestions list. The transactions will remain unlinked and available for other trips.",
+            async () =>
+            {
+                tripSuggestions.Remove(suggestion);
+                
+                ShowAlert(
+                    "Suggestion Rejected",
+                    $"Suggestion '{suggestion.SuggestedTripName}' has been rejected.",
+                    AlertDialog.AlertType.Info
+                );
+                
+                StateHasChanged();
+            },
+            "❌",
+            "Reject",
+            "Cancel",
+            "btn-error"
+        );
     }
 
     private void EditSuggestion(TripSuggestion suggestion)
@@ -533,15 +594,94 @@
     {
         if (!tripSuggestions.Any()) return;
 
-        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Create {tripSuggestions.Count} trips from all suggestions?");
-        if (confirmed)
-        {
-            // TODO: Batch create all trips
-            var count = tripSuggestions.Count;
-            tripSuggestions.Clear();
-            await JSRuntime.InvokeVoidAsync("alert", $"{count} trips created successfully!");
-            StateHasChanged();
-        }
+        ShowConfirm(
+            "Approve All Suggestions",
+            $"Create {tripSuggestions.Count} trips from all suggestions?\n\n" +
+            $"This will create trips and link all associated transactions. This action cannot be undone.",
+            async () =>
+            {
+                isLoading = true;
+                StateHasChanged();
+                
+                int successCount = 0;
+                int errorCount = 0;
+                var suggestionsCopy = tripSuggestions.ToList();
+                
+                try
+                {
+                    foreach (var suggestion in suggestionsCopy)
+                    {
+                        try
+                        {
+                            // Create trip from suggestion
+                            var trip = new Trip
+                            {
+                                TripName = suggestion.SuggestedTripName,
+                                Email = suggestion.Email,
+                                StartDate = suggestion.StartDate,
+                                EndDate = suggestion.EndDate,
+                                Duration = suggestion.Duration,
+                                Country1 = suggestion.DetectedCountry,
+                                City1 = suggestion.Destination,
+                                PurposeId = suggestion.SuggestedPurposeId ?? 1,
+                                TripTypeId = suggestion.SuggestedTripTypeId ?? 1,
+                                StatusId = suggestion.SuggestedStatusId ?? 2,
+                                ValidationStatusId = 1,
+                                IsManual = false,
+                                OwnerId = suggestion.SuggestedOwnerId ?? 1,
+                                CreatedAt = DateTime.Now,
+                                ModifiedAt = DateTime.Now,
+                                ModifiedBy = "System"
+                            };
+
+                            var createdTrip = await TripService.CreateTripAsync(trip);
+
+                            // Link transactions
+                            foreach (var transactionId in suggestion.SelectedTransactionIds)
+                            {
+                                var transaction = await TransactionService.GetByIdAsync(transactionId);
+                                if (transaction != null)
+                                {
+                                    await TransactionService.LinkTransactionToTripAsync(transactionId, createdTrip.TripId);
+                                }
+                            }
+
+                            tripSuggestions.Remove(suggestion);
+                            successCount++;
+                        }
+                        catch (Exception ex)
+                        {
+                            errorCount++;
+                            Console.WriteLine($"Error creating trip {suggestion.SuggestedTripName}: {ex.Message}");
+                        }
+                    }
+                    
+                    ShowAlert(
+                        "Batch Creation Complete",
+                        $"Successfully created {successCount} trips!" +
+                        (errorCount > 0 ? $"\n\n{errorCount} trips failed to create." : ""),
+                        errorCount > 0 ? AlertDialog.AlertType.Warning : AlertDialog.AlertType.Success
+                    );
+                }
+                catch (Exception ex)
+                {
+                    ShowAlert(
+                        "Batch Creation Error",
+                        $"Error during batch creation: {ex.Message}",
+                        AlertDialog.AlertType.Error
+                    );
+                }
+                finally
+                {
+                    isLoading = false;
+                    StateHasChanged();
+                }
+            },
+            "✅",
+            "Approve All",
+            "Cancel",
+            "btn-primary"
+        );
     }
 
     private string GetSuggestionBorderClass(int confidence)
@@ -589,5 +729,87 @@
         public int? SuggestedStatusId { get; set; }
         public int? SuggestedOwnerId { get; set; }
     }
+    
+    // Alert Dialog state
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+    private string alertOkText = "OK";
+    
+    // Confirmation Dialog state
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "❓";
+    private string confirmButtonText = "Yes";
+    private string cancelButtonText = "No";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction = null;
+    
+    // Alert Dialog Methods
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type = AlertDialog.AlertType.Info, string okText = "OK")
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        alertOkText = okText;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+
+    // Confirmation Dialog Methods
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "❓", 
+        string confirmText = "Yes", string cancelText = "No", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = confirmText;
+        cancelButtonText = cancelText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction.Invoke();
+        }
+        
+        pendingConfirmAction = null;
+        StateHasChanged();
+    }
 }
 </AuthorizeRoleView>
+
+<!-- Alert Dialog (for messages) -->
+<AlertDialog 
+    IsVisible="showAlertDialog"
+    Title="@alertTitle"
+    Message="@alertMessage"
+    Type="@alertType"
+    OkButtonText="@alertOkText"
+    OnClose="CloseAlertDialog" />
+
+<!-- Confirmation Dialog (for confirmations) -->
+<ConfirmDialog 
+    IsVisible="showConfirmDialog"
+    Title="@confirmTitle"
+    Message="@confirmMessage"
+    Icon="@confirmIcon"
+    ConfirmButtonText="@confirmButtonText"
+    CancelButtonText="@cancelButtonText"
+    ConfirmButtonClass="@confirmButtonClass"
+    OnResult="HandleConfirmResult" />

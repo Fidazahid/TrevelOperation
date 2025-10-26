@@ -5,14 +5,14 @@
 @using TravelOperation.Core.Services
 @using TravelOperation.Core.Services.Interfaces
 @using TrevelOperation.RazorLib.Components
-@using TravelOperation.Core.Models
 @inject ITransactionService TransactionService
 @inject ILookupService LookupService
+@inject ITripService TripService
 @inject IJSRuntime JSRuntime
 
 <AuthorizeRoleView RequiredRole="Finance">
-<div class="container mx-auto p-6">
-    <div class="flex justify-between items-center mb-6">
+<div class="container mx-auto ">
+    <div class="flex justify-between items-center ">
         <div>
             <h1 class="text-3xl font-bold text-gray-900">✈️ Airfare Control</h1>
             <p class="text-gray-600">Ensure all airfare transactions have cabin class assigned</p>
@@ -28,7 +28,7 @@
     </div>
 
     <!-- Summary Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 ">
         <div class="card bg-yellow-50 border-l-4 border-yellow-400">
             <div class="card-body">
                 <div class="flex items-center">
@@ -205,11 +205,13 @@
                                 <td>
                                     <div class="dropdown dropdown-end">
                                         <label tabindex="0" class="btn btn-ghost btn-sm">⋮</label>
-                                        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52">
-                                            <li><a @onclick="() => ViewDetails(transaction.TransactionId)">👁️ View Details</a></li>
-                                            <li><a @onclick="() => GenerateMessage(transaction.TransactionId)">📧 Generate Message</a></li>
+                                        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-white rounded-box w-52 z-50">
+                                            <li><a @onclick="() => ViewTransactionDetails(transaction.TransactionId)">👁️ View details</a></li>
+                                            <li><a @onclick="() => GenerateMessage(transaction.TransactionId)">📧 Generate message</a></li>
+                                            <li><a @onclick="() => LinkToTrip(transaction.TransactionId)">🔗 Link to trip</a></li>
                                             <li><hr /></li>
-                                            <li><a @onclick="() => MarkAsValid(transaction.TransactionId)">✅ Mark Valid</a></li>
+                                            <li><a @onclick="() => MarkAsValid(transaction.TransactionId)">✅ Mark valid</a></li>
+                                            <li><a @onclick="() => ExportTransaction(transaction.TransactionId)" class="text-info">📄 Export</a></li>
                                         </ul>
                                     </div>
                                 </td>
@@ -261,6 +263,43 @@
     </div>
 </div>
 
+<!-- Transaction Detail Modal -->
+<TransactionDetailModal 
+    Transaction="selectedTransaction" 
+    IsVisible="showDetailModal" 
+    OnClose="CloseDetailModal" />
+
+<!-- Link to Trip Modal -->
+<LinkTransactionsModal 
+    @ref="linkTransactionsModal"
+    IsVisible="showLinkModal"
+    TripId="@(selectedTripForLink?.TripId ?? 0)"
+    Trip="selectedTripForLink"
+    OnClose="CloseLinkModal"
+    OnTransactionsLinked="HandleTransactionsLinked" />
+
+</AuthorizeRoleView>
+
+<!-- Alert Dialog (for messages) - OUTSIDE AuthorizeRoleView -->
+<AlertDialog 
+    IsVisible="showAlertDialog"
+    Title="@alertTitle"
+    Message="@alertMessage"
+    Type="@alertType"
+    OkButtonText="@alertOkText"
+    OnClose="CloseAlertDialog" />
+
+<!-- Confirmation Dialog (for confirmations) - OUTSIDE AuthorizeRoleView -->
+<ConfirmDialog 
+    IsVisible="showConfirmDialog"
+    Title="@confirmTitle"
+    Message="@confirmMessage"
+    Icon="@confirmIcon"
+    ConfirmButtonText="@confirmButtonText"
+    CancelButtonText="@cancelButtonText"
+    ConfirmButtonClass="@confirmButtonClass"
+    OnResult="HandleConfirmResult" />
+
 @code {
     private List<Transaction> transactions = new();
     private List<Transaction> filteredTransactions = new();
@@ -286,6 +325,30 @@
     private int premiumCount = 0;
     private decimal totalAirfareAmount = 0;
     private bool allSelected = false;
+    
+    // Modal state
+    private Transaction? selectedTransaction = null;
+    private bool showDetailModal = false;
+    private bool showLinkModal = false;
+    private LinkTransactionsModal? linkTransactionsModal;
+    private Trip? selectedTripForLink = null;
+    
+    // Alert Dialog state
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+    private string alertOkText = "OK";
+    
+    // Confirmation Dialog state
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "❓";
+    private string confirmButtonText = "Yes";
+    private string cancelButtonText = "No";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction = null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -463,83 +526,265 @@
 
     private async Task UpdateCabinClass(string transactionId, string? cabinClassIdStr)
     {
-        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-        if (transaction != null && !string.IsNullOrEmpty(cabinClassIdStr))
+        try
         {
-            transaction.CabinClassId = int.Parse(cabinClassIdStr);
-            await TransactionService.UpdateTransactionAsync(transaction);
-            CalculateSummary();
-            StateHasChanged();
+            var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+            if (transaction != null && !string.IsNullOrEmpty(cabinClassIdStr))
+            {
+                transaction.CabinClassId = int.Parse(cabinClassIdStr);
+                await TransactionService.UpdateTransactionAsync(transaction);
+                
+                ShowAlert("Success", "Cabin class updated successfully", AlertDialog.AlertType.Success);
+                CalculateSummary();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error updating cabin class: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
     private async Task UpdateCategory(string transactionId, string? categoryIdStr)
     {
-        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-        if (transaction != null && !string.IsNullOrEmpty(categoryIdStr))
+        try
         {
-            transaction.CategoryId = int.Parse(categoryIdStr);
-            await TransactionService.UpdateTransactionAsync(transaction);
-            StateHasChanged();
+            var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+            if (transaction != null && !string.IsNullOrEmpty(categoryIdStr))
+            {
+                transaction.CategoryId = int.Parse(categoryIdStr);
+                await TransactionService.UpdateTransactionAsync(transaction);
+                
+                ShowAlert("Success", "Category updated successfully", AlertDialog.AlertType.Success);
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error updating category: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
     private async Task RefreshData()
     {
         await LoadAirfareTransactions();
+        ShowAlert("Refreshed", "Data refreshed successfully", AlertDialog.AlertType.Info);
         FilterTransactions();
     }
 
     private async Task ValidateAll()
     {
-        var result = await JSRuntime.InvokeAsync<bool>("confirm", "Mark all visible transactions as valid?");
-        if (result)
+        try
         {
-            foreach (var transaction in filteredTransactions)
-            {
-                await TransactionService.MarkAsValidAsync(transaction.TransactionId);
-            }
-            await JSRuntime.InvokeVoidAsync("alert", $"Marked {filteredTransactions.Count} transactions as valid");
-            await RefreshData();
+            ShowConfirm(
+                "Validate All Transactions",
+                $"Mark all {filteredTransactions.Count} visible transactions as valid?",
+                async () =>
+                {
+                    foreach (var transaction in filteredTransactions)
+                    {
+                        await TransactionService.MarkAsValidAsync(transaction.TransactionId);
+                    }
+                    ShowAlert("Success", $"Marked {filteredTransactions.Count} transactions as valid", AlertDialog.AlertType.Success);
+                    await RefreshData();
+                },
+                "✅",
+                "Validate All",
+                "Cancel",
+                "btn-success"
+            );
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error validating transactions: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
-    private async Task ViewDetails(string transactionId)
+    // Modal and Detail Functions
+    private async Task ViewTransactionDetails(string transactionId)
     {
-        await JSRuntime.InvokeVoidAsync("alert", $"View details for transaction {transactionId} - Navigation pending");
+        try
+        {
+            selectedTransaction = await TransactionService.GetTransactionByIdAsync(transactionId);
+            showDetailModal = true;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error loading transaction: {ex.Message}", AlertDialog.AlertType.Error);
+        }
+    }
+
+    private void CloseDetailModal()
+    {
+        showDetailModal = false;
+        selectedTransaction = null;
+        StateHasChanged();
+    }
+
+    private async Task LinkToTrip(string transactionId)
+    {
+        try
+        {
+            // Load the transaction to get the email and date
+            var transaction = await TransactionService.GetTransactionByIdAsync(transactionId);
+            if (transaction == null)
+            {
+                ShowAlert("Transaction Not Found", "The selected transaction could not be found.", AlertDialog.AlertType.Error);
+                return;
+            }
+
+            // Find trips for this user around the transaction date
+            var userTrips = await TripService.GetTripsByEmailAsync(transaction.Email);
+            var relevantTrips = userTrips.Where(t => 
+                transaction.TransactionDate >= t.StartDate.AddDays(-5) && 
+                transaction.TransactionDate <= t.EndDate.AddDays(5)
+            ).ToList();
+
+            if (!relevantTrips.Any())
+            {
+                // No trips found - suggest creating one
+                ShowAlert(
+                    "No Trips Available", 
+                    "No trips found for this user and date range. Please create a trip first.", 
+                    AlertDialog.AlertType.Warning
+                );
+                return;
+            }
+
+            // If only one trip, confirm before linking
+            if (relevantTrips.Count == 1)
+            {
+                selectedTripForLink = relevantTrips.First();
+                
+                ShowConfirm(
+                    "Link Transaction",
+                    $"Link this transaction to trip:\n\n{selectedTripForLink.TripName}\n{selectedTripForLink.StartDate:dd/MM/yyyy} - {selectedTripForLink.EndDate:dd/MM/yyyy}",
+                    async () =>
+                    {
+                        await TransactionService.LinkTransactionToTripAsync(transactionId, selectedTripForLink.TripId);
+                        ShowAlert("Success", $"Transaction linked to trip: {selectedTripForLink.TripName}", AlertDialog.AlertType.Success);
+                        await RefreshData();
+                    },
+                    "🧳",
+                    "Link",
+                    "Cancel",
+                    "btn-primary"
+                );
+            }
+            else
+            {
+                // Multiple trips found - let user choose via modal
+                selectedTripForLink = relevantTrips.First();
+                showLinkModal = true;
+                ShowAlert(
+                    "Multiple Trips Found", 
+                    $"Found {relevantTrips.Count} possible trips. Please select one from the modal.", 
+                    AlertDialog.AlertType.Info
+                );
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error linking transaction: {ex.Message}", AlertDialog.AlertType.Error);
+        }
+    }
+
+    private void CloseLinkModal()
+    {
+        showLinkModal = false;
+        selectedTripForLink = null;
+        StateHasChanged();
+    }
+
+    private async Task HandleTransactionsLinked()
+    {
+        await RefreshData();
+        ShowAlert("Success", "Transaction linked to trip successfully", AlertDialog.AlertType.Success);
+    }
+
+    private async Task ExportTransaction(string transactionId)
+    {
+        try
+        {
+            var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+            if (transaction != null)
+            {
+                var csv = $"Transaction ID,Date,Email,Vendor,Amount,Currency,Cabin Class,Category\n";
+                csv += $"{transaction.TransactionId},{transaction.TransactionDate:dd/MM/yyyy},{transaction.Email},{transaction.Vendor},{transaction.Amount},{transaction.Currency},{transaction.CabinClass?.Name ?? "Not Set"},{transaction.Category?.Name ?? "Airfare"}\n";
+                
+                await JSRuntime.InvokeVoidAsync("downloadFile", $"transaction-{transactionId}.csv", "text/csv", csv);
+                ShowAlert("Success", "Transaction exported successfully", AlertDialog.AlertType.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error exporting transaction: {ex.Message}", AlertDialog.AlertType.Error);
+        }
     }
 
     private async Task GenerateMessage(string transactionId)
     {
-        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-        if (transaction != null)
+        try
         {
-            var message = GenerateAirfareMessage(transaction);
-            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", message);
-            await JSRuntime.InvokeVoidAsync("alert", "Message copied to clipboard!");
+            // First try from current page, then from all transactions
+            var transaction = pagedResult.Items.FirstOrDefault(t => t.TransactionId == transactionId) 
+                           ?? transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+            
+            if (transaction != null)
+            {
+                var message = GenerateAirfareMessage(transaction);
+                await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", message);
+                ShowAlert("Success", "Message copied to clipboard!", AlertDialog.AlertType.Success);
+                StateHasChanged();
+            }
+            else
+            {
+                ShowAlert("Error", "Transaction not found", AlertDialog.AlertType.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error generating message: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
     private async Task MarkAsValid(string transactionId)
     {
-        await TransactionService.MarkAsValidAsync(transactionId);
-        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-        if (transaction != null)
+        try
         {
-            transaction.IsValid = true;
-            StateHasChanged();
+            await TransactionService.MarkAsValidAsync(transactionId);
+            var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+            if (transaction != null)
+            {
+                transaction.IsValid = true;
+                StateHasChanged();
+            }
+            ShowAlert("Success", "Transaction marked as valid", AlertDialog.AlertType.Success);
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error marking as valid: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
     private async Task MarkSelectedAsValid()
     {
-        foreach (var transactionId in selectedTransactions)
+        try
         {
-            await TransactionService.MarkAsValidAsync(transactionId);
+            foreach (var transactionId in selectedTransactions)
+            {
+                await TransactionService.MarkAsValidAsync(transactionId);
+            }
+            selectedTransactions.Clear();
+            ShowAlert("Success", "Selected transactions marked as valid", AlertDialog.AlertType.Success);
+            await RefreshData();
         }
-        selectedTransactions.Clear();
-        await JSRuntime.InvokeVoidAsync("alert", "Selected transactions marked as valid");
-        await RefreshData();
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error marking transactions as valid: {ex.Message}", AlertDialog.AlertType.Error);
+        }
     }
 
     private void ClearSelection()
@@ -582,5 +827,51 @@ Thank you!";
         }
         return email;
     }
+    
+    // Alert Dialog Methods
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type = AlertDialog.AlertType.Info, string okText = "OK")
+    {
+        Console.WriteLine($"ShowAlert called - Title: {title}, IsVisible: {showAlertDialog}");
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        alertOkText = okText;
+        showAlertDialog = true;
+        Console.WriteLine($"After set - IsVisible: {showAlertDialog}");
+        StateHasChanged();
+    }
+    
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+    
+    // Confirmation Dialog Methods
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "❓", 
+        string confirmText = "Yes", string cancelText = "No", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = confirmText;
+        cancelButtonText = cancelText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+    
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction.Invoke();
+        }
+        
+        pendingConfirmAction = null;
+        StateHasChanged();
+    }
 }
-</AuthorizeRoleView>

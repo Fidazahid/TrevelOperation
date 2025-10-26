@@ -4,9 +4,28 @@ import themeManager from './theme-manager';
 // Make functions globally available
 window.themeManager = themeManager;
 
-// File download helper
+// File download helper (accepts raw content)
 window.downloadFile = (fileName, contentType, content) => {
     const blob = new Blob([content], { type: contentType });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+};
+
+// File download helper from base64 (for C# byte[] exports)
+window.downloadFileBase64 = (base64Data, fileName, contentType) => {
+    const byteCharacters = atob(base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: contentType });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

@@ -5,13 +5,15 @@
 
 @if (IsVisible && Trip != null)
 {
-    <div class="modal modal-open" @onclick="OnBackdropClick">
-        <div class="modal-box w-11/12 max-w-4xl" @onclick:stopPropagation="true">
+    <div class="modal modal-open" @onclick="OnBackdropClick" style="display: flex !important; align-items: center !important; justify-content: center !important;">
+        <div class="modal-box w-11/12 max-w-4xl" @onclick:stopPropagation="true" style="position: relative !important;">
+            <!-- Close button at top right corner -->
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @onclick="Close" style="z-index: 1000;">
+                ✕
+            </button>
+            
             <div class="flex justify-between items-center mb-6">
                 <h3 class="font-bold text-xl">@(IsEditMode ? "Edit Trip" : "Create New Trip")</h3>
-                <button class="btn btn-sm btn-circle btn-ghost" @onclick="Close">
-                    <i class="fas fa-times"></i>
-                </button>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -81,8 +83,14 @@
                             <label class="label">
                                 <span class="label-text font-medium">Duration</span>
                             </label>
-                            <input type="text" class="input input-bordered bg-base-200" 
+                            <input type="text" class="input input-bordered bg-base-200 @(GetValidationClass("Duration"))" 
                                    value="@(Trip.Duration) days" readonly />
+                            @if (validationErrors.ContainsKey("Duration"))
+                            {
+                                <label class="label">
+                                    <span class="label-text-alt text-error">@validationErrors["Duration"]</span>
+                                </label>
+                            }
                         </div>
                     </div>
                 </div>
@@ -108,26 +116,44 @@
 
                         <div class="form-control mb-4">
                             <label class="label">
-                                <span class="label-text font-medium">Primary City</span>
+                                <span class="label-text font-medium">Primary City * </span>
                             </label>
-                            <input type="text" class="input input-bordered" 
+                            <input type="text" class="input input-bordered @(GetValidationClass("City1"))" 
                                    @bind="Trip.City1" placeholder="e.g., Tel Aviv, New York" />
+                            @if (validationErrors.ContainsKey("City1"))
+                            {
+                                <label class="label">
+                                    <span class="label-text-alt text-error">@validationErrors["City1"]</span>
+                                </label>
+                            }
                         </div>
 
                         <div class="form-control mb-4">
                             <label class="label">
                                 <span class="label-text font-medium">Secondary Country</span>
                             </label>
-                            <input type="text" class="input input-bordered" 
+                            <input type="text" class="input input-bordered @(GetValidationClass("Country2"))" 
                                    @bind="Trip.Country2" placeholder="For multi-destination trips" />
+                            @if (validationErrors.ContainsKey("Country2"))
+                            {
+                                <label class="label">
+                                    <span class="label-text-alt text-error">@validationErrors["Country2"]</span>
+                                </label>
+                            }
                         </div>
 
                         <div class="form-control">
                             <label class="label">
                                 <span class="label-text font-medium">Secondary City</span>
                             </label>
-                            <input type="text" class="input input-bordered" 
+                            <input type="text" class="input input-bordered @(GetValidationClass("City2"))" 
                                    @bind="Trip.City2" placeholder="For multi-destination trips" />
+                            @if (validationErrors.ContainsKey("City2"))
+                            {
+                                <label class="label">
+                                    <span class="label-text-alt text-error">@validationErrors["City2"]</span>
+                                </label>
+                            }
                         </div>
                     </div>
                 </div>
@@ -310,6 +336,14 @@
     </div>
 }
 
+<!-- Alert Dialog -->
+<AlertDialog IsVisible="@showAlertDialog"
+             Title="@alertTitle"
+             Message="@alertMessage"
+             Type="@alertType"
+             OkButtonText="@alertOkText"
+             OnClose="CloseAlertDialog" />
+
 @code {
     [Parameter] public bool IsVisible { get; set; }
     [Parameter] public bool IsEditMode { get; set; }
@@ -325,6 +359,13 @@
 
     private Dictionary<string, string> validationErrors = new();
     private bool isSaving = false;
+
+    // Alert Dialog state
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+    private string alertOkText = "OK";
 
     // Date binding helpers
     private string startDateString
@@ -406,37 +447,61 @@
 
         if (Trip == null) return false;
 
+        // Trip name is required
         if (string.IsNullOrWhiteSpace(Trip.TripName))
             validationErrors["TripName"] = "Trip name is required";
 
+        // Email is required and must be valid format
         if (string.IsNullOrWhiteSpace(Trip.Email))
             validationErrors["Email"] = "Email is required";
         else if (!IsValidEmail(Trip.Email))
-            validationErrors["Email"] = "Please enter a valid email address";
+            validationErrors["Email"] = "Email format is invalid";
 
-        if (Trip.StartDate == default)
+        // Start Date must be before or equal to End Date
+        if (Trip.StartDate == default(DateTime))
             validationErrors["StartDate"] = "Start date is required";
 
-        if (Trip.EndDate == default)
+        if (Trip.EndDate == default(DateTime))
             validationErrors["EndDate"] = "End date is required";
 
-        if (Trip.StartDate > Trip.EndDate)
-            validationErrors["EndDate"] = "End date must be after start date";
+        if (Trip.EndDate < Trip.StartDate)
+            validationErrors["EndDate"] = "End date must be on or after start date";
 
+        // Duration calculation check
+        if (Trip.StartDate != default && Trip.EndDate != default)
+        {
+            var calculatedDuration = (Trip.EndDate - Trip.StartDate).Days + 1;
+            if (calculatedDuration < 1)
+                validationErrors["Duration"] = "Trip duration must be at least 1 day";
+        }
+
+        // At least one country is required
         if (string.IsNullOrWhiteSpace(Trip.Country1))
-            validationErrors["Country1"] = "Primary country is required";
+            validationErrors["Country1"] = "At least one country is required";
 
+        // At least one city is required
+        if (string.IsNullOrWhiteSpace(Trip.City1))
+            validationErrors["City1"] = "At least one city is required";
+
+        // Purpose is required
         if (Trip.PurposeId <= 0)
-            validationErrors["PurposeId"] = "Purpose is required";
+            validationErrors["PurposeId"] = "Trip purpose is required";
 
+        // Trip type is required
         if (Trip.TripTypeId <= 0)
             validationErrors["TripTypeId"] = "Trip type is required";
 
+        // Status is required
         if (Trip.StatusId <= 0)
-            validationErrors["StatusId"] = "Status is required";
+            validationErrors["StatusId"] = "Trip status is required";
 
+        // Owner must be assigned
         if (Trip.OwnerId <= 0)
-            validationErrors["OwnerId"] = "Owner is required";
+            validationErrors["OwnerId"] = "Trip owner must be assigned";
+
+        // If second country is provided, second city must also be provided
+        if (!string.IsNullOrWhiteSpace(Trip.Country2) && string.IsNullOrWhiteSpace(Trip.City2))
+            validationErrors["City2"] = "City2 is required when Country2 is specified";
 
         return !validationErrors.Any();
     }
@@ -474,31 +539,14 @@
                 
                 await OnSave.InvokeAsync(Trip);
                 
-                // Close modal after successful save
+                // Close modal only after successful save (no exception thrown)
                 await Close();
-                
-                // Show success toast
-                try
-                {
-                    await JSRuntime.InvokeVoidAsync("showToast", "success", "Trip saved successfully!");
-                }
-                catch
-                {
-                    Console.WriteLine("Trip saved successfully!");
-                }
             }
         }
         catch (Exception ex)
         {
-            try
-            {
-                await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error saving trip: {ex.Message}");
-            }
-            catch
-            {
-                // Fallback if showToast is not available
-                Console.WriteLine($"Error saving trip: {ex.Message}");
-            }
+            // Show error but DON'T close the modal - let user fix the issue
+            ShowAlert("Error", $"Error saving trip: {ex.Message}", AlertDialog.AlertType.Error);
         }
         finally
         {
@@ -517,5 +565,22 @@
         // Close modal when clicking on backdrop (outside the modal box)
         // The modal-box has @onclick:stopPropagation which prevents this from firing when clicking inside
         Close();
+    }
+
+    // Alert Dialog Methods
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type = AlertDialog.AlertType.Info, string okText = "OK")
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        alertOkText = okText;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
     }
 }

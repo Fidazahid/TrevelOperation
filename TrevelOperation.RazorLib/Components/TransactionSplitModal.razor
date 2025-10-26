@@ -6,8 +6,12 @@
 
 @if (ShowModal && Transaction != null)
 {
-    <div class="modal modal-open">
+    <div class="modal modal-open flex items-center justify-center" style="display: flex !important; align-items: center !important; justify-content: center !important;">
         <div class="modal-box max-w-4xl">
+            <form method="dialog">
+                <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @onclick="OnCancel">✕</button>
+            </form>
+            
             <h3 class="font-bold text-lg mb-4">✂️ Split Transaction</h3>
             
             <!-- Original Transaction Info -->

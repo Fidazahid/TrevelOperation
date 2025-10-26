@@ -4,8 +4,10 @@
 @using TravelOperation.Core.Services
 @using TrevelOperation.Service
 @using TrevelOperation.RazorLib.Components
+@using TravelOperation.Core.Services.Interfaces
 @inject ITransactionService TransactionService
 @inject IMessageTemplateService MessageTemplateService
+@inject ILookupService LookupService
 @inject IJSRuntime JSRuntime
 
 <AuthorizeRoleView RequiredRole="Finance">
@@ -292,6 +294,27 @@
         </div>
     </div>
 </div>
+</AuthorizeRoleView>
+
+<!-- Alert Dialog (for messages) - OUTSIDE AuthorizeRoleView -->
+<AlertDialog 
+    IsVisible="showAlertDialog"
+    Title="@alertTitle"
+    Message="@alertMessage"
+    Type="@alertType"
+    OkButtonText="@alertOkText"
+    OnClose="CloseAlertDialog" />
+
+<!-- Confirmation Dialog (for confirmations) - OUTSIDE AuthorizeRoleView -->
+<ConfirmDialog 
+    IsVisible="showConfirmDialog"
+    Title="@confirmTitle"
+    Message="@confirmMessage"
+    Icon="@confirmIcon"
+    ConfirmButtonText="@confirmButtonText"
+    CancelButtonText="@cancelButtonText"
+    ConfirmButtonClass="@confirmButtonClass"
+    OnResult="HandleConfirmResult" />
 
 @code {
     private List<MealTransactionData> transactions = new();
@@ -317,6 +340,23 @@
     private int externalParticipantsCount = 0;
     private decimal totalAmount = 0;
     private bool allSelected = false;
+    
+    // Alert Dialog state
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+    private string alertOkText = "OK";
+    
+    // Confirmation Dialog state
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "❓";
+    private string confirmButtonText = "Yes";
+    private string cancelButtonText = "No";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction = null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -490,86 +530,178 @@
 
     private async Task UpdateParticipants(string transactionId, string? participants)
     {
-        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-        if (transaction != null)
+        try
         {
-            transaction.Participants = participants ?? "";
-            transaction.ParticipantsValidated = !string.IsNullOrEmpty(participants);
-            CalculateSummary();
-            StateHasChanged();
+            var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+            if (transaction != null)
+            {
+                transaction.Participants = participants ?? "";
+                transaction.ParticipantsValidated = !string.IsNullOrEmpty(participants);
+                
+                // Update in database
+                var dbTransaction = await TransactionService.GetTransactionByIdAsync(transactionId);
+                if (dbTransaction != null)
+                {
+                    dbTransaction.Participants = participants;
+                    dbTransaction.ParticipantsValidated = !string.IsNullOrEmpty(participants);
+                    await TransactionService.UpdateTransactionAsync(dbTransaction);
+                }
+                
+                ShowAlert("Success", "Participants updated successfully", AlertDialog.AlertType.Success);
+                CalculateSummary();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error updating participants: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
     private async Task UpdateCategory(string transactionId, string? category)
     {
-        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-        if (transaction != null)
+        try
         {
-            transaction.Category = category ?? "";
-            StateHasChanged();
+            var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+            if (transaction != null)
+            {
+                transaction.Category = category ?? "";
+                
+                // Update in database
+                var dbTransaction = await TransactionService.GetTransactionByIdAsync(transactionId);
+                if (dbTransaction != null)
+                {
+                    // Get category ID from lookup service
+                    var lookupService = await LookupService.GetCategoriesAsync();
+                    var categoryObj = lookupService.FirstOrDefault(c => c.Name == category);
+                    if (categoryObj != null)
+                    {
+                        dbTransaction.CategoryId = categoryObj.CategoryId;
+                        await TransactionService.UpdateTransactionAsync(dbTransaction);
+                    }
+                }
+                
+                ShowAlert("Success", "Category updated successfully", AlertDialog.AlertType.Success);
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error updating category: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
     private async Task RefreshData()
     {
         await LoadMealTransactions();
+        ShowAlert("Refreshed", "Data refreshed successfully", AlertDialog.AlertType.Info);
         FilterTransactions();
     }
 
     private async Task ValidateAll()
     {
-        var result = await JSRuntime.InvokeAsync<bool>("confirm", "Mark all visible transactions as valid?");
-        if (result)
+        try
         {
-            foreach (var transaction in filteredTransactions)
-            {
-                transaction.IsValid = true;
-            }
-            await JSRuntime.InvokeVoidAsync("alert", $"Marked {filteredTransactions.Count} transactions as valid");
-            FilterTransactions();
+            ShowConfirm(
+                "Validate All Transactions",
+                $"Mark all {filteredTransactions.Count} visible transactions as valid?",
+                async () =>
+                {
+                    foreach (var transaction in filteredTransactions)
+                    {
+                        transaction.IsValid = true;
+                        await TransactionService.MarkAsValidAsync(transaction.TransactionId);
+                    }
+                    ShowAlert("Success", $"Marked {filteredTransactions.Count} transactions as valid", AlertDialog.AlertType.Success);
+                    FilterTransactions();
+                },
+                "✅",
+                "Validate All",
+                "Cancel",
+                "btn-success"
+            );
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error validating transactions: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
     private async Task ViewDetails(string transactionId)
     {
-        await JSRuntime.InvokeVoidAsync("alert", $"View details for transaction {transactionId} - Navigation pending");
+        try
+        {
+            ShowAlert("View Details", $"Transaction details for {transactionId}\n\nFull transaction detail view coming soon!", AlertDialog.AlertType.Info);
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error loading transaction details: {ex.Message}", AlertDialog.AlertType.Error);
+        }
     }
 
     private async Task GenerateMessage(string transactionId)
     {
-        var mealTransaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-        if (mealTransaction != null)
+        try
         {
-            var transaction = ConvertToTransaction(mealTransaction);
-            var message = MessageTemplateService.GenerateMealsMessage(transaction);
-            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", message);
-            await JSRuntime.InvokeVoidAsync("alert", "Message copied to clipboard!");
+            var mealTransaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+            if (mealTransaction != null)
+            {
+                var transaction = ConvertToTransaction(mealTransaction);
+                var message = MessageTemplateService.GenerateMealsMessage(transaction);
+                await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", message);
+                ShowAlert("Success", "Message copied to clipboard!", AlertDialog.AlertType.Success);
+            }
+            else
+            {
+                ShowAlert("Error", "Transaction not found", AlertDialog.AlertType.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error generating message: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
     private async Task MarkAsValid(string transactionId)
     {
-        var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-        if (transaction != null)
-        {
-            transaction.IsValid = true;
-            FilterTransactions();
-        }
-    }
-
-    private async Task MarkSelectedAsValid()
-    {
-        foreach (var transactionId in selectedTransactions)
+        try
         {
             var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
             if (transaction != null)
             {
                 transaction.IsValid = true;
+                await TransactionService.MarkAsValidAsync(transactionId);
+                ShowAlert("Success", "Transaction marked as valid", AlertDialog.AlertType.Success);
+                FilterTransactions();
             }
         }
-        selectedTransactions.Clear();
-        await JSRuntime.InvokeVoidAsync("alert", "Selected transactions marked as valid");
-        FilterTransactions();
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error marking as valid: {ex.Message}", AlertDialog.AlertType.Error);
+        }
+    }
+
+    private async Task MarkSelectedAsValid()
+    {
+        try
+        {
+            foreach (var transactionId in selectedTransactions)
+            {
+                var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
+                if (transaction != null)
+                {
+                    transaction.IsValid = true;
+                    await TransactionService.MarkAsValidAsync(transactionId);
+                }
+            }
+            selectedTransactions.Clear();
+            ShowAlert("Success", "Selected transactions marked as valid", AlertDialog.AlertType.Success);
+            FilterTransactions();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error marking transactions as valid: {ex.Message}", AlertDialog.AlertType.Error);
+        }
     }
 
     private void ClearSelection()
@@ -657,5 +789,49 @@
         public bool ParticipantsValidated { get; set; }
         public bool IsValid { get; set; }
     }
+    
+    // Alert Dialog Methods
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type = AlertDialog.AlertType.Info, string okText = "OK")
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        alertOkText = okText;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+    
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+    
+    // Confirmation Dialog Methods
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "❓", 
+        string confirmText = "Yes", string cancelText = "No", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = confirmText;
+        cancelButtonText = cancelText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+    
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction.Invoke();
+        }
+        
+        pendingConfirmAction = null;
+        StateHasChanged();
+    }
 }
-</AuthorizeRoleView>

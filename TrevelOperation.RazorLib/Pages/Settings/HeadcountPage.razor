@@ -1,0 +1,473 @@
+@page "/settings/headcount"
+@using TravelOperation.Core.Models.Entities
+@using TrevelOperation.Service
+@using TrevelOperation.RazorLib.Components
+@using Microsoft.AspNetCore.Components.Forms
+@inject ISettingsService SettingsService
+@inject IJSRuntime JSRuntime
+
+<AuthorizeRoleView RequiredRole="Finance">
+<div class="container mx-auto p-6">
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">👥 Headcount Management</h1>
+            <p class="text-gray-600">Manage employee organizational data and import/export records</p>
+        </div>
+        <div class="flex gap-2">
+            <label class="btn btn-secondary">
+                📁 Import CSV
+                <InputFile OnChange="HandleFileSelected" accept=".csv" class="hidden" />
+            </label>
+            <button class="btn btn-primary" @onclick="ExportData">
+                💾 Export CSV
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="flex justify-center items-center py-20">
+            <span class="loading loading-spinner loading-lg"></span>
+        </div>
+    }
+    else
+    {
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="card bg-base-100 shadow">
+                <div class="card-body p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-500">Total Employees</p>
+                            <p class="text-2xl font-bold">@filteredData.Count</p>
+                        </div>
+                        <div class="text-4xl">👥</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card bg-base-100 shadow">
+                <div class="card-body p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-500">Departments</p>
+                            <p class="text-2xl font-bold">@departments.Count</p>
+                        </div>
+                        <div class="text-4xl">🏢</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card bg-base-100 shadow">
+                <div class="card-body p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-500">Sites</p>
+                            <p class="text-2xl font-bold">@sites.Count</p>
+                        </div>
+                        <div class="text-4xl">📍</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card bg-base-100 shadow">
+                <div class="card-body p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-500">Latest Period</p>
+                            <p class="text-2xl font-bold">@(periods.Any() ? periods.Max().ToString("MMM yyyy") : "N/A")</p>
+                        </div>
+                        <div class="text-4xl">📅</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="card bg-base-100 shadow-md mb-6">
+            <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Search</span>
+                        </label>
+                        <input type="text" class="input input-bordered" 
+                               @bind="searchText" @bind:event="oninput" @onkeyup="FilterData"
+                               placeholder="Name, email, userId..." />
+                    </div>
+                    
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Department</span>
+                        </label>
+                        <select class="select select-bordered" @bind="selectedDepartment" @bind:after="FilterData">
+                            <option value="">All Departments</option>
+                            @foreach (var dept in departments)
+                            {
+                                <option value="@dept">@dept</option>
+                            }
+                        </select>
+                    </div>
+                    
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Site</span>
+                        </label>
+                        <select class="select select-bordered" @bind="selectedSite" @bind:after="FilterData">
+                            <option value="">All Sites</option>
+                            @foreach (var site in sites)
+                            {
+                                <option value="@site">@site</option>
+                            }
+                        </select>
+                    </div>
+                    
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Subsidiary</span>
+                        </label>
+                        <select class="select select-bordered" @bind="selectedSubsidiary" @bind:after="FilterData">
+                            <option value="">All Subsidiaries</option>
+                            @foreach (var sub in subsidiaries)
+                            {
+                                <option value="@sub">@sub</option>
+                            }
+                        </select>
+                    </div>
+                    
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Period</span>
+                        </label>
+                        <select class="select select-bordered" @bind="selectedPeriod" @bind:after="FilterData">
+                            <option value="">All Periods</option>
+                            @foreach (var period in periods.OrderByDescending(p => p))
+                            {
+                                <option value="@period.ToString("yyyy-MM-dd")">@period.ToString("MMM yyyy")</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="card bg-base-100 shadow-md">
+            <div class="card-body p-0">
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra">
+                        <thead class="bg-base-200 sticky top-0">
+                            <tr>
+                                <th>Period</th>
+                                <th>User ID</th>
+                                <th>Email</th>
+                                <th>First Name</th>
+                                <th>Last Name</th>
+                                <th>Department</th>
+                                <th>Site</th>
+                                <th>Subsidiary</th>
+                                <th>Domain</th>
+                                <th>Cost Center</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!pagedData.Any())
+                            {
+                                <tr>
+                                    <td colspan="10" class="text-center text-gray-500 py-8">
+                                        No headcount records found. Import a CSV file to get started.
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var item in pagedData)
+                                {
+                                    <tr>
+                                        <td>@item.Period.ToString("MMM yyyy")</td>
+                                        <td>@item.UserId</td>
+                                        <td>@item.Email</td>
+                                        <td>@item.FirstName</td>
+                                        <td>@item.LastName</td>
+                                        <td><span class="badge badge-ghost">@item.Department</span></td>
+                                        <td><span class="badge badge-ghost">@item.Site</span></td>
+                                        <td><span class="badge badge-ghost">@item.Subsidiary</span></td>
+                                        <td>@item.Domain</td>
+                                        <td>@item.CostCenter</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination -->
+                @if (filteredData.Any())
+                {
+                    <div class="flex justify-between items-center p-4 border-t">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-gray-600">Rows per page:</span>
+                            <select class="select select-bordered select-sm" @bind="pageSize" @bind:after="OnPageSizeChanged">
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                        
+                        <div class="text-sm text-gray-600">
+                            @((currentPage - 1) * pageSize + 1) - @Math.Min(currentPage * pageSize, filteredData.Count) of @filteredData.Count
+                        </div>
+                        
+                        <div class="join">
+                            <button class="join-item btn btn-sm" @onclick="FirstPage" disabled="@(currentPage == 1)">«</button>
+                            <button class="join-item btn btn-sm" @onclick="PreviousPage" disabled="@(currentPage == 1)">‹</button>
+                            <button class="join-item btn btn-sm btn-active">@currentPage</button>
+                            <button class="join-item btn btn-sm" @onclick="NextPage" disabled="@(currentPage == totalPages)">›</button>
+                            <button class="join-item btn btn-sm" @onclick="LastPage" disabled="@(currentPage == totalPages)">»</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+</AuthorizeRoleView>
+
+<!-- Alert Dialog -->
+<AlertDialog 
+    IsVisible="showAlertDialog"
+    Title="@alertTitle"
+    Message="@alertMessage"
+    Type="@alertType"
+    OkButtonText="@alertOkText"
+    OnClose="CloseAlertDialog" />
+
+@code {
+    private List<TravelOperation.Core.Models.Entities.Headcount> allData = new();
+    private List<TravelOperation.Core.Models.Entities.Headcount> filteredData = new();
+    private List<TravelOperation.Core.Models.Entities.Headcount> pagedData = new();
+    
+    private List<string> departments = new();
+    private List<string> sites = new();
+    private List<string> subsidiaries = new();
+    private List<DateTime> periods = new();
+    
+    private string searchText = "";
+    private string selectedDepartment = "";
+    private string selectedSite = "";
+    private string selectedSubsidiary = "";
+    private string selectedPeriod = "";
+    
+    private int currentPage = 1;
+    private int pageSize = 50;
+    private int totalPages = 1;
+    
+    private bool isLoading = false;
+    
+    // Alert Dialog state
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+    private string alertOkText = "OK";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        StateHasChanged();
+        
+        try
+        {
+            allData = await SettingsService.GetHeadcountAsync();
+            
+            // Extract unique filter values
+            departments = allData.Select(h => h.Department ?? "").Where(d => !string.IsNullOrEmpty(d)).Distinct().OrderBy(d => d).ToList();
+            sites = allData.Select(h => h.Site ?? "").Where(s => !string.IsNullOrEmpty(s)).Distinct().OrderBy(s => s).ToList();
+            subsidiaries = allData.Select(h => h.Subsidiary ?? "").Where(s => !string.IsNullOrEmpty(s)).Distinct().OrderBy(s => s).ToList();
+            periods = allData.Select(h => h.Period).Distinct().OrderBy(p => p).ToList();
+            
+            FilterData();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Failed to load headcount data: {ex.Message}", AlertDialog.AlertType.Error);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void FilterData()
+    {
+        filteredData = allData.Where(h =>
+        {
+            if (!string.IsNullOrEmpty(searchText))
+            {
+                var search = searchText.ToLower();
+                if (!((h.FirstName ?? "").ToLower().Contains(search) ||
+                      (h.LastName ?? "").ToLower().Contains(search) ||
+                      (h.Email ?? "").ToLower().Contains(search) ||
+                      (h.UserId ?? "").ToLower().Contains(search)))
+                    return false;
+            }
+            
+            if (!string.IsNullOrEmpty(selectedDepartment) && h.Department != selectedDepartment)
+                return false;
+                
+            if (!string.IsNullOrEmpty(selectedSite) && h.Site != selectedSite)
+                return false;
+                
+            if (!string.IsNullOrEmpty(selectedSubsidiary) && h.Subsidiary != selectedSubsidiary)
+                return false;
+                
+            if (!string.IsNullOrEmpty(selectedPeriod))
+            {
+                var selectedDate = DateTime.Parse(selectedPeriod);
+                if (h.Period.Date != selectedDate.Date)
+                    return false;
+            }
+            
+            return true;
+        }).ToList();
+        
+        totalPages = (int)Math.Ceiling((double)filteredData.Count / pageSize);
+        currentPage = Math.Max(1, Math.Min(currentPage, totalPages));
+        
+        UpdatePagedData();
+    }
+
+    private void UpdatePagedData()
+    {
+        pagedData = filteredData
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+            
+        StateHasChanged();
+    }
+
+    private void OnPageSizeChanged()
+    {
+        currentPage = 1;
+        FilterData();
+    }
+
+    private void FirstPage()
+    {
+        currentPage = 1;
+        UpdatePagedData();
+    }
+
+    private void PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            UpdatePagedData();
+        }
+    }
+
+    private void NextPage()
+    {
+        if (currentPage < totalPages)
+        {
+            currentPage++;
+            UpdatePagedData();
+        }
+    }
+
+    private void LastPage()
+    {
+        currentPage = totalPages;
+        UpdatePagedData();
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+        
+        if (!file.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+        {
+            ShowAlert("Invalid File", "Please select a CSV file.", AlertDialog.AlertType.Error);
+            return;
+        }
+        
+        isLoading = true;
+        StateHasChanged();
+        
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024); // 10MB limit
+            await SettingsService.ImportHeadcountAsync(stream);
+            
+            ShowAlert("Import Successful", "Headcount data has been imported successfully!", AlertDialog.AlertType.Success);
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Import Failed", $"Failed to import headcount data: {ex.Message}", AlertDialog.AlertType.Error);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ExportData()
+    {
+        try
+        {
+            var csv = GenerateCSV();
+            var fileName = $"Headcount_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+            
+            await JSRuntime.InvokeVoidAsync("downloadFile", fileName, "text/csv", csv);
+            
+            ShowAlert("Export Successful", "Headcount data has been exported successfully!", AlertDialog.AlertType.Success);
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Export Failed", $"Failed to export headcount data: {ex.Message}", AlertDialog.AlertType.Error);
+        }
+    }
+
+    private string GenerateCSV()
+    {
+        var sb = new System.Text.StringBuilder();
+        
+        // Header
+        sb.AppendLine("Period,UserId,Email,FirstName,LastName,Subsidiary,Site,Department,Domain,CostCenter");
+        
+        // Data
+        foreach (var item in filteredData)
+        {
+            sb.AppendLine($"{item.Period:yyyy-MM-dd},{item.UserId},{item.Email},{item.FirstName},{item.LastName},{item.Subsidiary},{item.Site},{item.Department},{item.Domain},{item.CostCenter}");
+        }
+        
+        return sb.ToString();
+    }
+
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type = AlertDialog.AlertType.Info, string okText = "OK")
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        alertOkText = okText;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+}

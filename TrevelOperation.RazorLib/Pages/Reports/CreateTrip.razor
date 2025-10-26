@@ -27,11 +27,11 @@
                 <!-- Basic Information -->
                 <div class="card bg-base-50">
                     <div class="card-body">
-                        <h3 class="card-title text-lg mb-4">📋 Basic Information</h3>
+                        <h3 class="card-title text-lg mb-4">📋 Basic information</h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div class="form-control">
                                 <label class="label">
-                                    <span class="label-text">Trip Name *</span>
+                                    <span class="label-text">Trip name *</span>
                                 </label>
                                 <input type="text" class="input input-bordered @GetValidationClass("TripName")" 
                                        @bind="newTrip.TripName" 
@@ -47,7 +47,7 @@
                             
                             <div class="form-control">
                                 <label class="label">
-                                    <span class="label-text">Traveler Email *</span>
+                                    <span class="label-text">Traveler email *</span>
                                 </label>
                                 <input type="email" class="input input-bordered @GetValidationClass("Email")" 
                                        @bind="newTrip.Email" 
@@ -67,11 +67,11 @@
                 <!-- Travel Dates -->
                 <div class="card bg-base-50">
                     <div class="card-body">
-                        <h3 class="card-title text-lg mb-4">📅 Travel Dates</h3>
+                        <h3 class="card-title text-lg mb-4">📅 Travel dates</h3>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div class="form-control">
                                 <label class="label">
-                                    <span class="label-text">Start Date *</span>
+                                    <span class="label-text">Start date *</span>
                                 </label>
                                 <input type="date" class="input input-bordered @GetValidationClass("StartDate")" 
                                        @bind="newTrip.StartDate" 
@@ -86,7 +86,7 @@
                             
                             <div class="form-control">
                                 <label class="label">
-                                    <span class="label-text">End Date *</span>
+                                    <span class="label-text">End date *</span>
                                 </label>
                                 <input type="date" class="input input-bordered @GetValidationClass("EndDate")" 
                                        @bind="newTrip.EndDate" 
@@ -120,7 +120,7 @@
                         <h3 class="card-title text-lg mb-4">🌍 Destination</h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="space-y-4">
-                                <h4 class="font-semibold">Primary Destination *</h4>
+                                <h4 class="font-semibold">Primary destination *</h4>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div class="form-control">
                                         <label class="label">
@@ -171,7 +171,7 @@
                             </div>
                             
                             <div class="space-y-4">
-                                <h4 class="font-semibold">Secondary Destination <span class="text-sm text-gray-500">(Optional)</span></h4>
+                                <h4 class="font-semibold">Secondary destination <span class="text-sm text-gray-500">(Optional)</span></h4>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div class="form-control">
                                         <label class="label">
@@ -201,7 +201,7 @@
                 <!-- Trip Classification -->
                 <div class="card bg-base-50">
                     <div class="card-body">
-                        <h3 class="card-title text-lg mb-4">🏷️ Trip Classification</h3>
+                        <h3 class="card-title text-lg mb-4">🏷️ Trip classification</h3>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div class="form-control">
                                 <label class="label">
@@ -226,7 +226,7 @@
                             
                             <div class="form-control">
                                 <label class="label">
-                                    <span class="label-text">Trip Type *</span>
+                                    <span class="label-text">Trip type *</span>
                                 </label>
                                 <select class="select select-bordered @GetValidationClass("TripTypeId")" 
                                         @bind="newTrip.TripTypeId" 
@@ -297,7 +297,7 @@
                             
                             <div class="form-control">
                                 <label class="label">
-                                    <span class="label-text">Validation Status</span>
+                                    <span class="label-text">Validation status</span>
                                 </label>
                                 <select class="select select-bordered" @bind="newTrip.ValidationStatusId">
                                     @foreach (var validationStatus in availableValidationStatuses)
@@ -487,23 +487,31 @@
 
         try
         {
+            // Sanitize secondary destination - if one is empty, clear both
+            if (string.IsNullOrWhiteSpace(newTrip.Country2) || string.IsNullOrWhiteSpace(newTrip.City2))
+            {
+                newTrip.Country2 = null;
+                newTrip.City2 = null;
+            }
+
             // Set created timestamp
             newTrip.CreatedAt = DateTime.UtcNow;
             newTrip.ModifiedAt = DateTime.UtcNow;
-            newTrip.ModifiedBy = newTrip.Email; // TODO: Get from authenticated user
+            newTrip.ModifiedBy = newTrip.Email;
 
             // Call service to save trip
             var createdTrip = await TripService.CreateTripAsync(newTrip);
 
-            // Show success message
-            await JSRuntime.InvokeVoidAsync("alert", $"✅ Trip '{createdTrip.TripName}' created successfully!");
+            // Show success toast notification
+            await JSRuntime.InvokeVoidAsync("showToast", "success", $"Trip '{createdTrip.TripName}' created successfully!");
             
-            // Navigate to trips list or trip detail
+            // Navigate to trips list
             Navigation.NavigateTo("/trips");
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"❌ Error creating trip: {ex.Message}");
+            // Show error toast notification
+            await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error creating trip: {ex.Message}");
         }
         finally
         {

@@ -6,7 +6,7 @@
 @inject IJSRuntime JSRuntime
 
 <!-- Modal -->
-<div class="modal @(isVisible ? "modal-open" : "")" id="transactionEditModal">
+<div class="modal @(isVisible ? "modal-open" : "") flex items-center justify-center" id="transactionEditModal">
     <div class="modal-box w-11/12 max-w-4xl">
         <form method="dialog">
             <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @onclick="Hide">✕</button>
@@ -56,18 +56,21 @@
                     </div>
 
                     <!-- Amount (Read-only) -->
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text font-semibold">Amount</span>
-                        </label>
-                        <div class="flex gap-2">
-                            <input type="text" class="input input-bordered bg-base-200 flex-1" 
-                                   value="@($"{currentTransaction.Currency} {currentTransaction.Amount:N2}")" readonly />
-                            @if (currentTransaction.AmountUSD.HasValue)
-                            {
-                                <input type="text" class="input input-bordered bg-base-200 flex-1" 
-                                       value="@($"USD {currentTransaction.AmountUSD:N2}")" readonly />
-                            }
+                    <div class="card bg-base-100 border border-base-300 shadow-sm">
+                        <div class="card-body p-4">
+                            <h5 class="font-semibold text-sm mb-3 flex items-center gap-2">
+                                <span class="text-lg">💰</span>
+                                <span>Amount</span>
+                            </h5>
+                            <div class="flex gap-2">
+                                <input type="text" class="input input-bordered input-sm bg-base-200 flex-1" 
+                                       value="@($"{currentTransaction.Currency} {currentTransaction.Amount:N2}")" readonly />
+                                @if (currentTransaction.AmountUSD.HasValue)
+                                {
+                                    <input type="text" class="input input-bordered input-sm bg-base-200 flex-1" 
+                                           value="@($"USD {currentTransaction.AmountUSD:N2}")" readonly />
+                                }
+                            </div>
                         </div>
                     </div>
 
@@ -151,19 +154,27 @@
                     </div>
 
                     <!-- Validation Status -->
-                    <div class="form-control">
-                        <label class="label cursor-pointer">
-                            <span class="label-text font-semibold">Mark as Valid</span>
-                            <input type="checkbox" class="toggle toggle-success" @bind="editForm.IsValid" />
-                        </label>
-                    </div>
-
-                    <!-- Data Validation Flag -->
-                    <div class="form-control">
-                        <label class="label cursor-pointer">
-                            <span class="label-text font-semibold">Needs Validation</span>
-                            <input type="checkbox" class="toggle toggle-warning" @bind="editForm.DataValidation" />
-                        </label>
+                    <div class="card bg-base-100 border border-success/20 shadow-sm">
+                        <div class="card-body p-4">
+                            <h5 class="font-semibold text-sm mb-3 flex items-center gap-2">
+                                <span class="text-lg">✅</span>
+                                <span>Validation</span>
+                            </h5>
+                            <div class="flex flex-col gap-3">
+                                <div class="form-control">
+                                    <label class="label cursor-pointer justify-start gap-3 hover:bg-base-200/50 rounded-lg p-2 transition-colors">
+                                        <input type="checkbox" class="checkbox checkbox-sm checkbox-success" @bind="editForm.IsValid" />
+                                        <span class="label-text font-semibold">Mark as Valid</span>
+                                    </label>
+                                </div>
+                                <div class="form-control">
+                                    <label class="label cursor-pointer justify-start gap-3 hover:bg-base-200/50 rounded-lg p-2 transition-colors">
+                                        <input type="checkbox" class="checkbox checkbox-sm checkbox-warning" @bind="editForm.DataValidation" />
+                                        <span class="label-text font-semibold">Needs Validation</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

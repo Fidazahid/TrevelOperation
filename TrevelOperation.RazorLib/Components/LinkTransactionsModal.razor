@@ -5,8 +5,12 @@
 
 @if (IsVisible)
 {
-    <div class="modal modal-open">
-        <div class="modal-box max-w-6xl">
+    <div class="modal modal-open flex items-center justify-center">
+        <div class="modal-box w-11/12 max-w-7xl" style="max-width: 70vw !important; width: 90vw !important;">
+            <form method="dialog">
+                <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @onclick="OnClose">✕</button>
+            </form>
+            
             <h3 class="font-bold text-lg mb-4">Link Transactions to Trip</h3>
             
             @if (Trip != null)
@@ -110,7 +114,7 @@
                                     <td>@transaction.TransactionDate.ToString("dd/MM/yyyy")</td>
                                     <td>@transaction.Category?.Emoji @transaction.Category?.Name</td>
                                     <td class="truncate max-w-xs">@transaction.Vendor</td>
-                                    <td>${transaction.AmountUSD.ToString("N2")}</td>
+                                    <td>$@((transaction.AmountUSD ?? 0).ToString("N2"))</td>
                                     <td>
                                         @if (transaction.TripId.HasValue)
                                         {

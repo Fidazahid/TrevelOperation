@@ -1,0 +1,512 @@
+@page "/settings/system"
+@using TrevelOperation.RazorLib.Components
+@inject IJSRuntime JSRuntime
+
+<AuthorizeRoleView RequiredRole="Finance">
+<div class="container mx-auto p-6">
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">⚙️ System Settings</h1>
+            <p class="text-gray-600">Configure application preferences and system-wide settings</p>
+        </div>
+        <div class="flex gap-2">
+            <button class="btn btn-secondary" @onclick="ResetToDefaults">
+                🔄 Reset to Defaults
+            </button>
+            <button class="btn btn-primary" @onclick="SaveSettings" disabled="@isSaving">
+                @if (isSaving)
+                {
+                    <span class="loading loading-spinner loading-sm"></span>
+                    <text>Saving...</text>
+                }
+                else
+                {
+                    <text>💾 Save Changes</text>
+                }
+            </button>
+        </div>
+    </div>
+
+    <!-- Application Settings -->
+    <div class="card bg-base-100 shadow-md mb-6">
+        <div class="card-body">
+            <h2 class="card-title text-xl mb-4">🎨 Application Settings</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Application Name</span>
+                    </label>
+                    <input type="text" class="input input-bordered w-full" 
+                           @bind="settings.ApplicationName" 
+                           placeholder="Travel Expense Management" />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Company Name</span>
+                    </label>
+                    <input type="text" class="input input-bordered w-full" 
+                           @bind="settings.CompanyName" 
+                           placeholder="Your Company" />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Default Currency</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="settings.DefaultCurrency">
+                        <option value="USD">USD - US Dollar</option>
+                        <option value="EUR">EUR - Euro</option>
+                        <option value="GBP">GBP - British Pound</option>
+                        <option value="ILS">ILS - Israeli Shekel</option>
+                    </select>
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Date Format</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="settings.DateFormat">
+                        <option value="dd/MM/yyyy">dd/MM/yyyy (25/12/2024)</option>
+                        <option value="MM/dd/yyyy">MM/dd/yyyy (12/25/2024)</option>
+                        <option value="yyyy-MM-dd">yyyy-MM-dd (2024-12-25)</option>
+                    </select>
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Items Per Page</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="settings.DefaultPageSize">
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Time Zone</span>
+                    </label>
+                    <select class="select select-bordered w-full" @bind="settings.TimeZone">
+                        <option value="UTC">UTC</option>
+                        <option value="Israel Standard Time">Israel Standard Time (GMT+2)</option>
+                        <option value="Eastern Standard Time">Eastern Standard Time (GMT-5)</option>
+                        <option value="Pacific Standard Time">Pacific Standard Time (GMT-8)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transaction Settings -->
+    <div class="card bg-base-100 shadow-md mb-6">
+        <div class="card-body">
+            <h2 class="card-title text-xl mb-4">💳 Transaction Settings</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">High-Value Meal Threshold ($)</span>
+                        <span class="label-text-alt text-gray-500">Triggers review</span>
+                    </label>
+                    <input type="number" class="input input-bordered w-full" 
+                           @bind="settings.HighValueMealThreshold" 
+                           min="0" step="10" />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Low-Value Lodging Threshold ($)</span>
+                        <span class="label-text-alt text-gray-500">Triggers review</span>
+                    </label>
+                    <input type="number" class="input input-bordered w-full" 
+                           @bind="settings.LowValueLodgingThreshold" 
+                           min="0" step="10" />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Documentation Required Above ($)</span>
+                        <span class="label-text-alt text-gray-500">Minimum receipt amount</span>
+                    </label>
+                    <input type="number" class="input input-bordered w-full" 
+                           @bind="settings.DocumentationThreshold" 
+                           min="0" step="5" />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Auto-Link Date Range (days)</span>
+                        <span class="label-text-alt text-gray-500">±days for trip suggestion</span>
+                    </label>
+                    <input type="number" class="input input-bordered w-full" 
+                           @bind="settings.AutoLinkDateRange" 
+                           min="1" max="30" />
+                </div>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-4">
+                    <input type="checkbox" class="checkbox" @bind="settings.RequireParticipantsForMeals" />
+                    <div>
+                        <span class="label-text font-semibold">Require Participants for High-Value Meals</span>
+                        <p class="text-sm text-gray-500">Meals above threshold must have participants listed</p>
+                    </div>
+                </label>
+            </div>
+            
+            <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-4">
+                    <input type="checkbox" class="checkbox" @bind="settings.RequireDocumentationForAllTransactions" />
+                    <div>
+                        <span class="label-text font-semibold">Require Documentation for All Transactions</span>
+                        <p class="text-sm text-gray-500">All transactions must have receipts uploaded</p>
+                    </div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Settings -->
+    <div class="card bg-base-100 shadow-md mb-6">
+        <div class="card-body">
+            <h2 class="card-title text-xl mb-4">🔔 Notification Settings</h2>
+            
+            <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-4">
+                    <input type="checkbox" class="checkbox" @bind="settings.EnableEmailNotifications" />
+                    <div>
+                        <span class="label-text font-semibold">Enable Email Notifications</span>
+                        <p class="text-sm text-gray-500">Send email alerts for important events</p>
+                    </div>
+                </label>
+            </div>
+            
+            <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-4">
+                    <input type="checkbox" class="checkbox" @bind="settings.NotifyOnTripValidation" />
+                    <div>
+                        <span class="label-text font-semibold">Notify on Trip Validation</span>
+                        <p class="text-sm text-gray-500">Alert users when trips require validation</p>
+                    </div>
+                </label>
+            </div>
+            
+            <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-4">
+                    <input type="checkbox" class="checkbox" @bind="settings.NotifyOnPolicyViolation" />
+                    <div>
+                        <span class="label-text font-semibold">Notify on Policy Violations</span>
+                        <p class="text-sm text-gray-500">Alert finance team about policy compliance issues</p>
+                    </div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Retention Settings -->
+    <div class="card bg-base-100 shadow-md mb-6">
+        <div class="card-body">
+            <h2 class="card-title text-xl mb-4">🗄️ Data Retention Settings</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Audit Log Retention (days)</span>
+                        <span class="label-text-alt text-gray-500">How long to keep audit logs</span>
+                    </label>
+                    <input type="number" class="input input-bordered w-full" 
+                           @bind="settings.AuditLogRetentionDays" 
+                           min="30" max="3650" />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Transaction Archive After (days)</span>
+                        <span class="label-text-alt text-gray-500">Archive old transactions</span>
+                    </label>
+                    <input type="number" class="input input-bordered w-full" 
+                           @bind="settings.TransactionArchiveDays" 
+                           min="365" max="7300" />
+                </div>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-4">
+                    <input type="checkbox" class="checkbox" @bind="settings.AutoArchiveOldData" />
+                    <div>
+                        <span class="label-text font-semibold">Auto-Archive Old Data</span>
+                        <p class="text-sm text-gray-500">Automatically move old records to archive tables</p>
+                    </div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Security Settings -->
+    <div class="card bg-base-100 shadow-md mb-6">
+        <div class="card-body">
+            <h2 class="card-title text-xl mb-4">🔒 Security Settings</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Session Timeout (minutes)</span>
+                    </label>
+                    <input type="number" class="input input-bordered w-full" 
+                           @bind="settings.SessionTimeoutMinutes" 
+                           min="5" max="480" />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Max Failed Login Attempts</span>
+                    </label>
+                    <input type="number" class="input input-bordered w-full" 
+                           @bind="settings.MaxFailedLoginAttempts" 
+                           min="3" max="10" />
+                </div>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-4">
+                    <input type="checkbox" class="checkbox" @bind="settings.RequireTwoFactorAuth" />
+                    <div>
+                        <span class="label-text font-semibold">Require Two-Factor Authentication</span>
+                        <p class="text-sm text-gray-500">All users must enable 2FA (Coming Soon)</p>
+                    </div>
+                </label>
+            </div>
+            
+            <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-4">
+                    <input type="checkbox" class="checkbox" @bind="settings.LogAllUserActions" />
+                    <div>
+                        <span class="label-text font-semibold">Log All User Actions</span>
+                        <p class="text-sm text-gray-500">Comprehensive audit trail (may impact performance)</p>
+                    </div>
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
+</AuthorizeRoleView>
+
+<!-- Alert Dialog -->
+<AlertDialog 
+    IsVisible="showAlertDialog"
+    Title="@alertTitle"
+    Message="@alertMessage"
+    Type="@alertType"
+    OkButtonText="@alertOkText"
+    OnClose="CloseAlertDialog" />
+
+<!-- Confirmation Dialog -->
+<ConfirmDialog 
+    IsVisible="showConfirmDialog"
+    Title="@confirmTitle"
+    Message="@confirmMessage"
+    Icon="@confirmIcon"
+    ConfirmButtonText="@confirmButtonText"
+    CancelButtonText="@cancelButtonText"
+    ConfirmButtonClass="@confirmButtonClass"
+    OnResult="HandleConfirmResult" />
+
+@code {
+    private SystemSettingsModel settings = new();
+    private bool isSaving = false;
+    
+    // Alert Dialog state
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+    private string alertOkText = "OK";
+    
+    // Confirmation Dialog state
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "❓";
+    private string confirmButtonText = "Yes";
+    private string cancelButtonText = "No";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction = null;
+
+    protected override void OnInitialized()
+    {
+        LoadSettings();
+    }
+
+    private void LoadSettings()
+    {
+        // Load from localStorage or database
+        // For now, using defaults
+        settings = new SystemSettingsModel
+        {
+            ApplicationName = "Travel Expense Management",
+            CompanyName = "Your Company",
+            DefaultCurrency = "USD",
+            DateFormat = "dd/MM/yyyy",
+            DefaultPageSize = 50,
+            TimeZone = "Israel Standard Time",
+            HighValueMealThreshold = 80,
+            LowValueLodgingThreshold = 100,
+            DocumentationThreshold = 25,
+            AutoLinkDateRange = 2,
+            RequireParticipantsForMeals = true,
+            RequireDocumentationForAllTransactions = false,
+            EnableEmailNotifications = true,
+            NotifyOnTripValidation = true,
+            NotifyOnPolicyViolation = true,
+            AuditLogRetentionDays = 2555, // 7 years
+            TransactionArchiveDays = 730, // 2 years
+            AutoArchiveOldData = false,
+            SessionTimeoutMinutes = 30,
+            MaxFailedLoginAttempts = 5,
+            RequireTwoFactorAuth = false,
+            LogAllUserActions = true
+        };
+    }
+
+    private async Task SaveSettings()
+    {
+        isSaving = true;
+        StateHasChanged();
+        
+        try
+        {
+            // TODO: Save to localStorage or database
+            await Task.Delay(500); // Simulate save
+            
+            ShowAlert(
+                "Settings Saved",
+                "System settings have been saved successfully!",
+                AlertDialog.AlertType.Success
+            );
+        }
+        catch (Exception ex)
+        {
+            ShowAlert(
+                "Save Failed",
+                $"Failed to save settings: {ex.Message}",
+                AlertDialog.AlertType.Error
+            );
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ResetToDefaults()
+    {
+        ShowConfirm(
+            "Reset to Defaults",
+            "Are you sure you want to reset all settings to their default values?\n\nThis action cannot be undone.",
+            async () =>
+            {
+                LoadSettings();
+                
+                ShowAlert(
+                    "Settings Reset",
+                    "All settings have been reset to default values.",
+                    AlertDialog.AlertType.Info
+                );
+                
+                StateHasChanged();
+            },
+            "🔄",
+            "Reset",
+            "Cancel",
+            "btn-warning"
+        );
+    }
+
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type = AlertDialog.AlertType.Info, string okText = "OK")
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        alertOkText = okText;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "❓", 
+        string confirmText = "Yes", string cancelText = "No", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = confirmText;
+        cancelButtonText = cancelText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction.Invoke();
+        }
+        
+        pendingConfirmAction = null;
+        StateHasChanged();
+    }
+
+    public class SystemSettingsModel
+    {
+        // Application Settings
+        public string ApplicationName { get; set; } = "";
+        public string CompanyName { get; set; } = "";
+        public string DefaultCurrency { get; set; } = "USD";
+        public string DateFormat { get; set; } = "dd/MM/yyyy";
+        public int DefaultPageSize { get; set; } = 50;
+        public string TimeZone { get; set; } = "UTC";
+        
+        // Transaction Settings
+        public decimal HighValueMealThreshold { get; set; } = 80;
+        public decimal LowValueLodgingThreshold { get; set; } = 100;
+        public decimal DocumentationThreshold { get; set; } = 25;
+        public int AutoLinkDateRange { get; set; } = 2;
+        public bool RequireParticipantsForMeals { get; set; } = true;
+        public bool RequireDocumentationForAllTransactions { get; set; } = false;
+        
+        // Notification Settings
+        public bool EnableEmailNotifications { get; set; } = true;
+        public bool NotifyOnTripValidation { get; set; } = true;
+        public bool NotifyOnPolicyViolation { get; set; } = true;
+        
+        // Data Retention Settings
+        public int AuditLogRetentionDays { get; set; } = 2555; // 7 years
+        public int TransactionArchiveDays { get; set; } = 730; // 2 years
+        public bool AutoArchiveOldData { get; set; } = false;
+        
+        // Security Settings
+        public int SessionTimeoutMinutes { get; set; } = 30;
+        public int MaxFailedLoginAttempts { get; set; } = 5;
+        public bool RequireTwoFactorAuth { get; set; } = false;
+        public bool LogAllUserActions { get; set; } = true;
+    }
+}
