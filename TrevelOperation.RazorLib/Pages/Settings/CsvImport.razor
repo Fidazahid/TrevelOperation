@@ -213,12 +213,29 @@
         </div>
     }
 </div>
+</AuthorizeRoleView>
+
+<!-- Alert Dialog -->
+<AlertDialog 
+    IsVisible="showAlertDialog"
+    Title="@alertTitle"
+    Message="@alertMessage"
+    Type="@alertType"
+    OkButtonText="@alertOkText"
+    OnClose="CloseAlertDialog" />
 
 @code {
     private string _selectedImportType = "";
     private IBrowserFile? _selectedFile;
     private bool _isImporting = false;
     private ImportResult? _importResult;
+    
+    // Alert Dialog state
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+    private string alertOkText = "OK";
 
     private void SelectImportType(string importType)
     {
@@ -236,7 +253,10 @@
     private async Task StartImport()
     {
         if (_selectedFile == null || string.IsNullOrEmpty(_selectedImportType))
+        {
+            ShowAlert("No File Selected", "Please select a file to import.", AlertDialog.AlertType.Warning);
             return;
+        }
 
         _isImporting = true;
         _importResult = null;
@@ -252,6 +272,24 @@
                 "Manual" => await ImportService.ImportManualCsvAsync(stream, _selectedFile.Name),
                 _ => throw new InvalidOperationException($"Unknown import type: {_selectedImportType}")
             };
+            
+            // Show success or error message based on result
+            if (_importResult.Success)
+            {
+                ShowAlert(
+                    "Import Successful", 
+                    $"Successfully imported {_importResult.RecordsImported} of {_importResult.RecordsProcessed} records.", 
+                    AlertDialog.AlertType.Success
+                );
+            }
+            else
+            {
+                ShowAlert(
+                    "Import Failed", 
+                    $"Import failed with {_importResult.RecordsWithErrors} errors. Check the details below.", 
+                    AlertDialog.AlertType.Error
+                );
+            }
         }
         catch (Exception ex)
         {
@@ -262,6 +300,8 @@
                 Success = false,
                 Errors = new List<string> { $"Import failed: {ex.Message}" }
             };
+            
+            ShowAlert("Import Error", $"An error occurred during import: {ex.Message}", AlertDialog.AlertType.Error);
         }
         finally
         {
@@ -337,28 +377,52 @@
     {
         if (_importResult == null) return;
 
-        var logData = new
+        try
         {
-            ImportDate = _importResult.ImportDate,
-            FileName = _importResult.FileName,
-            Success = _importResult.Success,
-            Statistics = new
+            var logData = new
             {
-                Processed = _importResult.RecordsProcessed,
-                Imported = _importResult.RecordsImported,
-                Skipped = _importResult.RecordsSkipped,
-                Errors = _importResult.RecordsWithErrors
-            },
-            Warnings = _importResult.Warnings,
-            Errors = _importResult.Errors
-        };
+                ImportDate = _importResult.ImportDate,
+                FileName = _importResult.FileName,
+                Success = _importResult.Success,
+                Statistics = new
+                {
+                    Processed = _importResult.RecordsProcessed,
+                    Imported = _importResult.RecordsImported,
+                    Skipped = _importResult.RecordsSkipped,
+                    Errors = _importResult.RecordsWithErrors
+                },
+                Warnings = _importResult.Warnings,
+                Errors = _importResult.Errors
+            };
 
-        var json = JsonSerializer.Serialize(logData, new JsonSerializerOptions { WriteIndented = true });
-        var fileName = $"import-log-{_importResult.ImportDate:yyyyMMdd-HHmmss}.json";
+            var json = JsonSerializer.Serialize(logData, new JsonSerializerOptions { WriteIndented = true });
+            var fileName = $"import-log-{_importResult.ImportDate:yyyyMMdd-HHmmss}.json";
 
-        await JSRuntime.InvokeVoidAsync("downloadFile", fileName, "application/json", json);
+            await JSRuntime.InvokeVoidAsync("downloadFile", fileName, "application/json", json);
+            ShowAlert("Export Successful", "Import log has been downloaded successfully.", AlertDialog.AlertType.Success);
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Export Failed", $"Failed to export log: {ex.Message}", AlertDialog.AlertType.Error);
+        }
+    }
+    
+    // Alert Dialog Methods
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type = AlertDialog.AlertType.Info, string okText = "OK")
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        alertOkText = okText;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
     }
 
     private record FieldMapping(string FieldName, string ColumnName, bool IsRequired, string Format);
 }
-</AuthorizeRoleView>

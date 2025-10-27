@@ -408,6 +408,23 @@
     private OwnerDisplay? selectedOwner;
     private List<Trip> ownerTrips = new();
     
+    // Alert Dialog state
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+    private string alertOkText = "OK";
+    
+    // Confirmation Dialog state
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "❓";
+    private string confirmButtonText = "Yes";
+    private string cancelButtonText = "No";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction = null;
+    
     private bool isLoading = false;
     private string? errorMessage;
 
@@ -625,32 +642,37 @@
 
             HideModal();
             await LoadOwners();
-            await JSRuntime.InvokeVoidAsync("alert", $"Owner {(isEditing ? "updated" : "added")} successfully!");
+            ShowAlert("Success", $"Owner {(isEditing ? "updated" : "added")} successfully!", AlertDialog.AlertType.Success);
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error saving owner: {ex.Message}");
+            ShowAlert("Error", $"Failed to save owner: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
     private async Task DeleteOwner(OwnerDisplay owner)
     {
-        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-            $"Delete owner '{owner.Name}'? This action cannot be undone and may affect trip assignments.");
-        
-        if (confirmed)
-        {
-            try
+        ShowConfirm(
+            "Delete Owner",
+            $"Are you sure you want to delete owner '{owner.Name}'?\n\nThis action cannot be undone and may affect trip assignments.",
+            async () =>
             {
-                await SettingsService.DeleteOwnerAsync(owner.OwnerId);
-                await LoadOwners();
-                await JSRuntime.InvokeVoidAsync("alert", "Owner deleted successfully!");
-            }
-            catch (Exception ex)
-            {
-                await JSRuntime.InvokeVoidAsync("alert", $"Error deleting owner: {ex.Message}");
-            }
-        }
+                try
+                {
+                    await SettingsService.DeleteOwnerAsync(owner.OwnerId);
+                    await LoadOwners();
+                    ShowAlert("Deleted", "Owner deleted successfully!", AlertDialog.AlertType.Success);
+                }
+                catch (Exception ex)
+                {
+                    ShowAlert("Error", $"Failed to delete owner: {ex.Message}", AlertDialog.AlertType.Error);
+                }
+            },
+            "🗑️",
+            "Delete",
+            "Cancel",
+            "btn-error"
+        );
     }
 
     private void ToggleOwnerStatus(OwnerDisplay owner)
@@ -674,7 +696,7 @@
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error loading trips: {ex.Message}");
+            ShowAlert("Error", $"Failed to load trips: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
@@ -699,50 +721,62 @@
 
     private async Task ImportFromHeadcount()
     {
-        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-            "Sync with headcount data? This will create owners from unique emails in headcount table.");
-        
-        if (confirmed)
-        {
-            try
+        ShowConfirm(
+            "Sync with Headcount",
+            "Sync with headcount data?\n\nThis will create owners from unique emails in the headcount table.",
+            async () =>
             {
-                var headcount = await SettingsService.GetHeadcountAsync();
-                var existingEmails = owners.Select(o => o.Email.ToLower()).ToHashSet();
-                var addedCount = 0;
-                
-                foreach (var emp in headcount)
+                try
                 {
-                    if (!existingEmails.Contains(emp.Email.ToLower()))
+                    var headcount = await SettingsService.GetHeadcountAsync();
+                    var existingEmails = owners.Select(o => o.Email.ToLower()).ToHashSet();
+                    var addedCount = 0;
+                    
+                    foreach (var emp in headcount)
                     {
-                        await SettingsService.CreateOwnerAsync(
-                            $"{emp.FirstName} {emp.LastName}",
-                            emp.Email,
-                            emp.CostCenter,
-                            emp.Department,
-                            emp.Domain);
-                        addedCount++;
+                        if (!existingEmails.Contains(emp.Email.ToLower()))
+                        {
+                            await SettingsService.CreateOwnerAsync(
+                                $"{emp.FirstName} {emp.LastName}",
+                                emp.Email,
+                                emp.CostCenter,
+                                emp.Department,
+                                emp.Domain);
+                            addedCount++;
+                        }
                     }
+                    
+                    await LoadOwners();
+                    ShowAlert("Sync Complete", $"Synced {addedCount} new owners from headcount data!", AlertDialog.AlertType.Success);
                 }
-                
-                await LoadOwners();
-                await JSRuntime.InvokeVoidAsync("alert", $"Synced {addedCount} new owners from headcount data!");
-            }
-            catch (Exception ex)
-            {
-                await JSRuntime.InvokeVoidAsync("alert", $"Error syncing headcount: {ex.Message}");
-            }
-        }
+                catch (Exception ex)
+                {
+                    ShowAlert("Sync Failed", $"Error syncing headcount: {ex.Message}", AlertDialog.AlertType.Error);
+                }
+            },
+            "📥",
+            "Sync",
+            "Cancel",
+            "btn-primary"
+        );
     }
 
     private async Task ExportOwners()
     {
-        var csv = "Name,Email,Department,Domain,CostCenter,TripCount,LastActivity\n";
-        foreach (var owner in owners.OrderBy(o => o.Name))
+        try
         {
-            csv += $"\"{owner.Name}\",\"{owner.Email}\",\"{owner.Department}\",\"{owner.Domain}\",\"{owner.CostCenter}\",{owner.TripCount},{owner.LastActivity?.ToString("yyyy-MM-dd") ?? ""}\n";
+            var csv = "Name,Email,Department,Domain,CostCenter,TripCount,LastActivity\n";
+            foreach (var owner in owners.OrderBy(o => o.Name))
+            {
+                csv += $"\"{owner.Name}\",\"{owner.Email}\",\"{owner.Department}\",\"{owner.Domain}\",\"{owner.CostCenter}\",{owner.TripCount},{owner.LastActivity?.ToString("yyyy-MM-dd") ?? ""}\n";
+            }
+            
+            await JSRuntime.InvokeVoidAsync("downloadFile", "owners.csv", "text/csv", csv);
         }
-        
-        await JSRuntime.InvokeVoidAsync("downloadFile", "owners.csv", "text/csv", csv);
+        catch (Exception ex)
+        {
+            ShowAlert("Export Failed", $"Failed to export owners: {ex.Message}", AlertDialog.AlertType.Error);
+        }
     }
 
     private string GetTripStatusClass(string status)
@@ -770,6 +804,51 @@
             _ => "badge-neutral"
         };
     }
+    
+    // Alert Dialog Methods
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type = AlertDialog.AlertType.Info, string okText = "OK")
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        alertOkText = okText;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+
+    // Confirmation Dialog Methods
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "❓", 
+        string confirmText = "Yes", string cancelText = "No", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = confirmText;
+        cancelButtonText = cancelText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction.Invoke();
+        }
+        
+        pendingConfirmAction = null;
+        StateHasChanged();
+    }
 
     // Display wrapper class for UI (includes calculated fields)
     public class OwnerDisplay
@@ -787,3 +866,23 @@
     }
 }
 </AuthorizeRoleView>
+
+<!-- Alert Dialog -->
+<AlertDialog 
+    IsVisible="showAlertDialog"
+    Title="@alertTitle"
+    Message="@alertMessage"
+    Type="@alertType"
+    OkButtonText="@alertOkText"
+    OnClose="CloseAlertDialog" />
+
+<!-- Confirmation Dialog -->
+<ConfirmDialog 
+    IsVisible="showConfirmDialog"
+    Title="@confirmTitle"
+    Message="@confirmMessage"
+    Icon="@confirmIcon"
+    ConfirmButtonText="@confirmButtonText"
+    CancelButtonText="@cancelButtonText"
+    ConfirmButtonClass="@confirmButtonClass"
+    OnResult="HandleConfirmResult" />

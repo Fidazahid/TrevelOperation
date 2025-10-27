@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Components;
-using Microsoft.JSInterop;
 using TravelOperation.Core.Models.Entities;
 using TravelOperation.Core.Services.Interfaces;
 using TrevelOperation.RazorLib.Components;
@@ -35,6 +34,12 @@ public partial class PolicyCompliance
     private int currentPage = 1;
     private int pageSize = 10;
     private int totalPages => filteredResults.Count > 0 ? (int)Math.Ceiling((double)filteredResults.Count / pageSize) : 1;
+
+    // Alert Dialog state
+    private bool isAlertVisible;
+    private string alertTitle = string.Empty;
+    private string alertMessage = string.Empty;
+    private AlertDialog.AlertType alertType;
 
     protected override async Task OnInitializedAsync()
     {
@@ -113,11 +118,11 @@ public partial class PolicyCompliance
 
             CalculateStats();
 
-            await JSRuntime.InvokeVoidAsync("alert", $"Compliance check complete. Found {complianceResults.Count} non-compliant transactions.");
+            ShowAlert("Compliance Check Complete", $"Found {complianceResults.Count} non-compliant transactions.", AlertDialog.AlertType.Info);
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error running compliance check: {ex.Message}");
+            ShowAlert("Error", $"Error running compliance check: {ex.Message}", AlertDialog.AlertType.Error);
         }
         finally
         {
@@ -254,11 +259,11 @@ public partial class PolicyCompliance
             CloseApproveModal();
             await RefreshData();
             
-            await JSRuntime.InvokeVoidAsync("alert", "Exception approved successfully!");
+            ShowAlert("Success", "Exception approved successfully!", AlertDialog.AlertType.Success);
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error approving exception: {ex.Message}");
+            ShowAlert("Error", $"Error approving exception: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
@@ -291,11 +296,11 @@ public partial class PolicyCompliance
             CloseFlagModal();
             await RefreshData();
             
-            await JSRuntime.InvokeVoidAsync("alert", "Transaction flagged successfully!");
+            ShowAlert("Success", "Transaction flagged successfully!", AlertDialog.AlertType.Success);
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error flagging transaction: {ex.Message}");
+            ShowAlert("Error", $"Error flagging transaction: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
@@ -340,6 +345,19 @@ public partial class PolicyCompliance
     {
         // Refresh data after delete
         await RefreshData();
+    }
+
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type)
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        isAlertVisible = true;
+    }
+
+    private void CloseAlertDialog()
+    {
+        isAlertVisible = false;
     }
 
     private class ComplianceStats

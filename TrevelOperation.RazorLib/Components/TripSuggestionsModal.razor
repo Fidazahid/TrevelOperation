@@ -1,7 +1,7 @@
 @using TravelOperation.Core.Models.Entities
 @using TravelOperation.Core.Services.Interfaces
+@using TrevelOperation.RazorLib.Components
 @inject ITripService TripService
-@inject IJSRuntime JSRuntime
 
 @if (IsVisible && Suggestions != null)
 {
@@ -138,6 +138,14 @@
     </div>
 }
 
+<!-- Alert Dialog -->
+<AlertDialog @ref="alertDialog"
+             IsVisible="showAlertDialog"
+             Title="@alertTitle"
+             Message="@alertMessage"
+             Type="@alertType"
+             OnClose="CloseAlertDialog" />
+
 @code {
     [Parameter] public bool IsVisible { get; set; }
     [Parameter] public IEnumerable<Trip>? Suggestions { get; set; }
@@ -147,6 +155,28 @@
     private HashSet<Trip> selectedSuggestions = new();
     private HashSet<int> expandedSuggestions = new();
     private bool isSaving = false;
+
+    // Alert Dialog state
+    private AlertDialog? alertDialog;
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type)
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
 
     protected override void OnParametersSet()
     {
@@ -231,28 +261,12 @@
             // Show results
             if (successCount > 0)
             {
-                try
-                {
-                    await JSRuntime.InvokeVoidAsync("showToast", "success", 
-                        $"Successfully created {successCount} trip{(successCount != 1 ? "s" : "")}");
-                }
-                catch
-                {
-                    Console.WriteLine($"Successfully created {successCount} trips");
-                }
+                ShowAlert("Success", $"Successfully created {successCount} trip{(successCount != 1 ? "s" : "")}", AlertDialog.AlertType.Success);
             }
 
             if (errorCount > 0)
             {
-                try
-                {
-                    await JSRuntime.InvokeVoidAsync("showToast", "warning", 
-                        $"Failed to create {errorCount} trip{(errorCount != 1 ? "s" : "")}");
-                }
-                catch
-                {
-                    Console.WriteLine($"Failed to create {errorCount} trips");
-                }
+                ShowAlert("Warning", $"Failed to create {errorCount} trip{(errorCount != 1 ? "s" : "")}", AlertDialog.AlertType.Warning);
             }
 
             // Notify parent to reload data
@@ -263,14 +277,7 @@
         }
         catch (Exception ex)
         {
-            try
-            {
-                await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error creating trips: {ex.Message}");
-            }
-            catch
-            {
-                Console.WriteLine($"Error creating trips: {ex.Message}");
-            }
+            ShowAlert("Error Creating Trips", $"Error creating trips: {ex.Message}", AlertDialog.AlertType.Error);
         }
         finally
         {

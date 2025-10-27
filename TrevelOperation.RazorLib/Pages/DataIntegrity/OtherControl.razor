@@ -288,6 +288,24 @@
     </div>
 </div>
 
+<!-- Alert Dialog -->
+<AlertDialog @ref="alertDialog"
+             IsVisible="showAlertDialog"
+             Title="@alertTitle"
+             Message="@alertMessage"
+             Type="@alertType"
+             OnClose="CloseAlertDialog" />
+
+<!-- Confirm Dialog -->
+<ConfirmDialog @ref="confirmDialog"
+               IsVisible="showConfirmDialog"
+               Title="@confirmTitle"
+               Message="@confirmMessage"
+               Icon="@confirmIcon"
+               ConfirmButtonText="@confirmButtonText"
+               ConfirmButtonClass="@confirmButtonClass"
+               OnResult="HandleConfirmResult" />
+
 @code {
     private List<OtherTransactionData> transactions = new();
     private List<OtherTransactionData> filteredTransactions = new();
@@ -311,6 +329,63 @@
     private decimal averageAmount = 0;
     private decimal totalAmount = 0;
     private bool allSelected = false;
+
+    // Alert Dialog state
+    private AlertDialog? alertDialog;
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+
+    // Confirm Dialog state
+    private ConfirmDialog? confirmDialog;
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "⚠️";
+    private string confirmButtonText = "Confirm";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction;
+
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type)
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "⚠️", string buttonText = "Confirm", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = buttonText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction();
+        }
+        
+        pendingConfirmAction = null;
+        StateHasChanged();
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -498,7 +573,7 @@
             }
         }
         selectedTransactions.Clear();
-        await JSRuntime.InvokeVoidAsync("alert", $"Updated {count} transactions to category: {category}");
+        ShowAlert("Success", $"Updated {count} transactions to category: {category}", AlertDialog.AlertType.Success);
         CalculateSummary();
         StateHasChanged();
     }
@@ -511,16 +586,23 @@
 
     private async Task ValidateAll()
     {
-        var result = await JSRuntime.InvokeAsync<bool>("confirm", "This will mark all 'Other' transactions as requiring manual review. Continue?");
-        if (result)
-        {
-            await JSRuntime.InvokeVoidAsync("alert", $"Flagged {filteredTransactions.Count(t => t.Category == "Other")} transactions for manual review");
-        }
+        ShowConfirm(
+            "Validate All Transactions",
+            "This will mark all 'Other' transactions as requiring manual review. Continue?",
+            async () =>
+            {
+                var otherCount = filteredTransactions.Count(t => t.Category == "Other");
+                ShowAlert("Success", $"Flagged {otherCount} transactions for manual review", AlertDialog.AlertType.Success);
+            },
+            "✅",
+            "Validate All",
+            "btn-primary"
+        );
     }
 
     private async Task ViewDetails(string transactionId)
     {
-        await JSRuntime.InvokeVoidAsync("alert", $"View details for transaction {transactionId} - Navigation pending");
+        ShowAlert("View Details", $"View details for transaction {transactionId} - Navigation pending", AlertDialog.AlertType.Info);
     }
 
     private async Task GenerateMessage(string transactionId)
@@ -551,7 +633,7 @@
             
             var message = MessageTemplateService.GenerateOtherCategoryMessage(transaction, trip);
             await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", message);
-            await JSRuntime.InvokeVoidAsync("alert", "Message copied to clipboard!");
+            ShowAlert("Success", "Message copied to clipboard!", AlertDialog.AlertType.Success);
         }
     }
 
@@ -561,11 +643,17 @@
         if (transaction != null)
         {
             var suggestion = GetCategorySuggestion(transaction);
-            var result = await JSRuntime.InvokeAsync<bool>("confirm", $"Suggested category for '{transaction.Vendor}': {suggestion}\n\nApply this suggestion?");
-            if (result)
-            {
-                await UpdateCategory(transactionId, suggestion);
-            }
+            ShowConfirm(
+                "Category Suggestion",
+                $"Suggested category for '{transaction.Vendor}': {suggestion}\n\nApply this suggestion?",
+                async () =>
+                {
+                    await UpdateCategory(transactionId, suggestion);
+                },
+                "🤖",
+                "Apply Suggestion",
+                "btn-primary"
+            );
         }
     }
 

@@ -5,10 +5,12 @@
 @using TrevelOperation.Service
 @using TrevelOperation.RazorLib.Components
 @using TravelOperation.Core.Services.Interfaces
+@using Microsoft.AspNetCore.Components
 @inject ITransactionService TransactionService
 @inject IMessageTemplateService MessageTemplateService
 @inject ILookupService LookupService
 @inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 
 <AuthorizeRoleView RequiredRole="Finance">
 <div class="container mx-auto p-6">
@@ -239,11 +241,11 @@
                                 <td>
                                     <div class="dropdown dropdown-end">
                                         <label tabindex="0" class="btn btn-ghost btn-sm">⋮</label>
-                                        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52">
-                                            <li><a @onclick="() => ViewDetails(transaction.TransactionId)">👁️ View Details</a></li>
-                                            <li><a @onclick="() => GenerateMessage(transaction.TransactionId)">📧 Generate Message</a></li>
+                                        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-white rounded-box w-52 z-10">
+                                            <li><a @onclick="() => ViewDetails(transaction.TransactionId)" @onclick:preventDefault="false" class="cursor-pointer hover:bg-gray-100">👁️ View Details</a></li>
+                                            <li><a @onclick="() => GenerateMessage(transaction.TransactionId)" @onclick:preventDefault="false" class="cursor-pointer hover:bg-gray-100">📧 Generate Message</a></li>
                                             <li><hr /></li>
-                                            <li><a @onclick="() => MarkAsValid(transaction.TransactionId)">✅ Mark Valid</a></li>
+                                            <li><a @onclick="() => MarkAsValid(transaction.TransactionId)" @onclick:preventDefault="false" class="cursor-pointer hover:bg-gray-100">✅ Mark Valid</a></li>
                                         </ul>
                                     </div>
                                 </td>
@@ -295,6 +297,15 @@
     </div>
 </div>
 </AuthorizeRoleView>
+
+<!-- Transaction Detail Modal -->
+<TransactionDetailModal 
+    IsVisible="showTransactionDetailModal"
+    Transaction="selectedTransaction"
+    OnClose="CloseTransactionDetailModal"
+    OnEdit="HandleTransactionEdit"
+    OnDelete="HandleTransactionDelete"
+    OnGenerateMessage="HandleGenerateMessageFromModal" />
 
 <!-- Alert Dialog (for messages) - OUTSIDE AuthorizeRoleView -->
 <AlertDialog 
@@ -357,6 +368,10 @@
     private string cancelButtonText = "No";
     private string confirmButtonClass = "btn-primary";
     private Func<Task>? pendingConfirmAction = null;
+
+    // Transaction Detail Modal state
+    private bool showTransactionDetailModal = false;
+    private Transaction? selectedTransaction = null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -532,28 +547,36 @@
     {
         try
         {
-            var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-            if (transaction != null)
+            Console.WriteLine($"UpdateParticipants called for {transactionId}");
+            
+            // Update in database directly
+            var dbTransaction = await TransactionService.GetTransactionByIdAsync(transactionId);
+            if (dbTransaction != null)
             {
-                transaction.Participants = participants ?? "";
-                transaction.ParticipantsValidated = !string.IsNullOrEmpty(participants);
+                dbTransaction.Participants = participants;
+                dbTransaction.ParticipantsValidated = !string.IsNullOrEmpty(participants);
+                await TransactionService.UpdateTransactionAsync(dbTransaction);
                 
-                // Update in database
-                var dbTransaction = await TransactionService.GetTransactionByIdAsync(transactionId);
-                if (dbTransaction != null)
+                // Update local data
+                var localTransaction = filteredTransactions.FirstOrDefault(t => t.TransactionId == transactionId);
+                if (localTransaction != null)
                 {
-                    dbTransaction.Participants = participants;
-                    dbTransaction.ParticipantsValidated = !string.IsNullOrEmpty(participants);
-                    await TransactionService.UpdateTransactionAsync(dbTransaction);
+                    localTransaction.Participants = participants ?? "";
+                    localTransaction.ParticipantsValidated = !string.IsNullOrEmpty(participants);
                 }
                 
                 ShowAlert("Success", "Participants updated successfully", AlertDialog.AlertType.Success);
                 CalculateSummary();
                 StateHasChanged();
             }
+            else
+            {
+                ShowAlert("Error", "Transaction not found", AlertDialog.AlertType.Error);
+            }
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"Error updating participants: {ex.Message}");
             ShowAlert("Error", $"Error updating participants: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
@@ -562,31 +585,43 @@
     {
         try
         {
-            var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-            if (transaction != null)
+            Console.WriteLine($"UpdateCategory called for {transactionId} to {category}");
+            
+            // Update in database
+            var dbTransaction = await TransactionService.GetTransactionByIdAsync(transactionId);
+            if (dbTransaction != null)
             {
-                transaction.Category = category ?? "";
-                
-                // Update in database
-                var dbTransaction = await TransactionService.GetTransactionByIdAsync(transactionId);
-                if (dbTransaction != null)
+                // Get category ID from lookup service
+                var lookupService = await LookupService.GetCategoriesAsync();
+                var categoryObj = lookupService.FirstOrDefault(c => c.Name == category);
+                if (categoryObj != null)
                 {
-                    // Get category ID from lookup service
-                    var lookupService = await LookupService.GetCategoriesAsync();
-                    var categoryObj = lookupService.FirstOrDefault(c => c.Name == category);
-                    if (categoryObj != null)
+                    dbTransaction.CategoryId = categoryObj.CategoryId;
+                    await TransactionService.UpdateTransactionAsync(dbTransaction);
+                    
+                    // Update local data
+                    var localTransaction = filteredTransactions.FirstOrDefault(t => t.TransactionId == transactionId);
+                    if (localTransaction != null)
                     {
-                        dbTransaction.CategoryId = categoryObj.CategoryId;
-                        await TransactionService.UpdateTransactionAsync(dbTransaction);
+                        localTransaction.Category = category ?? "";
                     }
+                    
+                    ShowAlert("Success", "Category updated successfully", AlertDialog.AlertType.Success);
+                    StateHasChanged();
                 }
-                
-                ShowAlert("Success", "Category updated successfully", AlertDialog.AlertType.Success);
-                StateHasChanged();
+                else
+                {
+                    ShowAlert("Error", "Category not found", AlertDialog.AlertType.Error);
+                }
+            }
+            else
+            {
+                ShowAlert("Error", "Transaction not found", AlertDialog.AlertType.Error);
             }
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"Error updating category: {ex.Message}");
             ShowAlert("Error", $"Error updating category: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
@@ -631,23 +666,79 @@
     {
         try
         {
-            ShowAlert("View Details", $"Transaction details for {transactionId}\n\nFull transaction detail view coming soon!", AlertDialog.AlertType.Info);
+            Console.WriteLine($"ViewDetails called for transaction: {transactionId}");
+            
+            // Get the full transaction details
+            selectedTransaction = await TransactionService.GetTransactionByIdAsync(transactionId);
+            
+            if (selectedTransaction != null)
+            {
+                Console.WriteLine($"Transaction found: {selectedTransaction.TransactionId}");
+                showTransactionDetailModal = true;
+                StateHasChanged();
+            }
+            else
+            {
+                Console.WriteLine($"Transaction not found: {transactionId}");
+                ShowAlert("Error", $"Transaction {transactionId} not found", AlertDialog.AlertType.Error);
+            }
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"Error in ViewDetails: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
             ShowAlert("Error", $"Error loading transaction details: {ex.Message}", AlertDialog.AlertType.Error);
         }
+    }
+
+    private Task CloseTransactionDetailModal()
+    {
+        showTransactionDetailModal = false;
+        selectedTransaction = null;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleTransactionEdit(Transaction transaction)
+    {
+        // Close modal and show edit UI (can be implemented later)
+        showTransactionDetailModal = false;
+        ShowAlert("Edit Transaction", "Edit functionality will be implemented soon", AlertDialog.AlertType.Info);
+    }
+
+    private async Task HandleTransactionDelete(Transaction transaction)
+    {
+        try
+        {
+            await TransactionService.DeleteAsync(transaction.TransactionId);
+            showTransactionDetailModal = false;
+            await LoadMealTransactions();
+            ShowAlert("Success", "Transaction deleted successfully", AlertDialog.AlertType.Success);
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Error", $"Error deleting transaction: {ex.Message}", AlertDialog.AlertType.Error);
+        }
+    }
+
+    private async Task HandleGenerateMessageFromModal(Transaction transaction)
+    {
+        showTransactionDetailModal = false;
+        await GenerateMessage(transaction.TransactionId);
     }
 
     private async Task GenerateMessage(string transactionId)
     {
         try
         {
-            var mealTransaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-            if (mealTransaction != null)
+            Console.WriteLine($"GenerateMessage called for {transactionId}");
+            
+            // Get transaction from database to ensure we have complete data
+            var dbTransaction = await TransactionService.GetTransactionByIdAsync(transactionId);
+            
+            if (dbTransaction != null)
             {
-                var transaction = ConvertToTransaction(mealTransaction);
-                var message = MessageTemplateService.GenerateMealsMessage(transaction);
+                var message = MessageTemplateService.GenerateMealsMessage(dbTransaction);
                 await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", message);
                 ShowAlert("Success", "Message copied to clipboard!", AlertDialog.AlertType.Success);
             }
@@ -658,6 +749,7 @@
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"Error generating message: {ex.Message}");
             ShowAlert("Error", $"Error generating message: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
@@ -666,17 +758,30 @@
     {
         try
         {
-            var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-            if (transaction != null)
+            Console.WriteLine($"MarkAsValid called for: {transactionId}");
+            
+            // Call the service directly - no need to find in local list first
+            await TransactionService.MarkAsValidAsync(transactionId);
+            
+            Console.WriteLine($"Transaction {transactionId} marked as valid in database");
+            
+            // Update local data and refresh
+            var localTransaction = filteredTransactions.FirstOrDefault(t => t.TransactionId == transactionId);
+            if (localTransaction != null)
             {
-                transaction.IsValid = true;
-                await TransactionService.MarkAsValidAsync(transactionId);
-                ShowAlert("Success", "Transaction marked as valid", AlertDialog.AlertType.Success);
-                FilterTransactions();
+                localTransaction.IsValid = true;
             }
+            
+            // Refresh the page data
+            await LoadMealTransactions();
+            CalculateSummary();
+            StateHasChanged();
+            
+            ShowAlert("Success", "Transaction marked as valid", AlertDialog.AlertType.Success);
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"Error marking as valid: {ex.Message}");
             ShowAlert("Error", $"Error marking as valid: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
@@ -685,21 +790,52 @@
     {
         try
         {
-            foreach (var transactionId in selectedTransactions)
+            Console.WriteLine($"MarkSelectedAsValid called for {selectedTransactions.Count} transactions");
+            
+            var successCount = 0;
+            var errorCount = 0;
+            
+            foreach (var transactionId in selectedTransactions.ToList())
             {
-                var transaction = transactions.FirstOrDefault(t => t.TransactionId == transactionId);
-                if (transaction != null)
+                try
                 {
-                    transaction.IsValid = true;
                     await TransactionService.MarkAsValidAsync(transactionId);
+                    
+                    // Update local data
+                    var localTransaction = filteredTransactions.FirstOrDefault(t => t.TransactionId == transactionId);
+                    if (localTransaction != null)
+                    {
+                        localTransaction.IsValid = true;
+                    }
+                    
+                    successCount++;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error marking {transactionId} as valid: {ex.Message}");
+                    errorCount++;
                 }
             }
+            
             selectedTransactions.Clear();
-            ShowAlert("Success", "Selected transactions marked as valid", AlertDialog.AlertType.Success);
-            FilterTransactions();
+            allSelected = false;
+            
+            // Refresh the page data
+            await LoadMealTransactions();
+            CalculateSummary();
+            StateHasChanged();
+            
+            var message = $"Successfully marked {successCount} transaction(s) as valid";
+            if (errorCount > 0)
+            {
+                message += $"\n{errorCount} transaction(s) failed";
+            }
+            
+            ShowAlert("Success", message, errorCount > 0 ? AlertDialog.AlertType.Warning : AlertDialog.AlertType.Success);
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"Error in MarkSelectedAsValid: {ex.Message}");
             ShowAlert("Error", $"Error marking transactions as valid: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }

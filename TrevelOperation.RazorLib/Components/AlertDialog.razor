@@ -27,6 +27,7 @@
 
 @code {
     [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback<bool> IsVisibleChanged { get; set; }
     [Parameter] public string Title { get; set; } = "Alert";
     [Parameter] public string Message { get; set; } = "";
     [Parameter] public AlertType Type { get; set; } = AlertType.Info;
@@ -73,11 +74,19 @@
 
     private async Task HandleOk()
     {
+        if (IsVisibleChanged.HasDelegate)
+        {
+            await IsVisibleChanged.InvokeAsync(false);
+        }
         await OnClose.InvokeAsync();
     }
 
     private async Task HandleClose()
     {
+        if (IsVisibleChanged.HasDelegate)
+        {
+            await IsVisibleChanged.InvokeAsync(false);
+        }
         await OnClose.InvokeAsync();
     }
 }

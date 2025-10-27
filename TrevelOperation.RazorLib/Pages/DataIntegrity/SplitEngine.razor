@@ -6,7 +6,6 @@
 @using TrevelOperation.Service
 @using TrevelOperation.RazorLib.Components
 @using Microsoft.AspNetCore.Components.Forms
-@inject IJSRuntime JSRuntime
 @inject ISplitService SplitService
 @inject ISettingsService SettingsService
 
@@ -302,6 +301,21 @@
     private bool isLoading = false;
     private string errorMessage = "";
 
+    // Alert Dialog state
+    private bool isAlertVisible;
+    private string alertTitle = string.Empty;
+    private string alertMessage = string.Empty;
+    private AlertDialog.AlertType alertType;
+
+    // Confirm Dialog state
+    private bool isConfirmVisible;
+    private string confirmTitle = string.Empty;
+    private string confirmMessage = string.Empty;
+    private string confirmIcon = "❓";
+    private string confirmButtonText = "Confirm";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadCategoriesAndParticipants();
@@ -451,62 +465,67 @@
     {
         if (!filteredSuggestions.Any())
         {
-            await JSRuntime.InvokeVoidAsync("alert", "No suggestions to process");
+            ShowAlert("No Suggestions", "No suggestions to process", AlertDialog.AlertType.Warning);
             return;
         }
 
-        var result = await JSRuntime.InvokeAsync<bool>("confirm", 
-            $"Process all {filteredSuggestions.Count} split suggestions? This will create split transactions for each.");
-        
-        if (!result) return;
-
-        try
-        {
-            isLoading = true;
-            errorMessage = "";
-            StateHasChanged();
-
-            var processed = 0;
-            var errors = new List<string>();
-
-            foreach (var suggestion in filteredSuggestions.ToList())
+        ShowConfirm(
+            "Process All Suggestions",
+            $"Process all {filteredSuggestions.Count} split suggestions? This will create split transactions for each.",
+            async () =>
             {
                 try
                 {
-                    await SplitService.ApplySplitAsync(suggestion.TransactionId, suggestion.SuggestedSplits, "System");
-                    processed++;
-                    splitSuggestions.Remove(suggestion);
+                    isLoading = true;
+                    errorMessage = "";
+                    StateHasChanged();
+
+                    var processed = 0;
+                    var errors = new List<string>();
+
+                    foreach (var suggestion in filteredSuggestions.ToList())
+                    {
+                        try
+                        {
+                            await SplitService.ApplySplitAsync(suggestion.TransactionId, suggestion.SuggestedSplits, "System");
+                            processed++;
+                            splitSuggestions.Remove(suggestion);
+                        }
+                        catch (Exception ex)
+                        {
+                            errors.Add($"{suggestion.TransactionId}: {ex.Message}");
+                        }
+                    }
+
+                    FilterSuggestions();
+                    
+                    var message = $"Processed {processed} split suggestions";
+                    if (errors.Any())
+                    {
+                        message += $"\n{errors.Count} errors occurred";
+                    }
+                    
+                    ShowAlert("Process Complete", message, errors.Any() ? AlertDialog.AlertType.Warning : AlertDialog.AlertType.Success);
                 }
                 catch (Exception ex)
                 {
-                    errors.Add($"{suggestion.TransactionId}: {ex.Message}");
+                    errorMessage = $"Error processing suggestions: {ex.Message}";
                 }
-            }
-
-            FilterSuggestions();
-            
-            var message = $"Processed {processed} split suggestions";
-            if (errors.Any())
-            {
-                message += $"\n{errors.Count} errors occurred";
-            }
-            
-            await JSRuntime.InvokeVoidAsync("alert", message);
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Error processing suggestions: {ex.Message}";
-        }
-        finally
-        {
-            isLoading = false;
-            StateHasChanged();
-        }
+                finally
+                {
+                    isLoading = false;
+                    StateHasChanged();
+                }
+            },
+            "⚡",
+            "Process All",
+            "btn-primary"
+        );
     }
 
     private async Task ViewDetails(string transactionId)
     {
-        await JSRuntime.InvokeVoidAsync("alert", $"View details for transaction {transactionId} - Navigation to transaction page pending");
+        ShowAlert("View Details", $"View details for transaction {transactionId} - Navigation to transaction page pending", AlertDialog.AlertType.Info);
     }
 
     private async Task EditSplit(SplitSuggestion suggestion)
@@ -522,147 +541,167 @@
             }
             else
             {
-                await JSRuntime.InvokeVoidAsync("alert", "Transaction not found");
+                ShowAlert("Error", "Transaction not found", AlertDialog.AlertType.Error);
             }
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error loading transaction: {ex.Message}");
+            ShowAlert("Error", $"Error loading transaction: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
     private async Task ProcessSplit(SplitSuggestion suggestion)
     {
-        var result = await JSRuntime.InvokeAsync<bool>("confirm", 
-            $"Apply suggested split for {suggestion.TransactionId}?\nThis will create {suggestion.SuggestedParticipants.Count} split transactions.");
-        
-        if (!result) return;
+        ShowConfirm(
+            "Apply Split",
+            $"Apply suggested split for {suggestion.TransactionId}?\nThis will create {suggestion.SuggestedParticipants.Count} split transactions.",
+            async () =>
+            {
+                try
+                {
+                    isLoading = true;
+                    StateHasChanged();
 
-        try
-        {
-            isLoading = true;
-            StateHasChanged();
-
-            await SplitService.ApplySplitAsync(suggestion.TransactionId, suggestion.SuggestedSplits, "System");
-            
-            splitSuggestions.Remove(suggestion);
-            FilterSuggestions();
-            
-            await JSRuntime.InvokeVoidAsync("alert", $"Split processed successfully for {suggestion.TransactionId}");
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error processing split: {ex.Message}");
-        }
-        finally
-        {
-            isLoading = false;
-            StateHasChanged();
-        }
+                    await SplitService.ApplySplitAsync(suggestion.TransactionId, suggestion.SuggestedSplits, "System");
+                    
+                    splitSuggestions.Remove(suggestion);
+                    FilterSuggestions();
+                    
+                    ShowAlert("Success", $"Split processed successfully for {suggestion.TransactionId}", AlertDialog.AlertType.Success);
+                }
+                catch (Exception ex)
+                {
+                    ShowAlert("Error", $"Error processing split: {ex.Message}", AlertDialog.AlertType.Error);
+                }
+                finally
+                {
+                    isLoading = false;
+                    StateHasChanged();
+                }
+            },
+            "✅",
+            "Apply Split",
+            "btn-success"
+        );
     }
 
     private async Task RejectSplit(string transactionId)
     {
-        var result = await JSRuntime.InvokeAsync<bool>("confirm", 
-            $"Reject split suggestion for {transactionId}?\nYou can always manually split this transaction later.");
-        
-        if (!result) return;
-
-        var suggestion = splitSuggestions.FirstOrDefault(s => s.TransactionId == transactionId);
-        if (suggestion != null)
-        {
-            splitSuggestions.Remove(suggestion);
-            FilterSuggestions();
-            await JSRuntime.InvokeVoidAsync("alert", $"Split suggestion rejected for {transactionId}");
-        }
+        ShowConfirm(
+            "Reject Split",
+            $"Reject split suggestion for {transactionId}?\nYou can always manually split this transaction later.",
+            async () =>
+            {
+                var suggestion = splitSuggestions.FirstOrDefault(s => s.TransactionId == transactionId);
+                if (suggestion != null)
+                {
+                    splitSuggestions.Remove(suggestion);
+                    FilterSuggestions();
+                    ShowAlert("Success", $"Split suggestion rejected for {transactionId}", AlertDialog.AlertType.Success);
+                }
+            },
+            "❌",
+            "Reject",
+            "btn-error"
+        );
     }
 
     private async Task ProcessSelectedSplits()
     {
         if (!selectedSuggestions.Any())
         {
-            await JSRuntime.InvokeVoidAsync("alert", "No suggestions selected");
+            ShowAlert("No Selection", "No suggestions selected", AlertDialog.AlertType.Warning);
             return;
         }
 
-        var result = await JSRuntime.InvokeAsync<bool>("confirm", 
-            $"Process {selectedSuggestions.Count} selected split suggestions?");
-        
-        if (!result) return;
-
-        try
-        {
-            isLoading = true;
-            StateHasChanged();
-
-            var processed = 0;
-            var errors = new List<string>();
-
-            foreach (var transactionId in selectedSuggestions.ToList())
+        ShowConfirm(
+            "Process Selected",
+            $"Process {selectedSuggestions.Count} selected split suggestions?",
+            async () =>
             {
-                var suggestion = splitSuggestions.FirstOrDefault(s => s.TransactionId == transactionId);
-                if (suggestion != null)
+                try
                 {
-                    try
-                    {
-                        await SplitService.ApplySplitAsync(transactionId, suggestion.SuggestedSplits, "System");
-                        processed++;
-                        splitSuggestions.Remove(suggestion);
-                    }
-                    catch (Exception ex)
-                    {
-                        errors.Add($"{transactionId}: {ex.Message}");
-                    }
-                }
-            }
+                    isLoading = true;
+                    StateHasChanged();
 
-            selectedSuggestions.Clear();
-            FilterSuggestions();
-            
-            var message = $"Processed {processed} split suggestions";
-            if (errors.Any())
-            {
-                message += $"\n{errors.Count} errors occurred";
-            }
-            
-            await JSRuntime.InvokeVoidAsync("alert", message);
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Error processing selected splits: {ex.Message}";
-        }
-        finally
-        {
-            isLoading = false;
-            StateHasChanged();
-        }
+                    var processed = 0;
+                    var errors = new List<string>();
+
+                    foreach (var transactionId in selectedSuggestions.ToList())
+                    {
+                        var suggestion = splitSuggestions.FirstOrDefault(s => s.TransactionId == transactionId);
+                        if (suggestion != null)
+                        {
+                            try
+                            {
+                                await SplitService.ApplySplitAsync(transactionId, suggestion.SuggestedSplits, "System");
+                                processed++;
+                                splitSuggestions.Remove(suggestion);
+                            }
+                            catch (Exception ex)
+                            {
+                                errors.Add($"{transactionId}: {ex.Message}");
+                            }
+                        }
+                    }
+
+                    selectedSuggestions.Clear();
+                    FilterSuggestions();
+                    
+                    var message = $"Processed {processed} split suggestions";
+                    if (errors.Any())
+                    {
+                        message += $"\n{errors.Count} errors occurred";
+                    }
+                    
+                    ShowAlert("Process Complete", message, errors.Any() ? AlertDialog.AlertType.Warning : AlertDialog.AlertType.Success);
+                }
+                catch (Exception ex)
+                {
+                    errorMessage = $"Error processing selected splits: {ex.Message}";
+                }
+                finally
+                {
+                    isLoading = false;
+                    StateHasChanged();
+                }
+            },
+            "✅",
+            "Process Selected",
+            "btn-success"
+        );
     }
 
     private async Task RejectSelectedSplits()
     {
         if (!selectedSuggestions.Any())
         {
-            await JSRuntime.InvokeVoidAsync("alert", "No suggestions selected");
+            ShowAlert("No Selection", "No suggestions selected", AlertDialog.AlertType.Warning);
             return;
         }
 
-        var result = await JSRuntime.InvokeAsync<bool>("confirm", 
-            $"Reject {selectedSuggestions.Count} selected split suggestions?");
-        
-        if (!result) return;
-
-        foreach (var transactionId in selectedSuggestions.ToList())
-        {
-            var suggestion = splitSuggestions.FirstOrDefault(s => s.TransactionId == transactionId);
-            if (suggestion != null)
+        ShowConfirm(
+            "Reject Selected",
+            $"Reject {selectedSuggestions.Count} selected split suggestions?",
+            async () =>
             {
-                splitSuggestions.Remove(suggestion);
-            }
-        }
-        selectedSuggestions.Clear();
-        FilterSuggestions();
-        
-        await JSRuntime.InvokeVoidAsync("alert", "Selected suggestions rejected");
+                foreach (var transactionId in selectedSuggestions.ToList())
+                {
+                    var suggestion = splitSuggestions.FirstOrDefault(s => s.TransactionId == transactionId);
+                    if (suggestion != null)
+                    {
+                        splitSuggestions.Remove(suggestion);
+                    }
+                }
+                selectedSuggestions.Clear();
+                FilterSuggestions();
+                
+                ShowAlert("Success", "Selected suggestions rejected", AlertDialog.AlertType.Success);
+            },
+            "❌",
+            "Reject Selected",
+            "btn-error"
+        );
     }
 
     private void ClearSelection()
@@ -744,11 +783,11 @@
             showSplitModal = false;
             selectedTransaction = null;
             
-            await JSRuntime.InvokeVoidAsync("alert", "Transaction split successfully!");
+            ShowAlert("Success", "Transaction split successfully!", AlertDialog.AlertType.Success);
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error saving split: {ex.Message}");
+            ShowAlert("Error", $"Error saving split: {ex.Message}", AlertDialog.AlertType.Error);
         }
         finally
         {
@@ -764,5 +803,56 @@
         StateHasChanged();
         return Task.CompletedTask;
     }
+
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type)
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        isAlertVisible = true;
+    }
+
+    private void CloseAlertDialog()
+    {
+        isAlertVisible = false;
+    }
+
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "❓", string confirmText = "Confirm", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = confirmText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        isConfirmVisible = true;
+    }
+
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction();
+        }
+        pendingConfirmAction = null;
+    }
 }
+
+<!-- Alert Dialog -->
+<AlertDialog 
+    @bind-IsVisible="isAlertVisible"
+    Title="@alertTitle"
+    Message="@alertMessage"
+    Type="@alertType"
+    OnClose="CloseAlertDialog" />
+
+<!-- Confirm Dialog -->
+<ConfirmDialog 
+    @bind-IsVisible="isConfirmVisible"
+    Title="@confirmTitle"
+    Message="@confirmMessage"
+    OnResult="HandleConfirmResult"
+    Icon="@confirmIcon"
+    ConfirmButtonText="@confirmButtonText"
+    ConfirmButtonClass="@confirmButtonClass" />
 </AuthorizeRoleView>

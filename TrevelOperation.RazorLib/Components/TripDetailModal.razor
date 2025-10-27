@@ -1,10 +1,10 @@
 @using TravelOperation.Core.Models.Entities
 @using TravelOperation.Core.Services.Interfaces
 @using TrevelOperation.Service
+@using TrevelOperation.RazorLib.Components
 @inject ITripService TripService
 @inject ITransactionService TransactionService
 @inject ITaxCalculationService TaxService
-@inject IJSRuntime JSRuntime
 
 @if (IsVisible && Trip != null)
 {
@@ -375,6 +375,24 @@
     </div>
 }
 
+<!-- Alert Dialog -->
+<AlertDialog @ref="alertDialog"
+             IsVisible="showAlertDialog"
+             Title="@alertTitle"
+             Message="@alertMessage"
+             Type="@alertType"
+             OnClose="CloseAlertDialog" />
+
+<!-- Confirm Dialog -->
+<ConfirmDialog @ref="confirmDialog"
+               IsVisible="showConfirmDialog"
+               Title="@confirmTitle"
+               Message="@confirmMessage"
+               Icon="@confirmIcon"
+               ConfirmButtonText="@confirmButtonText"
+               ConfirmButtonClass="@confirmButtonClass"
+               OnResult="HandleConfirmResult" />
+
 @code {
     [Parameter] public bool IsVisible { get; set; }
     [Parameter] public Trip? Trip { get; set; }
@@ -390,6 +408,63 @@
     private bool _isLoadingTransactions = false;
     private bool _isLoadingTax = false;
     private TaxBreakdown? _taxBreakdown;
+
+    // Alert Dialog state
+    private AlertDialog? alertDialog;
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+
+    // Confirm Dialog state
+    private ConfirmDialog? confirmDialog;
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "⚠️";
+    private string confirmButtonText = "Confirm";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction;
+
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type)
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "⚠️", string buttonText = "Confirm", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = buttonText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction();
+        }
+        
+        pendingConfirmAction = null;
+        StateHasChanged();
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -426,7 +501,7 @@
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading transactions: {ex.Message}");
+            ShowAlert("Error Loading Transactions", $"Error loading transactions: {ex.Message}", AlertDialog.AlertType.Error);
         }
         finally
         {
@@ -445,7 +520,7 @@
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading tax breakdown: {ex.Message}");
+            ShowAlert("Error Loading Tax Data", $"Error loading tax breakdown: {ex.Message}", AlertDialog.AlertType.Error);
         }
         finally
         {
@@ -494,14 +569,18 @@
     {
         if (Trip != null)
         {
-            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
-                $"Are you sure you want to delete the trip '{Trip.TripName}'? This will unlink all associated transactions.");
-
-            if (confirmed)
-            {
-                await OnDelete.InvokeAsync(Trip);
-                await Close();
-            }
+            ShowConfirm(
+                "Delete Trip",
+                $"Are you sure you want to delete the trip '{Trip.TripName}'? This will unlink all associated transactions.",
+                async () =>
+                {
+                    await OnDelete.InvokeAsync(Trip);
+                    await Close();
+                },
+                "🗑️",
+                "Delete",
+                "btn-error"
+            );
         }
     }
 

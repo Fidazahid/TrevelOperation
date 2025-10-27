@@ -1,10 +1,10 @@
 @using TravelOperation.Core.Models.Entities
 @using TravelOperation.Core.Services.Interfaces
 @using TrevelOperation.Service
+@using TrevelOperation.RazorLib.Components
 @inject ITransactionService TransactionService
 @inject IAuditService AuditService
 @inject IMessageTemplateService MessageTemplateService
-@inject IJSRuntime JSRuntime
 
 @if (IsVisible && Transaction != null)
 {
@@ -365,6 +365,24 @@
     </div>
 }
 
+<!-- Alert Dialog -->
+<AlertDialog @ref="alertDialog"
+             IsVisible="showAlertDialog"
+             Title="@alertTitle"
+             Message="@alertMessage"
+             Type="@alertType"
+             OnClose="CloseAlertDialog" />
+
+<!-- Confirm Dialog -->
+<ConfirmDialog @ref="confirmDialog"
+               IsVisible="showConfirmDialog"
+               Title="@confirmTitle"
+               Message="@confirmMessage"
+               Icon="@confirmIcon"
+               ConfirmButtonText="@confirmButtonText"
+               ConfirmButtonClass="@confirmButtonClass"
+               OnResult="HandleConfirmResult" />
+
 @code {
     [Parameter] public bool IsVisible { get; set; }
     [Parameter] public Transaction? Transaction { get; set; }
@@ -374,6 +392,63 @@
     [Parameter] public EventCallback<Transaction> OnLinkToTrip { get; set; }
     [Parameter] public EventCallback<Transaction> OnSplit { get; set; }
     [Parameter] public EventCallback<Transaction> OnGenerateMessage { get; set; }
+
+    // Alert Dialog state
+    private AlertDialog? alertDialog;
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+
+    // Confirm Dialog state
+    private ConfirmDialog? confirmDialog;
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "⚠️";
+    private string confirmButtonText = "Confirm";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction;
+
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type)
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "⚠️", string buttonText = "Confirm", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = buttonText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction();
+        }
+        
+        pendingConfirmAction = null;
+        StateHasChanged();
+    }
 
     private async Task Close()
     {
@@ -393,14 +468,18 @@
     {
         if (Transaction != null)
         {
-            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-                $"Are you sure you want to delete transaction {Transaction.TransactionId}?");
-            
-            if (confirmed)
-            {
-                await OnDelete.InvokeAsync(Transaction);
-                await Close();
-            }
+            ShowConfirm(
+                "Delete Transaction",
+                $"Are you sure you want to delete transaction {Transaction.TransactionId}?",
+                async () =>
+                {
+                    await OnDelete.InvokeAsync(Transaction);
+                    await Close();
+                },
+                "🗑️",
+                "Delete",
+                "btn-error"
+            );
         }
     }
 
@@ -440,7 +519,7 @@
             }
             catch (Exception ex)
             {
-                await JSRuntime.InvokeVoidAsync("alert", $"Error marking transaction as valid: {ex.Message}");
+                ShowAlert("Error Marking Valid", $"Error marking transaction as valid: {ex.Message}", AlertDialog.AlertType.Error);
             }
         }
     }

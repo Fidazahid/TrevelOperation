@@ -260,6 +260,24 @@
     </div>
 </div>
 
+<!-- Alert Dialog -->
+<AlertDialog @ref="alertDialog"
+             IsVisible="showAlertDialog"
+             Title="@alertTitle"
+             Message="@alertMessage"
+             Type="@alertType"
+             OnClose="CloseAlertDialog" />
+
+<!-- Confirm Dialog -->
+<ConfirmDialog @ref="confirmDialog"
+               IsVisible="showConfirmDialog"
+               Title="@confirmTitle"
+               Message="@confirmMessage"
+               Icon="@confirmIcon"
+               ConfirmButtonText="@confirmButtonText"
+               ConfirmButtonClass="@confirmButtonClass"
+               OnResult="HandleConfirmResult" />
+
 @code {
     private List<Transaction> transactions = new();
     private List<Transaction> filteredTransactions = new();
@@ -284,6 +302,63 @@
     private int highValueMissingCount = 0;
     private decimal complianceRate = 0;
     private bool allSelected = false;
+
+    // Alert Dialog state
+    private AlertDialog? alertDialog;
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+
+    // Confirm Dialog state
+    private ConfirmDialog? confirmDialog;
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "⚠️";
+    private string confirmButtonText = "Confirm";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction;
+
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type)
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "⚠️", string buttonText = "Confirm", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = buttonText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction();
+        }
+        
+        pendingConfirmAction = null;
+        StateHasChanged();
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -542,16 +617,22 @@
 
     private async Task RequestAllDocuments()
     {
-        var result = await JSRuntime.InvokeAsync<bool>("confirm", $"Send document requests for all {filteredTransactions.Count} transactions?");
-        if (result)
-        {
-            await JSRuntime.InvokeVoidAsync("alert", $"Document requests sent for {filteredTransactions.Count} transactions");
-        }
+        ShowConfirm(
+            "Request All Documents",
+            $"Send document requests for all {filteredTransactions.Count} transactions?",
+            async () =>
+            {
+                ShowAlert("Success", $"Document requests sent for {filteredTransactions.Count} transactions", AlertDialog.AlertType.Success);
+            },
+            "📧",
+            "Send Requests",
+            "btn-primary"
+        );
     }
 
     private async Task ViewDetails(string transactionId)
     {
-        await JSRuntime.InvokeVoidAsync("alert", $"View details for transaction {transactionId} - Navigation pending");
+        ShowAlert("View Details", $"View details for transaction {transactionId} - Navigation pending", AlertDialog.AlertType.Info);
     }
 
     private async Task RequestDocument(string transactionId)
@@ -561,31 +642,31 @@
         {
             var message = GenerateDocumentRequestMessage(transaction);
             await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", message);
-            await JSRuntime.InvokeVoidAsync("alert", "Document request message copied to clipboard!");
+            ShowAlert("Success", "Document request message copied to clipboard!", AlertDialog.AlertType.Success);
         }
     }
 
     private async Task UploadDocument(string transactionId)
     {
-        await JSRuntime.InvokeVoidAsync("alert", $"Upload document for transaction {transactionId} - File upload pending");
+        ShowAlert("Upload Document", $"Upload document for transaction {transactionId} - File upload pending", AlertDialog.AlertType.Info);
     }
 
     private async Task MarkAsExempt(string transactionId)
     {
         // In real implementation, this would update a field like "DocumentationExempt"
-        await JSRuntime.InvokeVoidAsync("alert", "Document exemption feature pending - requires DB field");
+        ShowAlert("Feature Pending", "Document exemption feature pending - requires DB field", AlertDialog.AlertType.Info);
     }
 
     private async Task BulkRequestDocuments()
     {
-        await JSRuntime.InvokeVoidAsync("alert", $"Document requests sent for {selectedTransactions.Count} transactions");
+        ShowAlert("Success", $"Document requests sent for {selectedTransactions.Count} transactions", AlertDialog.AlertType.Success);
         selectedTransactions.Clear();
         StateHasChanged();
     }
 
     private async Task BulkMarkAsExempt()
     {
-        await JSRuntime.InvokeVoidAsync("alert", "Bulk exemption feature pending - requires DB field");
+        ShowAlert("Feature Pending", "Bulk exemption feature pending - requires DB field", AlertDialog.AlertType.Info);
         selectedTransactions.Clear();
         StateHasChanged();
     }

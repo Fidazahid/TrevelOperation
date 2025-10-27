@@ -2,13 +2,14 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using TravelOperation.Core.Models.Entities;
 using TravelOperation.Core.Services.Interfaces;
+using TrevelOperation.RazorLib.Components;
 
 namespace TrevelOperation.RazorLib.Pages.DataIntegrity;
 
 public partial class Matching
 {
     [Inject] private IMatchingService MatchingService { get; set; } = default!;
-    [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
+    
     private IEnumerable<TripMatchingSuggestion>? matchingSuggestions;
     private IEnumerable<Transaction>? manualSearchResults;
     private MatchingStatistics? statistics;
@@ -20,6 +21,63 @@ public partial class Matching
     private int selectedTripId = 0;
     private string emailFilter = string.Empty;
     private int daysTolerance = 5;
+
+    // Alert Dialog state
+    private AlertDialog? alertDialog;
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+
+    // Confirm Dialog state
+    private ConfirmDialog? confirmDialog;
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "⚠️";
+    private string confirmButtonText = "Confirm";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction;
+
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type)
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "⚠️", string buttonText = "Confirm", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = buttonText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction();
+        }
+        
+        pendingConfirmAction = null;
+        StateHasChanged();
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -73,20 +131,22 @@ public partial class Matching
     private async Task ShowStatistics()
     {
         statistics = await MatchingService.GetMatchingStatisticsAsync();
-        await JSRuntime.InvokeVoidAsync("alert", 
-            $"Matching Statistics:\n" +
-            $"• Total Transactions: {statistics.TotalTransactions}\n" +
-            $"• Linked: {statistics.LinkedTransactions} ({statistics.LinkingPercentage}%)\n" +
-            $"• Unlinked: {statistics.UnlinkedTransactions}\n" +
-            $"• Trips without transactions: {statistics.TripsWithoutTransactions}\n" +
-            $"• Pending suggestions: {statistics.PendingSuggestions}");
+        ShowAlert(
+            "Matching Statistics",
+            $"Total Transactions: {statistics.TotalTransactions}\n" +
+            $"Linked: {statistics.LinkedTransactions} ({statistics.LinkingPercentage}%)\n" +
+            $"Unlinked: {statistics.UnlinkedTransactions}\n" +
+            $"Trips without transactions: {statistics.TripsWithoutTransactions}\n" +
+            $"Pending suggestions: {statistics.PendingSuggestions}",
+            AlertDialog.AlertType.Info
+        );
     }
 
     private async Task SearchForMatches()
     {
         if (selectedTripId <= 0)
         {
-            await JSRuntime.InvokeVoidAsync("alert", "Please enter a valid Trip ID");
+            ShowAlert("Validation Error", "Please enter a valid Trip ID", AlertDialog.AlertType.Warning);
             return;
         }
 
@@ -117,58 +177,66 @@ public partial class Matching
 
     private async Task LinkTransaction(string transactionId, int tripId)
     {
-        try
-        {
-            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-                $"Link transaction {transactionId} to Trip {tripId}?");
-            
-            if (confirmed)
+        ShowConfirm(
+            "Link Transaction",
+            $"Link transaction {transactionId} to Trip {tripId}?",
+            async () =>
             {
-                var success = await MatchingService.LinkTransactionToTripAsync(transactionId, tripId, "System");
-                
-                if (success)
+                try
                 {
-                    await JSRuntime.InvokeVoidAsync("alert", "Transaction linked successfully!");
-                    await RefreshCurrentView();
+                    var success = await MatchingService.LinkTransactionToTripAsync(transactionId, tripId, "System");
+                    
+                    if (success)
+                    {
+                        ShowAlert("Success", "Transaction linked successfully!", AlertDialog.AlertType.Success);
+                        await RefreshCurrentView();
+                    }
+                    else
+                    {
+                        ShowAlert("Error", "Failed to link transaction. Please try again.", AlertDialog.AlertType.Error);
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    await JSRuntime.InvokeVoidAsync("alert", "Failed to link transaction. Please try again.");
+                    ShowAlert("Error", $"Error linking transaction: {ex.Message}", AlertDialog.AlertType.Error);
                 }
-            }
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error linking transaction: {ex.Message}");
-        }
+            },
+            "🔗",
+            "Link",
+            "btn-primary"
+        );
     }
 
     private async Task UnlinkTransaction(string transactionId)
     {
-        try
-        {
-            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-                $"Unlink transaction {transactionId} from its current trip?");
-            
-            if (confirmed)
+        ShowConfirm(
+            "Unlink Transaction",
+            $"Unlink transaction {transactionId} from its current trip?",
+            async () =>
             {
-                var success = await MatchingService.UnlinkTransactionFromTripAsync(transactionId, "System");
-                
-                if (success)
+                try
                 {
-                    await JSRuntime.InvokeVoidAsync("alert", "Transaction unlinked successfully!");
-                    await RefreshCurrentView();
+                    var success = await MatchingService.UnlinkTransactionFromTripAsync(transactionId, "System");
+                    
+                    if (success)
+                    {
+                        ShowAlert("Success", "Transaction unlinked successfully!", AlertDialog.AlertType.Success);
+                        await RefreshCurrentView();
+                    }
+                    else
+                    {
+                        ShowAlert("Error", "Failed to unlink transaction. Please try again.", AlertDialog.AlertType.Error);
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    await JSRuntime.InvokeVoidAsync("alert", "Failed to unlink transaction. Please try again.");
+                    ShowAlert("Error", $"Error unlinking transaction: {ex.Message}", AlertDialog.AlertType.Error);
                 }
-            }
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error unlinking transaction: {ex.Message}");
-        }
+            },
+            "🔓",
+            "Unlink",
+            "btn-warning"
+        );
     }
 
     private async Task LinkAllSuggestedTransactions(TripMatchingSuggestion suggestion)
@@ -177,40 +245,48 @@ public partial class Matching
         
         if (!unlinkedTransactions.Any())
         {
-            await JSRuntime.InvokeVoidAsync("alert", "No unlinked transactions to process.");
+            ShowAlert("No Unlinked Transactions", "No unlinked transactions to process.", AlertDialog.AlertType.Info);
             return;
         }
 
-        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-            $"Link {unlinkedTransactions.Count} transactions to trip '{suggestion.TripName}'?");
-        
-        if (!confirmed) return;
-
-        var successCount = 0;
-        var failCount = 0;
-
-        foreach (var transaction in unlinkedTransactions)
-        {
-            try
+        ShowConfirm(
+            "Link All Transactions",
+            $"Link {unlinkedTransactions.Count} transactions to trip '{suggestion.TripName}'?",
+            async () =>
             {
-                var success = await MatchingService.LinkTransactionToTripAsync(
-                    transaction.TransactionId, suggestion.TripId, "System");
+                var successCount = 0;
+                var failCount = 0;
+
+                foreach (var transaction in unlinkedTransactions)
+                {
+                    try
+                    {
+                        var success = await MatchingService.LinkTransactionToTripAsync(
+                            transaction.TransactionId, suggestion.TripId, "System");
+                        
+                        if (success)
+                            successCount++;
+                        else
+                            failCount++;
+                    }
+                    catch
+                    {
+                        failCount++;
+                    }
+                }
+
+                ShowAlert(
+                    "Linking Completed",
+                    $"Linking completed!\nSuccessful: {successCount}\nFailed: {failCount}",
+                    successCount > 0 ? AlertDialog.AlertType.Success : AlertDialog.AlertType.Error
+                );
                 
-                if (success)
-                    successCount++;
-                else
-                    failCount++;
-            }
-            catch
-            {
-                failCount++;
-            }
-        }
-
-        await JSRuntime.InvokeVoidAsync("alert", 
-            $"Linking completed!\nSuccessful: {successCount}\nFailed: {failCount}");
-        
-        await RefreshCurrentView();
+                await RefreshCurrentView();
+            },
+            "🔗",
+            "Link All",
+            "btn-primary"
+        );
     }
 
     private async Task RefreshCurrentView()

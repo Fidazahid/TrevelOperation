@@ -1,0 +1,82 @@
+@* Prompt Dialog - For text input prompts *@
+
+@if (IsVisible)
+{
+    <div class="modal modal-open" style="display: flex !important; align-items: center !important; justify-content: center !important;">
+        <div class="modal-box max-w-md relative">
+            <!-- Icon and Title -->
+            <div class="flex items-start gap-4 mb-4">
+                <div class="text-4xl flex-shrink-0">
+                    @Icon
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-bold text-xl mb-2">@Title</h3>
+                    <p class="text-gray-600 whitespace-pre-line mb-4">@Message</p>
+                    
+                    <!-- Input Field -->
+                    <div class="form-control">
+                        <input type="text" 
+                               class="input input-bordered w-full" 
+                               placeholder="@Placeholder"
+                               @bind="inputValue"
+                               @onkeyup="HandleKeyPress" />
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="pt-4 mt-4 flex justify-center gap-3">
+                <button class="btn btn-ghost w-[140px]" @onclick="HandleCancel">
+                    @CancelButtonText
+                </button>
+                <button class="btn @ConfirmButtonClass w-[140px]" @onclick="HandleConfirm">
+                    @ConfirmButtonText
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string Title { get; set; } = "Enter Value";
+    [Parameter] public string Message { get; set; } = "Please enter a value:";
+    [Parameter] public string Icon { get; set; } = "✏️";
+    [Parameter] public string Placeholder { get; set; } = "Enter text...";
+    [Parameter] public string ConfirmButtonText { get; set; } = "OK";
+    [Parameter] public string CancelButtonText { get; set; } = "Cancel";
+    [Parameter] public string ConfirmButtonClass { get; set; } = "btn-primary";
+    [Parameter] public EventCallback<string?> OnResult { get; set; }
+
+    private string? inputValue = "";
+
+    protected override void OnParametersSet()
+    {
+        if (!IsVisible)
+        {
+            inputValue = "";
+        }
+    }
+
+    private async Task HandleConfirm()
+    {
+        await OnResult.InvokeAsync(inputValue);
+    }
+
+    private async Task HandleCancel()
+    {
+        await OnResult.InvokeAsync(null);
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await HandleConfirm();
+        }
+        else if (e.Key == "Escape")
+        {
+            await HandleCancel();
+        }
+    }
+}

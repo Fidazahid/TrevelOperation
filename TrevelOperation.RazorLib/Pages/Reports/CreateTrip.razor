@@ -5,7 +5,6 @@
 @using TrevelOperation.RazorLib.Components
 @inject ILookupService LookupService
 @inject ITripService TripService
-@inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
 <AuthorizeRoleView RequiredRoles='new List<string> { "Finance", "Owner" }'>
@@ -347,12 +346,29 @@
         </div>
     </div>
 </div>
+</AuthorizeRoleView>
+
+<!-- Alert Dialog -->
+<AlertDialog 
+    IsVisible="showAlertDialog"
+    Title="@alertTitle"
+    Message="@alertMessage"
+    Type="@alertType"
+    OkButtonText="@alertOkText"
+    OnClose="CloseAlertDialog" />
 
 @code {
     private Trip newTrip = new();
     private Dictionary<string, string> validationErrors = new();
     private bool isFormValid = false;
     private bool isSaving = false;
+    
+    // Alert Dialog state
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+    private string alertOkText = "OK";
     
     // Lookup data
     private List<Purpose> availablePurposes = new();
@@ -401,7 +417,7 @@
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading lookup data: {ex.Message}");
+            ShowAlert("Error Loading Data", $"Failed to load lookup data: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
@@ -502,16 +518,17 @@
             // Call service to save trip
             var createdTrip = await TripService.CreateTripAsync(newTrip);
 
-            // Show success toast notification
-            await JSRuntime.InvokeVoidAsync("showToast", "success", $"Trip '{createdTrip.TripName}' created successfully!");
+            // Show success alert dialog
+            ShowAlert("Trip Created", $"Trip '{createdTrip.TripName}' created successfully!", AlertDialog.AlertType.Success);
             
-            // Navigate to trips list
+            // Navigate to trips list after user closes the dialog
+            await Task.Delay(1500); // Give user time to see the message
             Navigation.NavigateTo("/trips");
         }
         catch (Exception ex)
         {
-            // Show error toast notification
-            await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error creating trip: {ex.Message}");
+            // Show error alert dialog
+            ShowAlert("Error Creating Trip", $"Failed to create trip: {ex.Message}", AlertDialog.AlertType.Error);
         }
         finally
         {
@@ -520,9 +537,24 @@
         }
     }
 
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type = AlertDialog.AlertType.Info, string okText = "OK")
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        alertOkText = okText;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+
     private void GoBack()
     {
         Navigation.NavigateTo("/trips");
     }
 }
-</AuthorizeRoleView>

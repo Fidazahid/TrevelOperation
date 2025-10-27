@@ -1,7 +1,6 @@
 @using TravelOperation.Core.Models.Entities
 @using TravelOperation.Core.Services.Interfaces
 @inject ITransactionService TransactionService
-@inject IJSRuntime JSRuntime
 
 @if (IsVisible)
 {
@@ -179,6 +178,26 @@
     </div>
 }
 
+<!-- Alert Dialog -->
+<AlertDialog 
+    IsVisible="showAlertDialog"
+    Title="@alertTitle"
+    Message="@alertMessage"
+    Type="@alertType"
+    OkButtonText="@alertOkText"
+    OnClose="CloseAlertDialog" />
+
+<!-- Confirmation Dialog -->
+<ConfirmDialog 
+    IsVisible="showConfirmDialog"
+    Title="@confirmTitle"
+    Message="@confirmMessage"
+    Icon="@confirmIcon"
+    ConfirmButtonText="@confirmButtonText"
+    CancelButtonText="@cancelButtonText"
+    ConfirmButtonClass="@confirmButtonClass"
+    OnResult="HandleConfirmResult" />
+
 @code {
     [Parameter]
     public bool IsVisible { get; set; }
@@ -208,6 +227,23 @@
     private string searchTerm = "";
     private DateTime? filterStartDate;
     private DateTime? filterEndDate;
+    
+    // Alert Dialog state
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+    private string alertOkText = "OK";
+    
+    // Confirmation Dialog state
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "❓";
+    private string confirmButtonText = "Yes";
+    private string cancelButtonText = "No";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction = null;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -245,7 +281,7 @@
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error loading transactions: {ex.Message}");
+            ShowAlert("Error Loading Transactions", $"Failed to load transactions: {ex.Message}", AlertDialog.AlertType.Error);
         }
         finally
         {
@@ -339,6 +375,8 @@
 
         try
         {
+            var count = selectedTransactionIds.Count;
+            
             foreach (var transactionId in selectedTransactionIds)
             {
                 await TransactionService.LinkTransactionToTripAsync(transactionId, TripId);
@@ -347,11 +385,11 @@
             selectedTransactionIds.Clear();
             await LoadTransactions();
             await OnTransactionsLinked.InvokeAsync();
-            await JSRuntime.InvokeVoidAsync("showToast", "success", $"Successfully linked {selectedTransactionIds.Count} transaction(s)");
+            ShowAlert("Success", $"Successfully linked {count} transaction(s)!", AlertDialog.AlertType.Success);
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error linking transactions: {ex.Message}");
+            ShowAlert("Error", $"Failed to link transactions: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
@@ -359,27 +397,79 @@
     {
         if (!selectedTransactionIds.Any()) return;
 
-        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
-            $"Are you sure you want to unlink {selectedTransactionIds.Count} transaction(s) from this trip?");
-
-        if (confirmed)
-        {
-            try
+        var count = selectedTransactionIds.Count;
+        
+        ShowConfirm(
+            "Unlink Transactions",
+            $"Are you sure you want to unlink {count} transaction(s) from this trip?",
+            async () =>
             {
-                foreach (var transactionId in selectedTransactionIds)
+                try
                 {
-                    await TransactionService.UnlinkTransactionFromTripAsync(transactionId);
-                }
+                    foreach (var transactionId in selectedTransactionIds)
+                    {
+                        await TransactionService.UnlinkTransactionFromTripAsync(transactionId);
+                    }
 
-                selectedTransactionIds.Clear();
-                await LoadTransactions();
-                await OnTransactionsLinked.InvokeAsync();
-                await JSRuntime.InvokeVoidAsync("showToast", "success", $"Successfully unlinked transactions");
-            }
-            catch (Exception ex)
-            {
-                await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error unlinking transactions: {ex.Message}");
-            }
+                    selectedTransactionIds.Clear();
+                    await LoadTransactions();
+                    await OnTransactionsLinked.InvokeAsync();
+                    ShowAlert("Success", "Successfully unlinked transactions!", AlertDialog.AlertType.Success);
+                }
+                catch (Exception ex)
+                {
+                    ShowAlert("Error", $"Failed to unlink transactions: {ex.Message}", AlertDialog.AlertType.Error);
+                }
+            },
+            "🔗",
+            "Unlink",
+            "Cancel",
+            "btn-error"
+        );
+    }
+    
+    // Alert Dialog Methods
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type = AlertDialog.AlertType.Info, string okText = "OK")
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        alertOkText = okText;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+
+    // Confirmation Dialog Methods
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "❓", 
+        string confirmText = "Yes", string cancelText = "No", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = confirmText;
+        cancelButtonText = cancelText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction.Invoke();
         }
+        
+        pendingConfirmAction = null;
+        StateHasChanged();
     }
 }

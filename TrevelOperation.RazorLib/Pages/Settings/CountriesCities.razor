@@ -3,8 +3,8 @@
 @using Microsoft.AspNetCore.Components.Forms
 @using TrevelOperation.Service
 @using TrevelOperation.RazorLib.Components
-@inject IJSRuntime JSRuntime
 @inject ISettingsService SettingsService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Countries & Cities - Travel Expense Management</PageTitle>
 
@@ -203,6 +203,26 @@
     </div>
 }
 
+<!-- Alert Dialog -->
+<AlertDialog 
+    IsVisible="showAlertDialog"
+    Title="@alertTitle"
+    Message="@alertMessage"
+    Type="@alertType"
+    OkButtonText="@alertOkText"
+    OnClose="CloseAlertDialog" />
+
+<!-- Confirmation Dialog -->
+<ConfirmDialog 
+    IsVisible="showConfirmDialog"
+    Title="@confirmTitle"
+    Message="@confirmMessage"
+    Icon="@confirmIcon"
+    ConfirmButtonText="@confirmButtonText"
+    CancelButtonText="@cancelButtonText"
+    ConfirmButtonClass="@confirmButtonClass"
+    OnResult="HandleConfirmResult" />
+
 @code {
     private List<CountryCity> countries = new();
     private IEnumerable<CountryCity> filteredCountries = new List<CountryCity>();
@@ -229,6 +249,23 @@
     // Loading state
     private bool isLoading = false;
     private string? errorMessage;
+    
+    // Alert Dialog state
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+    private string alertOkText = "OK";
+    
+    // Confirmation Dialog state
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "❓";
+    private string confirmButtonText = "Yes";
+    private string cancelButtonText = "No";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction = null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -363,32 +400,37 @@
 
             HideModal();
             await LoadCountries();
-            await JSRuntime.InvokeVoidAsync("alert", $"Country/City {(isEditing ? "updated" : "added")} successfully!");
+            ShowAlert("Success", $"Country/City {(isEditing ? "updated" : "added")} successfully!", AlertDialog.AlertType.Success);
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error saving country/city: {ex.Message}");
+            ShowAlert("Error", $"Failed to save country/city: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
     private async Task DeleteCountryCity(CountryCity item)
     {
-        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-            $"Delete {item.City}, {item.Country}? This action cannot be undone.");
-        
-        if (confirmed)
-        {
-            try
+        ShowConfirm(
+            "Delete Country/City",
+            $"Are you sure you want to delete {item.City}, {item.Country}?\n\nThis action cannot be undone.",
+            async () =>
             {
-                await SettingsService.DeleteCountryCityAsync(item.CountryCityId);
-                await LoadCountries();
-                await JSRuntime.InvokeVoidAsync("alert", "Country/City deleted successfully!");
-            }
-            catch (Exception ex)
-            {
-                await JSRuntime.InvokeVoidAsync("alert", $"Error deleting country/city: {ex.Message}");
-            }
-        }
+                try
+                {
+                    await SettingsService.DeleteCountryCityAsync(item.CountryCityId);
+                    await LoadCountries();
+                    ShowAlert("Deleted", "Country/City deleted successfully!", AlertDialog.AlertType.Success);
+                }
+                catch (Exception ex)
+                {
+                    ShowAlert("Error", $"Failed to delete country/city: {ex.Message}", AlertDialog.AlertType.Error);
+                }
+            },
+            "🗑️",
+            "Delete",
+            "Cancel",
+            "btn-error"
+        );
     }
 
     private void HideModal()
@@ -431,7 +473,7 @@
             }
             catch (Exception ex)
             {
-                await JSRuntime.InvokeVoidAsync("alert", $"Error reading file: {ex.Message}");
+                ShowAlert("Error", $"Failed to read file: {ex.Message}", AlertDialog.AlertType.Error);
             }
         }
     }
@@ -474,23 +516,76 @@
             
             HideImportModal();
             await LoadCountries();
-            await JSRuntime.InvokeVoidAsync("alert", $"Successfully imported {importedCount} countries/cities!");
+            ShowAlert("Import Successful", $"Successfully imported {importedCount} countries/cities!", AlertDialog.AlertType.Success);
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"Import failed: {ex.Message}");
+            ShowAlert("Import Failed", $"Import failed: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
     private async Task ExportToCSV()
     {
-        var csv = "Country,City\n";
-        foreach (var item in filteredCountries)
+        try
         {
-            csv += $"{item.Country},{item.City}\n";
+            var csv = "Country,City\n";
+            foreach (var item in filteredCountries)
+            {
+                csv += $"{item.Country},{item.City}\n";
+            }
+            
+            // File download requires browser API
+            await JSRuntime.InvokeVoidAsync("downloadFile", "countries-cities.csv", "text/csv", csv);
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Export Failed", $"Failed to export data: {ex.Message}", AlertDialog.AlertType.Error);
+        }
+    }
+    
+    // Alert Dialog Methods
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type = AlertDialog.AlertType.Info, string okText = "OK")
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        alertOkText = okText;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+
+    // Confirmation Dialog Methods
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "❓", 
+        string confirmText = "Yes", string cancelText = "No", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = confirmText;
+        cancelButtonText = cancelText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction.Invoke();
         }
         
-        await JSRuntime.InvokeVoidAsync("downloadFile", "countries-cities.csv", "text/csv", csv);
+        pendingConfirmAction = null;
+        StateHasChanged();
     }
 }
 </AuthorizeRoleView>

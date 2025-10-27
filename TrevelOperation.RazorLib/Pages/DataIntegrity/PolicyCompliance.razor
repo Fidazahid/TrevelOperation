@@ -4,7 +4,6 @@
 @using TrevelOperation.RazorLib.Components
 @inject IPolicyComplianceService PolicyComplianceService
 @inject ITransactionService TransactionService
-@inject IJSRuntime JSRuntime
 
 <AuthorizeRoleView RequiredRole="Finance">
 <div class="container mx-auto p-6">
@@ -297,5 +296,13 @@
 <TransactionEditModal 
     @ref="transactionEditModal"
     OnTransactionUpdated="HandleTransactionUpdated" />
+
+<!-- Alert Dialog -->
+<AlertDialog 
+    @bind-IsVisible="isAlertVisible"
+    Title="@alertTitle"
+    Message="@alertMessage"
+    Type="@alertType"
+    OnClose="CloseAlertDialog" />
 </AuthorizeRoleView>
 

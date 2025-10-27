@@ -395,6 +395,23 @@
     private decimal exampleMealsPerDay = 85.00m;
     private decimal exampleLodgingPerNight = 250.00m;
     
+    // Alert Dialog state
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+    private string alertOkText = "OK";
+    
+    // Confirmation Dialog state
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "❓";
+    private string confirmButtonText = "Yes";
+    private string cancelButtonText = "No";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction = null;
+    
     private bool isLoading = false;
     private string? errorMessage;
 
@@ -574,32 +591,37 @@
 
             HideModal();
             await LoadTaxSettings();
-            await JSRuntime.InvokeVoidAsync("alert", $"Tax setting {(isEditing ? "updated" : "added")} successfully!");
+            ShowAlert("Success", $"Tax setting {(isEditing ? "updated" : "added")} successfully!", AlertDialog.AlertType.Success);
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error saving tax setting: {ex.Message}");
+            ShowAlert("Error", $"Failed to save tax setting: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
     private async Task DeleteTaxSetting(Tax setting)
     {
-        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-            $"Delete tax setting for {setting.Country} ({setting.FiscalYear})? This action cannot be undone.");
-        
-        if (confirmed)
-        {
-            try
+        ShowConfirm(
+            "Delete Tax Setting",
+            $"Are you sure you want to delete the tax setting for {setting.Country} ({setting.FiscalYear})?\n\nThis action cannot be undone.",
+            async () =>
             {
-                await SettingsService.DeleteTaxSettingAsync(setting.TaxId);
-                await LoadTaxSettings();
-                await JSRuntime.InvokeVoidAsync("alert", "Tax setting deleted successfully!");
-            }
-            catch (Exception ex)
-            {
-                await JSRuntime.InvokeVoidAsync("alert", $"Error deleting tax setting: {ex.Message}");
-            }
-        }
+                try
+                {
+                    await SettingsService.DeleteTaxSettingAsync(setting.TaxId);
+                    await LoadTaxSettings();
+                    ShowAlert("Deleted", "Tax setting deleted successfully!", AlertDialog.AlertType.Success);
+                }
+                catch (Exception ex)
+                {
+                    ShowAlert("Error", $"Failed to delete tax setting: {ex.Message}", AlertDialog.AlertType.Error);
+                }
+            },
+            "🗑️",
+            "Delete",
+            "Cancel",
+            "btn-error"
+        );
     }
 
     private async Task DuplicateTaxSetting(Tax setting)
@@ -615,11 +637,11 @@
                 setting.TaxShield ?? 0);
             
             await LoadTaxSettings();
-            await JSRuntime.InvokeVoidAsync("alert", "Tax setting duplicated successfully!");
+            ShowAlert("Duplicated", $"Tax setting duplicated successfully for fiscal year {setting.FiscalYear + 1}!", AlertDialog.AlertType.Success);
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error duplicating tax setting: {ex.Message}");
+            ShowAlert("Error", $"Failed to duplicate tax setting: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
@@ -662,18 +684,90 @@
 
     private async Task ImportTaxData()
     {
-        await JSRuntime.InvokeVoidAsync("alert", "CSV import functionality would be implemented here");
+        ShowAlert("Feature Coming Soon", "CSV import functionality will be implemented here.", AlertDialog.AlertType.Info);
     }
 
     private async Task ExportTaxData()
     {
-        var csv = "FiscalYear,Country,Subsidiary,MealsCap,LodgingCap,TaxShield\n";
-        foreach (var setting in taxSettings.OrderBy(t => t.FiscalYear).ThenBy(t => t.Country))
+        try
         {
-            csv += $"{setting.FiscalYear},\"{setting.Country}\",\"{setting.Subsidiary}\",{setting.MealsCap.GetValueOrDefault()},{setting.LodgingCap.GetValueOrDefault()},{setting.TaxShield.GetValueOrDefault()}\n";
+            var csv = "FiscalYear,Country,Subsidiary,MealsCap,LodgingCap,TaxShield\n";
+            foreach (var setting in taxSettings.OrderBy(t => t.FiscalYear).ThenBy(t => t.Country))
+            {
+                csv += $"{setting.FiscalYear},\"{setting.Country}\",\"{setting.Subsidiary}\",{setting.MealsCap.GetValueOrDefault()},{setting.LodgingCap.GetValueOrDefault()},{setting.TaxShield.GetValueOrDefault()}\n";
+            }
+            
+            await JSRuntime.InvokeVoidAsync("downloadFile", "tax-settings.csv", "text/csv", csv);
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Export Failed", $"Failed to export tax settings: {ex.Message}", AlertDialog.AlertType.Error);
+        }
+    }
+    
+    // Alert Dialog Methods
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type = AlertDialog.AlertType.Info, string okText = "OK")
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        alertOkText = okText;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+
+    // Confirmation Dialog Methods
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "❓", 
+        string confirmText = "Yes", string cancelText = "No", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = confirmText;
+        cancelButtonText = cancelText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction.Invoke();
         }
         
-        await JSRuntime.InvokeVoidAsync("downloadFile", "tax-settings.csv", "text/csv", csv);
+        pendingConfirmAction = null;
+        StateHasChanged();
     }
 }
 </AuthorizeRoleView>
+
+<!-- Alert Dialog -->
+<AlertDialog 
+    IsVisible="showAlertDialog"
+    Title="@alertTitle"
+    Message="@alertMessage"
+    Type="@alertType"
+    OkButtonText="@alertOkText"
+    OnClose="CloseAlertDialog" />
+
+<!-- Confirmation Dialog -->
+<ConfirmDialog 
+    IsVisible="showConfirmDialog"
+    Title="@confirmTitle"
+    Message="@confirmMessage"
+    Icon="@confirmIcon"
+    ConfirmButtonText="@confirmButtonText"
+    CancelButtonText="@cancelButtonText"
+    ConfirmButtonClass="@confirmButtonClass"
+    OnResult="HandleConfirmResult" />

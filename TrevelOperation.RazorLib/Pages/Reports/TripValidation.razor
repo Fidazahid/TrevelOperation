@@ -7,7 +7,6 @@
 @inject ITripService TripService
 @inject ITransactionService TransactionService
 @inject ITaxCalculationService TaxCalculationService
-@inject IJSRuntime JSRuntime
 
 <AuthorizeRoleView RequiredRole="Finance">
 <div class="container mx-auto p-6">
@@ -237,6 +236,27 @@
         </div>
     }
 </div>
+</AuthorizeRoleView>
+
+<!-- Alert Dialog -->
+<AlertDialog 
+    IsVisible="showAlertDialog"
+    Title="@alertTitle"
+    Message="@alertMessage"
+    Type="@alertType"
+    OkButtonText="@alertOkText"
+    OnClose="CloseAlertDialog" />
+
+<!-- Confirmation Dialog -->
+<ConfirmDialog 
+    IsVisible="showConfirmDialog"
+    Title="@confirmTitle"
+    Message="@confirmMessage"
+    Icon="@confirmIcon"
+    ConfirmButtonText="@confirmButtonText"
+    CancelButtonText="@cancelButtonText"
+    ConfirmButtonClass="@confirmButtonClass"
+    OnResult="HandleConfirmResult" />
 
 @code {
     private List<Trip> trips = new();
@@ -246,6 +266,23 @@
     private Dictionary<int, TaxExposureResult> taxExposureCache = new();
     private Dictionary<int, int> transactionCountCache = new();
     private Dictionary<int, int> missingDocsCache = new();
+    
+    // Alert Dialog state
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+    private string alertOkText = "OK";
+    
+    // Confirmation Dialog state
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "❓";
+    private string confirmButtonText = "Yes";
+    private string cancelButtonText = "No";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction = null;
     
     // Filters
     private string selectedStatus = "";
@@ -305,7 +342,7 @@
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading trips: {ex.Message}");
+            ShowAlert("Error Loading Trips", $"Failed to load trip data: {ex.Message}", AlertDialog.AlertType.Error);
         }
         finally
         {
@@ -418,32 +455,39 @@
 
     private async Task ValidateTrip(Trip trip)
     {
-        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Validate trip '{trip.TripName}'?");
-        if (confirmed)
-        {
-            try
+        ShowConfirm(
+            "Validate Trip",
+            $"Are you sure you want to validate trip '{trip.TripName}'?\n\nThis will mark the trip as validated and approved.",
+            async () =>
             {
-                // Call service to validate trip
-                await TripService.ValidateTripAsync(trip.TripId);
-                
-                // Update local trip object
-                trip.ValidationStatusId = 3; // Validated
-                if (trip.ValidationStatus != null)
+                try
                 {
-                    trip.ValidationStatus.ValidationStatusId = 3;
-                    trip.ValidationStatus.Name = "Validated";
-                    trip.ValidationStatus.Emoji = "🟢";
+                    // Call service to validate trip
+                    await TripService.ValidateTripAsync(trip.TripId);
+                    
+                    // Update local trip object
+                    trip.ValidationStatusId = 3; // Validated
+                    if (trip.ValidationStatus != null)
+                    {
+                        trip.ValidationStatus.ValidationStatusId = 3;
+                        trip.ValidationStatus.Name = "Validated";
+                        trip.ValidationStatus.Emoji = "🟢";
+                    }
+                    
+                    CalculateSummary();
+                    await FilterTrips();
+                    ShowAlert("Trip Validated", $"Trip '{trip.TripName}' has been validated successfully!", AlertDialog.AlertType.Success);
                 }
-                
-                CalculateSummary();
-                FilterTrips();
-                await JSRuntime.InvokeVoidAsync("alert", "✅ Trip validated successfully!");
-            }
-            catch (Exception ex)
-            {
-                await JSRuntime.InvokeVoidAsync("alert", $"❌ Error validating trip: {ex.Message}");
-            }
-        }
+                catch (Exception ex)
+                {
+                    ShowAlert("Validation Error", $"Failed to validate trip: {ex.Message}", AlertDialog.AlertType.Error);
+                }
+            },
+            "✅",
+            "Validate",
+            "Cancel",
+            "btn-success"
+        );
     }
 
     private async Task ValidateAllReady()
@@ -451,67 +495,74 @@
         var readyTrips = trips.Where(t => t.ValidationStatus?.Name == "Ready to validate").ToList();
         if (!readyTrips.Any())
         {
-            await JSRuntime.InvokeVoidAsync("alert", "ℹ️ No trips ready for validation.");
+            ShowAlert("No Trips Ready", "There are no trips ready for validation at this time.", AlertDialog.AlertType.Info);
             return;
         }
 
-        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Validate all {readyTrips.Count} ready trips?");
-        if (confirmed)
-        {
-            try
+        ShowConfirm(
+            "Validate All Ready Trips",
+            $"Are you sure you want to validate all {readyTrips.Count} ready trips?\n\nThis will mark all of them as validated and approved.",
+            async () =>
             {
-                int successCount = 0;
-                int failCount = 0;
-                
-                foreach (var trip in readyTrips)
+                try
                 {
-                    try
+                    int successCount = 0;
+                    int failCount = 0;
+                    
+                    foreach (var trip in readyTrips)
                     {
-                        await TripService.ValidateTripAsync(trip.TripId);
-                        trip.ValidationStatusId = 3; // Validated
-                        if (trip.ValidationStatus != null)
+                        try
                         {
-                            trip.ValidationStatus.ValidationStatusId = 3;
-                            trip.ValidationStatus.Name = "Validated";
-                            trip.ValidationStatus.Emoji = "🟢";
+                            await TripService.ValidateTripAsync(trip.TripId);
+                            trip.ValidationStatusId = 3; // Validated
+                            if (trip.ValidationStatus != null)
+                            {
+                                trip.ValidationStatus.ValidationStatusId = 3;
+                                trip.ValidationStatus.Name = "Validated";
+                                trip.ValidationStatus.Emoji = "🟢";
+                            }
+                            successCount++;
                         }
-                        successCount++;
+                        catch
+                        {
+                            failCount++;
+                        }
                     }
-                    catch
+                    
+                    CalculateSummary();
+                    await FilterTrips();
+                    
+                    if (failCount == 0)
                     {
-                        failCount++;
+                        ShowAlert("All Trips Validated", $"Successfully validated all {successCount} trips!", AlertDialog.AlertType.Success);
+                    }
+                    else
+                    {
+                        ShowAlert("Partial Validation", $"{successCount} trips validated successfully, but {failCount} failed.", AlertDialog.AlertType.Warning);
                     }
                 }
-                
-                CalculateSummary();
-                FilterTrips();
-                
-                if (failCount == 0)
+                catch (Exception ex)
                 {
-                    await JSRuntime.InvokeVoidAsync("alert", $"✅ All {successCount} trips validated successfully!");
+                    ShowAlert("Bulk Validation Error", $"An error occurred during bulk validation: {ex.Message}", AlertDialog.AlertType.Error);
                 }
-                else
-                {
-                    await JSRuntime.InvokeVoidAsync("alert", $"⚠️ {successCount} trips validated, {failCount} failed.");
-                }
-            }
-            catch (Exception ex)
-            {
-                await JSRuntime.InvokeVoidAsync("alert", $"❌ Error during bulk validation: {ex.Message}");
-            }
-        }
+            },
+            "✅",
+            "Validate All",
+            "Cancel",
+            "btn-success"
+        );
     }
 
     private async Task ViewTripDetails(Trip trip)
     {
         // Navigate to trip details or show modal
-        await JSRuntime.InvokeVoidAsync("alert", $"Viewing details for '{trip.TripName}' - Full implementation pending");
+        ShowAlert("Feature Coming Soon", $"Viewing details for '{trip.TripName}' - Full implementation pending", AlertDialog.AlertType.Info);
     }
 
     private async Task EditTrip(Trip trip)
     {
         // Navigate to edit trip
-        await JSRuntime.InvokeVoidAsync("alert", $"Editing '{trip.TripName}' - Navigation pending");
+        ShowAlert("Feature Coming Soon", $"Editing '{trip.TripName}' - Navigation pending", AlertDialog.AlertType.Info);
     }
 
     private string GetValidationBorderClass(string? status)
@@ -611,5 +662,49 @@
         
         return issues;
     }
+    
+    // Alert Dialog Methods
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type = AlertDialog.AlertType.Info, string okText = "OK")
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        alertOkText = okText;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+
+    // Confirmation Dialog Methods
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "❓", 
+        string confirmText = "Yes", string cancelText = "No", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = confirmText;
+        cancelButtonText = cancelText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction.Invoke();
+        }
+        
+        pendingConfirmAction = null;
+        StateHasChanged();
+    }
 }
-</AuthorizeRoleView>

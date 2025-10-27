@@ -30,6 +30,7 @@
 
 @code {
     [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback<bool> IsVisibleChanged { get; set; }
     [Parameter] public string Title { get; set; } = "Confirm";
     [Parameter] public string Message { get; set; } = "Are you sure?";
     [Parameter] public string Icon { get; set; } = "❓";
@@ -40,11 +41,19 @@
 
     private async Task HandleConfirm()
     {
+        if (IsVisibleChanged.HasDelegate)
+        {
+            await IsVisibleChanged.InvokeAsync(false);
+        }
         await OnResult.InvokeAsync(true);
     }
 
     private async Task HandleCancel()
     {
+        if (IsVisibleChanged.HasDelegate)
+        {
+            await IsVisibleChanged.InvokeAsync(false);
+        }
         await OnResult.InvokeAsync(false);
     }
 }

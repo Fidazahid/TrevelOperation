@@ -289,6 +289,32 @@
     </div>
 </div>
 
+<!-- Alert Dialog -->
+<AlertDialog @ref="alertDialog"
+             IsVisible="showAlertDialog"
+             Title="@alertTitle"
+             Message="@alertMessage"
+             Type="@alertType"
+             OnClose="CloseAlertDialog" />
+
+<!-- Confirm Dialog -->
+<ConfirmDialog @ref="confirmDialog"
+               IsVisible="showConfirmDialog"
+               Title="@confirmTitle"
+               Message="@confirmMessage"
+               Icon="@confirmIcon"
+               ConfirmButtonText="@confirmButtonText"
+               ConfirmButtonClass="@confirmButtonClass"
+               OnResult="HandleConfirmResult" />
+
+<!-- Prompt Dialog -->
+<PromptDialog @ref="promptDialog"
+              IsVisible="showPromptDialog"
+              Title="@promptTitle"
+              Message="@promptMessage"
+              Placeholder="@promptPlaceholder"
+              OnResult="HandlePromptResult" />
+
 @code {
     private List<EntertainmentTransactionData> transactions = new();
     private List<EntertainmentTransactionData> filteredTransactions = new();
@@ -312,6 +338,94 @@
     private int withExternalParticipants = 0;
     private decimal totalAmount = 0;
     private bool allSelected = false;
+
+    // Alert Dialog state
+    private AlertDialog? alertDialog;
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+
+    // Confirm Dialog state
+    private ConfirmDialog? confirmDialog;
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "⚠️";
+    private string confirmButtonText = "Confirm";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction;
+
+    // Prompt Dialog state
+    private PromptDialog? promptDialog;
+    private bool showPromptDialog = false;
+    private string promptTitle = "";
+    private string promptMessage = "";
+    private string promptPlaceholder = "";
+    private Func<string?, Task>? pendingPromptAction;
+
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type)
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "⚠️", string buttonText = "Confirm", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = buttonText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction();
+        }
+        
+        pendingConfirmAction = null;
+        StateHasChanged();
+    }
+
+    private void ShowPrompt(string title, string message, Func<string?, Task> onResult, string placeholder = "")
+    {
+        promptTitle = title;
+        promptMessage = message;
+        promptPlaceholder = placeholder;
+        pendingPromptAction = onResult;
+        showPromptDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandlePromptResult(string? result)
+    {
+        showPromptDialog = false;
+        
+        if (pendingPromptAction != null)
+        {
+            await pendingPromptAction(result);
+        }
+        
+        pendingPromptAction = null;
+        StateHasChanged();
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -520,21 +634,27 @@
 
     private async Task ValidateAll()
     {
-        var result = await JSRuntime.InvokeAsync<bool>("confirm", "Mark all visible transactions as validated?");
-        if (result)
-        {
-            foreach (var transaction in filteredTransactions)
+        ShowConfirm(
+            "Validate All Transactions",
+            "Mark all visible transactions as validated?",
+            async () =>
             {
-                transaction.ParticipantsValidated = true;
-            }
-            await JSRuntime.InvokeVoidAsync("alert", $"Marked {filteredTransactions.Count} transactions as validated");
-            FilterTransactions();
-        }
+                foreach (var transaction in filteredTransactions)
+                {
+                    transaction.ParticipantsValidated = true;
+                }
+                ShowAlert("Success", $"Marked {filteredTransactions.Count} transactions as validated", AlertDialog.AlertType.Success);
+                FilterTransactions();
+            },
+            "✅",
+            "Validate All",
+            "btn-success"
+        );
     }
 
     private async Task ViewDetails(string transactionId)
     {
-        await JSRuntime.InvokeVoidAsync("alert", $"View details for transaction {transactionId} - Navigation pending");
+        ShowAlert("View Details", $"View details for transaction {transactionId} - Navigation pending", AlertDialog.AlertType.Info);
     }
 
     private async Task GenerateMessage(string transactionId)
@@ -549,17 +669,24 @@
             
             var message = MessageTemplateService.GenerateClientEntertainmentMessage(transaction, participantsList);
             await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", message);
-            await JSRuntime.InvokeVoidAsync("alert", "Message copied to clipboard!");
+            ShowAlert("Success", "Message copied to clipboard!", AlertDialog.AlertType.Success);
         }
     }
 
     private async Task AddParticipants(string transactionId)
     {
-        var newParticipants = await JSRuntime.InvokeAsync<string>("prompt", "Enter participant email addresses (comma-separated):");
-        if (!string.IsNullOrEmpty(newParticipants))
-        {
-            await UpdateParticipants(transactionId, newParticipants);
-        }
+        ShowPrompt(
+            "Add Participants",
+            "Enter participant email addresses (comma-separated):",
+            async (newParticipants) =>
+            {
+                if (!string.IsNullOrEmpty(newParticipants))
+                {
+                    await UpdateParticipants(transactionId, newParticipants);
+                }
+            },
+            "email1@company.com, email2@customer.com"
+        );
     }
 
     private async Task ValidateParticipants(string transactionId)
@@ -583,7 +710,7 @@
             }
         }
         selectedTransactions.Clear();
-        await JSRuntime.InvokeVoidAsync("alert", "Selected transactions validated");
+        ShowAlert("Success", "Selected transactions validated", AlertDialog.AlertType.Success);
         FilterTransactions();
     }
 

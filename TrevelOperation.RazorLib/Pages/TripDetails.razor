@@ -2,11 +2,11 @@
 @using TravelOperation.Core.Models.Entities
 @using TravelOperation.Core.Services.Interfaces
 @using TrevelOperation.Service
+@using TrevelOperation.RazorLib.Components
 @inject ITripService TripService
 @inject ITransactionService TransactionService
 @inject ITaxCalculationService TaxCalculationService
 @inject NavigationManager NavigationManager
-@inject IJSRuntime JSRuntime
 
 <PageTitle>Trip Details - Travel Expense Management</PageTitle>
 
@@ -285,6 +285,29 @@
     </div>
 }
 
+    }
+}
+
+<!-- Alert Dialog -->
+<AlertDialog 
+    IsVisible="showAlertDialog"
+    Title="@alertTitle"
+    Message="@alertMessage"
+    Type="@alertType"
+    OkButtonText="@alertOkText"
+    OnClose="CloseAlertDialog" />
+
+<!-- Confirmation Dialog -->
+<ConfirmDialog 
+    IsVisible="showConfirmDialog"
+    Title="@confirmTitle"
+    Message="@confirmMessage"
+    Icon="@confirmIcon"
+    ConfirmButtonText="@confirmButtonText"
+    CancelButtonText="@cancelButtonText"
+    ConfirmButtonClass="@confirmButtonClass"
+    OnResult="HandleConfirmResult" />
+
 @code {
     [Parameter]
     public int TripId { get; set; }
@@ -303,6 +326,23 @@
     private bool showTaxBreakdown = false;
     
     private TaxBreakdownModel taxBreakdown = new();
+    
+    // Alert Dialog state
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+    private string alertOkText = "OK";
+    
+    // Confirmation Dialog state
+    private bool showConfirmDialog = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string confirmIcon = "❓";
+    private string confirmButtonText = "Yes";
+    private string cancelButtonText = "No";
+    private string confirmButtonClass = "btn-primary";
+    private Func<Task>? pendingConfirmAction = null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -341,7 +381,7 @@
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error loading trip data: {ex.Message}");
+            ShowAlert("Error Loading Trip", $"Failed to load trip data: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
@@ -398,27 +438,32 @@
     {
         await LoadTripData();
         CloseLinkModal();
-        await JSRuntime.InvokeVoidAsync("showToast", "success", "Transactions linked successfully");
+        ShowAlert("Success", "Transactions linked successfully!", AlertDialog.AlertType.Success);
     }
 
     private async Task UnlinkTransaction(string transactionId)
     {
-        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-            "Are you sure you want to unlink this transaction from the trip?");
-        
-        if (confirmed)
-        {
-            try
+        ShowConfirm(
+            "Unlink Transaction",
+            "Are you sure you want to unlink this transaction from the trip?",
+            async () =>
             {
-                await TransactionService.UnlinkTransactionFromTripAsync(transactionId);
-                await LoadTripData();
-                await JSRuntime.InvokeVoidAsync("showToast", "success", "Transaction unlinked successfully");
-            }
-            catch (Exception ex)
-            {
-                await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error unlinking transaction: {ex.Message}");
-            }
-        }
+                try
+                {
+                    await TransactionService.UnlinkTransactionFromTripAsync(transactionId);
+                    await LoadTripData();
+                    ShowAlert("Success", "Transaction unlinked successfully!", AlertDialog.AlertType.Success);
+                }
+                catch (Exception ex)
+                {
+                    ShowAlert("Error", $"Failed to unlink transaction: {ex.Message}", AlertDialog.AlertType.Error);
+                }
+            },
+            "🔗",
+            "Unlink",
+            "Cancel",
+            "btn-warning"
+        );
     }
 
     private async Task ValidateTrip()
@@ -427,22 +472,67 @@
         {
             await TripService.ValidateTripAsync(TripId);
             await LoadTripData();
-            await JSRuntime.InvokeVoidAsync("showToast", "success", "Trip validated successfully");
+            ShowAlert("Trip Validated", "Trip validated successfully!", AlertDialog.AlertType.Success);
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("showToast", "error", $"Error validating trip: {ex.Message}");
+            ShowAlert("Validation Error", $"Failed to validate trip: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
     private async Task ExportTripData()
     {
-        await JSRuntime.InvokeVoidAsync("showToast", "info", "Export functionality coming soon");
+        ShowAlert("Feature Coming Soon", "Export functionality will be available soon.", AlertDialog.AlertType.Info);
     }
 
     private void ShowTaxBreakdown()
     {
         showTaxBreakdown = true;
+    }
+    
+    // Alert Dialog Methods
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type = AlertDialog.AlertType.Info, string okText = "OK")
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        alertOkText = okText;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
+    }
+
+    // Confirmation Dialog Methods
+    private void ShowConfirm(string title, string message, Func<Task> onConfirm, string icon = "❓", 
+        string confirmText = "Yes", string cancelText = "No", string buttonClass = "btn-primary")
+    {
+        confirmTitle = title;
+        confirmMessage = message;
+        confirmIcon = icon;
+        confirmButtonText = confirmText;
+        cancelButtonText = cancelText;
+        confirmButtonClass = buttonClass;
+        pendingConfirmAction = onConfirm;
+        showConfirmDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleConfirmResult(bool confirmed)
+    {
+        showConfirmDialog = false;
+        
+        if (confirmed && pendingConfirmAction != null)
+        {
+            await pendingConfirmAction.Invoke();
+        }
+        
+        pendingConfirmAction = null;
+        StateHasChanged();
     }
 
     private class TaxBreakdownModel

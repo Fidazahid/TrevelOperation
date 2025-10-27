@@ -1,9 +1,9 @@
 @using TravelOperation.Core.Services.Interfaces
 @using TravelOperation.Core.Models.Entities
 @using TravelOperation.Core.Models.Lookup
+@using TrevelOperation.RazorLib.Components
 @inject ITransactionService TransactionService
 @inject ILookupService LookupService
-@inject IJSRuntime JSRuntime
 
 <!-- Create Transaction Modal -->
 <div class="modal @(isVisible ? "modal-open" : "") flex items-center justify-center" id="transactionCreateModal">
@@ -474,6 +474,14 @@
     </div>
 </div>
 
+<!-- Alert Dialog -->
+<AlertDialog @ref="alertDialog"
+             IsVisible="showAlertDialog"
+             Title="@alertTitle"
+             Message="@alertMessage"
+             Type="@alertType"
+             OnClose="CloseAlertDialog" />
+
 @code {
     [Parameter] public EventCallback OnTransactionCreated { get; set; }
 
@@ -490,9 +498,31 @@
     private List<BookingType>? bookingTypes;
     private List<BookingStatus>? bookingStatuses;
 
+    // Alert Dialog state
+    private AlertDialog? alertDialog;
+    private bool showAlertDialog = false;
+    private string alertTitle = "";
+    private string alertMessage = "";
+    private AlertDialog.AlertType alertType = AlertDialog.AlertType.Info;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadLookupData();
+    }
+
+    private void ShowAlert(string title, string message, AlertDialog.AlertType type)
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertType = type;
+        showAlertDialog = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertDialog()
+    {
+        showAlertDialog = false;
+        StateHasChanged();
     }
 
     private async Task LoadLookupData()
@@ -507,7 +537,7 @@
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("console.error", "Failed to load lookup data:", ex.Message);
+            ShowAlert("Error Loading Data", $"Failed to load lookup data: {ex.Message}", AlertDialog.AlertType.Error);
         }
     }
 
@@ -584,31 +614,31 @@
         // Validate required fields
         if (string.IsNullOrWhiteSpace(createForm.Email))
         {
-            await JSRuntime.InvokeVoidAsync("alert", "Employee Email is required");
+            ShowAlert("Validation Error", "Employee Email is required", AlertDialog.AlertType.Warning);
             return;
         }
 
         if (string.IsNullOrWhiteSpace(createForm.Vendor))
         {
-            await JSRuntime.InvokeVoidAsync("alert", "Vendor Name is required");
+            ShowAlert("Validation Error", "Vendor Name is required", AlertDialog.AlertType.Warning);
             return;
         }
 
         if (createForm.Amount <= 0)
         {
-            await JSRuntime.InvokeVoidAsync("alert", "Amount must be greater than 0");
+            ShowAlert("Validation Error", "Amount must be greater than 0", AlertDialog.AlertType.Warning);
             return;
         }
 
         if (!createForm.CategoryId.HasValue)
         {
-            await JSRuntime.InvokeVoidAsync("alert", "Category is required");
+            ShowAlert("Validation Error", "Category is required", AlertDialog.AlertType.Warning);
             return;
         }
 
         if (showCabinClass && !createForm.CabinClassId.HasValue)
         {
-            await JSRuntime.InvokeVoidAsync("alert", "Cabin Class is required for Airfare transactions");
+            ShowAlert("Validation Error", "Cabin Class is required for Airfare transactions", AlertDialog.AlertType.Warning);
             return;
         }
 
@@ -654,7 +684,7 @@
 
             await TransactionService.CreateTransactionAsync(newTransaction);
 
-            await JSRuntime.InvokeVoidAsync("alert", "✅ Transaction created successfully!");
+            ShowAlert("Success", "Transaction created successfully!", AlertDialog.AlertType.Success);
 
             // Notify parent component
             await OnTransactionCreated.InvokeAsync();
@@ -664,8 +694,7 @@
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"❌ Failed to create transaction: {ex.Message}");
-            await JSRuntime.InvokeVoidAsync("console.error", "Failed to create transaction:", ex.Message);
+            ShowAlert("Error Creating Transaction", $"Failed to create transaction: {ex.Message}", AlertDialog.AlertType.Error);
         }
         finally
         {
