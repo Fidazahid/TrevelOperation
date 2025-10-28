@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TravelOperation.Core.Models.Entities;
 using TravelOperation.Core.Models.Lookup;
+using AuthUser = TravelOperation.Core.Models.User;
 
 namespace TravelOperation.Core.Data;
 
@@ -49,6 +50,7 @@ public class TravelDbContext : DbContext
     public DbSet<Policy> Policies { get; set; }
     public DbSet<Approval> Approvals { get; set; }
     public DbSet<User> Users { get; set; }
+    public DbSet<AuthUser> AuthUsers { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -223,6 +225,12 @@ public class TravelDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<AuthUser>(entity =>
+        {
+            entity.HasKey(e => e.Email);
+            entity.ToTable("AuthUsers");
+        });
+
         SeedData(modelBuilder);
     }
 
@@ -346,6 +354,21 @@ public class TravelDbContext : DbContext
             new Policy { PolicyId = 2, Category = "Meals", Description = "Daily meal allowance", MaxAmount = 75.00m, Period = "Daily", CreatedAt = seedDate, ModifiedAt = seedDate },
             new Policy { PolicyId = 3, Category = "Accommodation", Description = "Hotel accommodation", MaxAmount = 200.00m, Period = "Daily", CreatedAt = seedDate, ModifiedAt = seedDate },
             new Policy { PolicyId = 4, Category = "Miscellaneous", Description = "Other travel expenses", MaxAmount = 100.00m, Period = "Daily", CreatedAt = seedDate, ModifiedAt = seedDate }
+        );
+
+        // Seed default admin user for initial login
+        modelBuilder.Entity<AuthUser>().HasData(
+            new AuthUser
+            { 
+                Email = "admin@company.com", 
+                Password = "Admin@123", 
+                Role = "Finance", 
+                Department = "Finance", 
+                FirstName = "System", 
+                LastName = "Administrator", 
+                CreatedDate = seedDate, 
+                IsActive = true 
+            }
         );
     }
 }

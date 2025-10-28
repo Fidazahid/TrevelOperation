@@ -8,112 +8,144 @@
 
 @if (IsVisible && Transaction != null)
 {
-    <div class="modal modal-open">
-        <div class="modal-box max-w-5xl">
+    <div class="modal modal-open" style="display: flex; align-items: center; justify-content: center;">
+        <div class="modal-box" style="max-width: 600px; width: 50vw; max-height: 90vh; overflow-y: auto; background: white; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
             <!-- Header -->
-            <div class="flex justify-between items-start mb-6">
+            <div class="flex justify-between items-start mb-6" style="border-bottom: 2px solid #e5e7eb; padding-bottom: 16px;">
                 <div>
-                    <h3 class="font-bold text-2xl mb-1">Transaction details</h3>
-                    <p class="text-sm text-gray-600">@Transaction.TransactionId</p>
+                    <h3 class="font-bold text-2xl mb-1" style="color: #1f2937; font-size: 28px;">Transaction details</h3>
+                    <p class="text-sm text-gray-600" style="color: #6b7280; font-size: 14px; font-family: monospace;">@Transaction.TransactionId</p>
                 </div>
-                <button class="btn btn-sm btn-circle btn-ghost" @onclick="Close">✕</button>
+                <button class="btn btn-sm btn-circle btn-ghost" @onclick="Close" style="font-size: 20px; color: #6b7280;">✕</button>
             </div>
 
             <!-- Status and Validation Badges -->
-            <div class="flex gap-2 mb-6">
+            <div class="flex gap-3 mb-6" style="flex-wrap: wrap;">
                 @if (Transaction.IsValid)
                 {
-                    <span class="badge badge-success gap-2">
+                    <span class="badge badge-success gap-2" style="padding: 10px 16px; font-size: 14px; border-radius: 8px; background: #10b981; color: white; font-weight: 600;">
                         ✅ Validated
                     </span>
                 }
                 else
                 {
-                    <span class="badge badge-warning gap-2">
+                    <span class="badge badge-warning gap-2" style="padding: 10px 16px; font-size: 14px; border-radius: 8px; background: #f59e0b; color: white; font-weight: 600;">
                         ⚠️ Needs review
                     </span>
                 }
 
                 @if (Transaction.TripId != null)
                 {
-                    <span class="badge badge-info gap-2">
+                    <span class="badge badge-info gap-2" style="padding: 10px 16px; font-size: 14px; border-radius: 8px; background: #3b82f6; color: white; font-weight: 600;">
                         🧳 Linked to trip
                     </span>
                 }
                 else
                 {
-                    <span class="badge badge-ghost gap-2">
-                        Unlinked
+                    <span class="badge badge-ghost gap-2" style="padding: 10px 16px; font-size: 14px; border-radius: 8px; background: #e5e7eb; color: #6b7280; font-weight: 600;">
+                        🔓 Unlinked
                     </span>
                 }
 
                 @if (Transaction.DataValidation)
                 {
-                    <span class="badge badge-error gap-2">
+                    <span class="badge badge-error gap-2" style="padding: 10px 16px; font-size: 14px; border-radius: 8px; background: #ef4444; color: white; font-weight: 600;">
                         ⚠️ Data validation required
                     </span>
                 }
             </div>
 
-            <!-- Main Content - Two Column Layout -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                <!-- Left Column - Transaction Info -->
-                <div class="space-y-4">
-                    <!-- Basic Information -->
-                    <div class="card bg-base-200">
-                        <div class="card-body p-4">
-                            <h4 class="font-semibold text-lg mb-3">Basic information</h4>
+            <!-- Main Content - Single Column Layout -->
+            <div class="space-y-4 mb-6" style="display: flex; flex-direction: column; gap: 20px;">
+                <!-- Basic Information -->
+                    <div class="card" style="background: #f9fafb; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+                        <div class="card-body p-4" style="padding: 20px;">
+                            <h4 class="font-semibold text-lg mb-3" style="color: #1f2937; font-size: 18px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                                📋 Basic information
+                            </h4>
                             
-                            <div class="space-y-2">
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">Source:</span>
-                                    <span class="font-medium">@(Transaction.Source?.Name ?? "N/A")</span>
+                            <div class="space-y-2" style="display: flex; flex-direction: column; gap: 12px;">
+                                <div class="flex justify-between" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
+                                    <span class="text-gray-600" style="color: #6b7280; font-size: 14px;">Source:</span>
+                                    <span class="font-medium" style="color: #1f2937; font-weight: 600; font-size: 14px;">@(Transaction.Source?.Name ?? "N/A")</span>
                                 </div>
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">Email:</span>
-                                    <span class="font-medium">@Transaction.Email</span>
+                                <div class="flex justify-between" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
+                                    <span class="text-gray-600" style="color: #6b7280; font-size: 14px;">Email:</span>
+                                    <span class="font-medium" style="color: #1f2937; font-weight: 600; font-size: 14px;">@Transaction.Email</span>
                                 </div>
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">Transaction date:</span>
-                                    <span class="font-medium">@Transaction.TransactionDate.ToString("dd/MM/yyyy")</span>
+                                <div class="flex justify-between" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
+                                    <span class="text-gray-600" style="color: #6b7280; font-size: 14px;">Transaction date:</span>
+                                    <span class="font-medium" style="color: #1f2937; font-weight: 600; font-size: 14px;">@Transaction.TransactionDate.ToString("dd/MM/yyyy")</span>
                                 </div>
                                 @if (Transaction.AuthorizationDate != null)
                                 {
-                                    <div class="flex justify-between">
-                                        <span class="text-gray-600">Authorization date:</span>
-                                        <span class="font-medium">@Transaction.AuthorizationDate.Value.ToString("dd/MM/yyyy")</span>
+                                    <div class="flex justify-between" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
+                                        <span class="text-gray-600" style="color: #6b7280; font-size: 14px;">Authorization date:</span>
+                                        <span class="font-medium" style="color: #1f2937; font-weight: 600; font-size: 14px;">@Transaction.AuthorizationDate.Value.ToString("dd/MM/yyyy")</span>
                                     </div>
                                 }
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">Type:</span>
-                                    <span class="font-medium">@(Transaction.TransactionType ?? "N/A")</span>
+                                <div class="flex justify-between" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0;">
+                                    <span class="text-gray-600" style="color: #6b7280; font-size: 14px;">Type:</span>
+                                    <span class="font-medium" style="color: #1f2937; font-weight: 600; font-size: 14px;">@(Transaction.TransactionType ?? "N/A")</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Vendor Information -->
-                    <div class="card bg-base-200">
-                        <div class="card-body p-4">
-                            <h4 class="font-semibold text-lg mb-3">Vendor information</h4>
+                    <div class="card" style="background: #f9fafb; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+                        <div class="card-body p-4" style="padding: 20px;">
+                            <h4 class="font-semibold text-lg mb-3" style="color: #1f2937; font-size: 18px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                                🏪 Vendor information
+                            </h4>
                             
-                            <div class="space-y-2">
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">Vendor:</span>
-                                    <span class="font-medium">@(Transaction.Vendor ?? "N/A")</span>
+                            <div class="space-y-2" style="display: flex; flex-direction: column; gap: 12px;">
+                                <div class="flex justify-between" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
+                                    <span class="text-gray-600" style="color: #6b7280; font-size: 14px;">Vendor:</span>
+                                    <span class="font-medium" style="color: #1f2937; font-weight: 600; font-size: 14px;">@(Transaction.Vendor ?? "N/A")</span>
                                 </div>
                                 @if (!string.IsNullOrEmpty(Transaction.MerchantCategory))
                                 {
-                                    <div class="flex justify-between">
-                                        <span class="text-gray-600">Merchant category:</span>
-                                        <span class="font-medium">@Transaction.MerchantCategory</span>
+                                    <div class="flex justify-between" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
+                                        <span class="text-gray-600" style="color: #6b7280; font-size: 14px;">Merchant category:</span>
+                                        <span class="font-medium" style="color: #1f2937; font-weight: 600; font-size: 14px;">@Transaction.MerchantCategory</span>
                                     </div>
                                 }
                                 @if (!string.IsNullOrEmpty(Transaction.Address))
                                 {
-                                    <div class="flex justify-between">
-                                        <span class="text-gray-600">Address:</span>
-                                        <span class="font-medium text-sm">@Transaction.Address</span>
+                                    <div class="flex justify-between" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0;">
+                                        <span class="text-gray-600" style="color: #6b7280; font-size: 14px;">Address:</span>
+                                        <span class="font-medium text-sm" style="color: #1f2937; font-weight: 600; font-size: 14px;">@Transaction.Address</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Category & Classification -->
+                    <div class="card" style="background: #f9fafb; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+                        <div class="card-body p-4" style="padding: 20px;">
+                            <h4 class="font-semibold text-lg mb-3" style="color: #1f2937; font-size: 18px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                                📂 Category & classification
+                            </h4>
+                            
+                            <div class="space-y-2" style="display: flex; flex-direction: column; gap: 12px;">
+                                <div class="flex justify-between" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
+                                    <span class="text-gray-600" style="color: #6b7280; font-size: 14px;">Category:</span>
+                                    <span class="font-medium" style="color: #1f2937; font-weight: 600; font-size: 14px;">@(Transaction.Category?.Name ?? "Uncategorized")</span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(Transaction.Policy))
+                                {
+                                    <div class="flex justify-between" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
+                                        <span class="text-gray-600" style="color: #6b7280; font-size: 14px;">Policy:</span>
+                                        <span class="font-medium text-sm" style="color: #1f2937; font-weight: 600; font-size: 14px;">@Transaction.Policy</span>
+                                    </div>
+                                }
+                                @if (Transaction.CabinClass != null)
+                                {
+                                    <div class="flex justify-between" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0;">
+                                        <span class="text-gray-600" style="color: #6b7280; font-size: 14px;">Cabin class:</span>
+                                        <span class="font-medium" style="color: #1f2937; font-weight: 600; font-size: 14px;">@Transaction.CabinClass.Name</span>
                                     </div>
                                 }
                             </div>
@@ -121,68 +153,43 @@
                     </div>
 
                     <!-- Amount Information -->
-                    <div class="card bg-base-200">
-                        <div class="card-body p-4">
-                            <h4 class="font-semibold text-lg mb-3">Amount information</h4>
+                    <div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; border: none; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                        <div class="card-body p-4" style="padding: 24px;">
+                            <h4 class="font-semibold text-lg mb-3" style="color: white; font-size: 18px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                                💰 Amount information
+                            </h4>
                             
-                            <div class="space-y-2">
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600">Amount:</span>
-                                    <span class="font-bold text-xl">@Transaction.Currency @Transaction.Amount.ToString("N2")</span>
+                            <div class="space-y-2" style="display: flex; flex-direction: column; gap: 16px;">
+                                <div class="flex justify-between items-center" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="color: rgba(255, 255, 255, 0.9); font-size: 14px;">Amount:</span>
+                                    <span class="font-bold text-xl" style="color: white; font-weight: 700; font-size: 24px;">
+                                        @Transaction.Currency @Transaction.Amount.ToString("N2")
+                                    </span>
                                 </div>
                                 @if (Transaction.AmountUSD != null)
                                 {
-                                    <div class="flex justify-between items-center">
-                                        <span class="text-gray-600">Amount (USD):</span>
-                                        <span class="font-bold text-xl text-primary">${Transaction.AmountUSD.Value:N2}</span>
+                                    <div class="flex justify-between items-center" style="display: flex; justify-content: space-between; align-items: center; padding: 16px; background: rgba(255, 255, 255, 0.2); border-radius: 8px; backdrop-filter: blur(10px);">
+                                        <span style="color: white; font-size: 14px;">Amount (USD):</span>
+                                        <span class="font-bold text-xl" style="color: white; font-weight: 700; font-size: 28px;">
+                                            $@Transaction.AmountUSD.Value.ToString("N2")
+                                        </span>
                                     </div>
                                 }
                                 @if (Transaction.ExchangeRate != null)
                                 {
-                                    <div class="flex justify-between">
-                                        <span class="text-gray-600">Exchange rate:</span>
-                                        <span class="font-medium">@Transaction.ExchangeRate.Value.ToString("N6")</span>
+                                    <div class="flex justify-between" style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span style="color: rgba(255, 255, 255, 0.9); font-size: 14px;">Exchange rate:</span>
+                                        <span class="font-medium" style="color: white; font-weight: 600; font-size: 14px;">@Transaction.ExchangeRate.Value.ToString("N6")</span>
                                     </div>
                                 }
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Right Column - Category and Trip Info -->
-                <div class="space-y-4">
-                    <!-- Category Information -->
+                <!-- Trip Information -->
+                @if (Transaction.TripId != null && Transaction.Trip != null)
+                {
                     <div class="card bg-base-200">
-                        <div class="card-body p-4">
-                            <h4 class="font-semibold text-lg mb-3">Category & classification</h4>
-                            
-                            <div class="space-y-2">
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">Category:</span>
-                                    <span class="font-medium">@(Transaction.Category?.Name ?? "Uncategorized")</span>
-                                </div>
-                                @if (!string.IsNullOrEmpty(Transaction.Policy))
-                                {
-                                    <div class="flex justify-between">
-                                        <span class="text-gray-600">Policy:</span>
-                                        <span class="font-medium text-sm">@Transaction.Policy</span>
-                                    </div>
-                                }
-                                @if (Transaction.CabinClass != null)
-                                {
-                                    <div class="flex justify-between">
-                                        <span class="text-gray-600">Cabin class:</span>
-                                        <span class="font-medium">@Transaction.CabinClass.Name</span>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Trip Information -->
-                    @if (Transaction.TripId != null && Transaction.Trip != null)
-                    {
-                        <div class="card bg-base-200">
                             <div class="card-body p-4">
                                 <h4 class="font-semibold text-lg mb-3">🧳 Linked trip</h4>
                                 
@@ -206,10 +213,10 @@
                         </div>
                     }
 
-                    <!-- Booking Information -->
-                    @if (!string.IsNullOrEmpty(Transaction.BookingId) || !string.IsNullOrEmpty(Transaction.SourceTripId))
-                    {
-                        <div class="card bg-base-200">
+                <!-- Booking Information -->
+                @if (!string.IsNullOrEmpty(Transaction.BookingId) || !string.IsNullOrEmpty(Transaction.SourceTripId))
+                {
+                    <div class="card bg-base-200">
                             <div class="card-body p-4">
                                 <h4 class="font-semibold text-lg mb-3">Booking information</h4>
                                 
@@ -246,10 +253,10 @@
                         </div>
                     }
 
-                    <!-- Participants -->
-                    @if (!string.IsNullOrEmpty(Transaction.Participants))
-                    {
-                        <div class="card bg-base-200">
+                <!-- Participants -->
+                @if (!string.IsNullOrEmpty(Transaction.Participants))
+                {
+                    <div class="card bg-base-200">
                             <div class="card-body p-4">
                                 <h4 class="font-semibold text-lg mb-3">👥 Participants</h4>
                                 <p class="text-sm">@Transaction.Participants</p>
@@ -265,10 +272,10 @@
                         </div>
                     }
 
-                    <!-- Document -->
-                    @if (!string.IsNullOrEmpty(Transaction.DocumentUrl))
-                    {
-                        <div class="card bg-base-200">
+                <!-- Document -->
+                @if (!string.IsNullOrEmpty(Transaction.DocumentUrl))
+                {
+                    <div class="card bg-base-200">
                             <div class="card-body p-4">
                                 <h4 class="font-semibold text-lg mb-3">📎 Documentation</h4>
                                 <a href="@Transaction.DocumentUrl" target="_blank" class="btn btn-sm btn-outline btn-primary">
@@ -277,7 +284,6 @@
                             </div>
                         </div>
                     }
-                </div>
             </div>
 
             <!-- Notes -->
@@ -314,52 +320,58 @@
             </div>
 
             <!-- Actions -->
-            <div class="modal-action flex flex-wrap gap-2">
-                @if (OnEdit.HasDelegate)
-                {
-                    <button class="btn btn-primary" @onclick="HandleEdit">
-                        ✏️ Edit
-                    </button>
-                }
-                
-                @if (OnDelete.HasDelegate && !Transaction.IsValid)
-                {
-                    <button class="btn btn-error" @onclick="HandleDelete">
-                        🗑️ Delete
-                    </button>
-                }
+            <div class="modal-action" style="display: flex; justify-content: space-between; align-items: center; padding-top: 24px; border-top: 2px solid #e5e7eb; margin-top: 24px;">
+                <!-- Left side action buttons -->
+                <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+                    @if (OnEdit.HasDelegate)
+                    {
+                        <button class="btn btn-primary" @onclick="HandleEdit" style="padding: 12px 24px; font-size: 14px; font-weight: 600; border-radius: 8px; background: #3b82f6; color: white; border: none; cursor: pointer; transition: all 0.2s;">
+                            ✏️ Edit
+                        </button>
+                    }
+                    
+                    @if (OnDelete.HasDelegate && !Transaction.IsValid)
+                    {
+                        <button class="btn btn-error" @onclick="HandleDelete" style="padding: 12px 24px; font-size: 14px; font-weight: 600; border-radius: 8px; background: #ef4444; color: white; border: none; cursor: pointer; transition: all 0.2s;">
+                            🗑️ Delete
+                        </button>
+                    }
 
-                @if (OnLinkToTrip.HasDelegate && Transaction.TripId == null)
-                {
-                    <button class="btn btn-info" @onclick="HandleLinkToTrip">
-                        🔗 Link to trip
-                    </button>
-                }
+                    @if (OnLinkToTrip.HasDelegate && Transaction.TripId == null)
+                    {
+                        <button class="btn btn-info" @onclick="HandleLinkToTrip" style="padding: 12px 24px; font-size: 14px; font-weight: 600; border-radius: 8px; background: #06b6d4; color: white; border: none; cursor: pointer; transition: all 0.2s;">
+                            🔗 Link to trip
+                        </button>
+                    }
 
-                @if (OnSplit.HasDelegate)
-                {
-                    <button class="btn btn-accent" @onclick="HandleSplit">
-                        ✂️ Split transaction
-                    </button>
-                }
+                    @if (OnSplit.HasDelegate)
+                    {
+                        <button class="btn btn-accent" @onclick="HandleSplit" style="padding: 12px 24px; font-size: 14px; font-weight: 600; border-radius: 8px; background: #8b5cf6; color: white; border: none; cursor: pointer; transition: all 0.2s;">
+                            ✂️ Split transaction
+                        </button>
+                    }
 
-                @if (OnGenerateMessage.HasDelegate)
-                {
-                    <button class="btn btn-outline" @onclick="HandleGenerateMessage">
-                        📧 Generate message
-                    </button>
-                }
+                    @if (OnGenerateMessage.HasDelegate)
+                    {
+                        <button class="btn btn-outline" @onclick="HandleGenerateMessage" style="padding: 12px 24px; font-size: 14px; font-weight: 600; border-radius: 8px; background: white; color: #3b82f6; border: 2px solid #3b82f6; cursor: pointer; transition: all 0.2s;">
+                            📧 Generate message
+                        </button>
+                    }
+                </div>
 
-                @if (!Transaction.IsValid)
-                {
-                    <button class="btn btn-success" @onclick="HandleMarkValid">
-                        ✅ Mark as valid
-                    </button>
-                }
+                <!-- Right side buttons (Close and Mark as Valid) -->
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    @if (!Transaction.IsValid)
+                    {
+                        <button class="btn btn-success" @onclick="HandleMarkValid" style="padding: 12px 24px; font-size: 14px; font-weight: 600; border-radius: 8px; background: #10b981; color: white; border: none; cursor: pointer; transition: all 0.2s;">
+                            ✅ Mark as valid
+                        </button>
+                    }
 
-                <button class="btn btn-ghost ml-auto" @onclick="Close">
-                    Close
-                </button>
+                    <button class="btn btn-ghost" @onclick="Close" style="padding: 12px 24px; font-size: 14px; font-weight: 600; border-radius: 8px; background: #f3f4f6; color: #6b7280; border: none; cursor: pointer; transition: all 0.2s;">
+                        Close
+                    </button>
+                </div>
             </div>
         </div>
     </div>

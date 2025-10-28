@@ -39,7 +39,7 @@ public static class Startup
         services.AddScoped<AuditInterceptor>();
         
         services.AddDbContext<TravelDbContext>((serviceProvider, options) =>
-            options.UseSqlite("Data Source=TravelOperations.db")
+            options.UseSqlite("Data Source=TravelExpense.db")
                    .AddInterceptors(serviceProvider.GetRequiredService<AuditInterceptor>()));
             
         services.AddScoped<IAuditService, AuditService>();

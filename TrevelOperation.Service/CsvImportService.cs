@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using TravelOperation.Core.Data;
 using TravelOperation.Core.Models.Lookup;
 using TravelOperation.Core.Models.Entities;
+using TravelOperation.Core.Services.Interfaces;
 using TransformationRuleEntity = TravelOperation.Core.Models.Entities.TransformationRule;
 using TransformationRuleDto = TrevelOperation.Service.TransformationRule;
 
@@ -15,12 +16,17 @@ public class CsvImportService : ICsvImportService
 {
     private readonly TravelDbContext _context;
     private readonly ILogger<CsvImportService> _logger;
+    private readonly INotificationService _notificationService;
     private static readonly List<TransformationRuleDto> DefaultRules = GetDefaultTransformationRules();
 
-    public CsvImportService(TravelDbContext context, ILogger<CsvImportService> logger)
+    public CsvImportService(
+        TravelDbContext context, 
+        ILogger<CsvImportService> logger,
+        INotificationService notificationService)
     {
         _context = context;
         _logger = logger;
+        _notificationService = notificationService;
     }
 
     public async Task<ImportResult> ImportNavanCsvAsync(Stream csvStream, string fileName)
@@ -185,6 +191,12 @@ public class CsvImportService : ICsvImportService
 
             await _context.SaveChangesAsync();
             result.Success = result.RecordsImported > 0;
+
+            // Send notifications for imported transactions
+            if (result.RecordsImported > 0)
+            {
+                await SendNotificationsForImportedTransactionsAsync(importedData);
+            }
 
             _logger.LogInformation("CSV import completed. File: {FileName}, Processed: {Processed}, Imported: {Imported}, Errors: {Errors}",
                 fileName, result.RecordsProcessed, result.RecordsImported, result.RecordsWithErrors);
@@ -565,5 +577,72 @@ public class CsvImportService : ICsvImportService
             new() { RuleId = 15, PolicyPattern = "Software", CategoryName = "Other", Priority = 50 },
             new() { RuleId = 16, PolicyPattern = "Conference attendance", CategoryName = "Other", Priority = 50 }
         };
+    }
+
+    private async Task SendNotificationsForImportedTransactionsAsync(List<ImportedTransactionData> importedData)
+    {
+        try
+        {
+            foreach (var data in importedData)
+            {
+                // Skip if validation errors or no email
+                if (data.ValidationErrors.Any() || string.IsNullOrEmpty(data.Email))
+                    continue;
+
+                // Check if this is a high-value transaction ($1000)
+                if (Math.Abs(data.AmountUSD) >= 1000)
+                {
+                    try
+                    {
+                        await _notificationService.NotifyHighValueTransactionAsync(
+                            data.Email,
+                            data.TransactionId,
+                            data.AmountUSD,
+                            data.DeterminedCategory ?? "Unknown"
+                        );
+                        
+                        _logger.LogInformation(
+                            "Sent high-value transaction notification for {TransactionId} to {Email}",
+                            data.TransactionId,
+                            data.Email);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, 
+                            "Failed to send notification for transaction {TransactionId}",
+                            data.TransactionId);
+                    }
+                }
+
+                // Check for missing documentation
+                if (string.IsNullOrEmpty(data.DocumentUrl) && Math.Abs(data.AmountUSD) >= 100)
+                {
+                    try
+                    {
+                        await _notificationService.NotifyMissingDocumentationAsync(
+                            data.Email,
+                            data.TransactionId,
+                            data.AmountUSD
+                        );
+                        
+                        _logger.LogInformation(
+                            "Sent missing documentation notification for {TransactionId} to {Email}",
+                            data.TransactionId,
+                            data.Email);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, 
+                            "Failed to send missing documentation notification for transaction {TransactionId}",
+                            data.TransactionId);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending notifications for imported transactions");
+            // Don't throw - notifications are not critical for import success
+        }
     }
 }

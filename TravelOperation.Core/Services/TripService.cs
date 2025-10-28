@@ -12,15 +12,18 @@ public class TripService : ITripService
     private readonly TravelDbContext _context;
     private readonly IAuditService _auditService;
     private readonly IAuthenticationService _authService;
+    private readonly INotificationService _notificationService;
 
     public TripService(
         TravelDbContext context, 
         IAuditService auditService, 
-        IAuthenticationService authService)
+        IAuthenticationService authService,
+        INotificationService notificationService)
     {
         _context = context;
         _auditService = auditService;
         _authService = authService;
+        _notificationService = notificationService;
     }
 
     public async Task<IEnumerable<Trip>> GetAllTripsAsync()
@@ -220,6 +223,30 @@ public class TripService : ITripService
         };
 
         await _auditService.LogActionAsync("System", "Create", "Trips", trip.TripId.ToString(), null, auditData);
+        
+        // Notify Finance team about new trip creation
+        try
+        {
+            var destination = !string.IsNullOrEmpty(trip.City1) && !string.IsNullOrEmpty(trip.Country1)
+                ? $"{trip.City1}, {trip.Country1}"
+                : trip.Country1 ?? "Unknown";
+                
+            var dateRange = $"{trip.StartDate:dd/MM/yyyy} - {trip.EndDate:dd/MM/yyyy}";
+            
+            await _notificationService.NotifyFinanceTeamAsync(
+                "New Trip Created",
+                $"Employee {trip.Email} created a new trip:\n\n" +
+                $"📍 {trip.TripName}\n" +
+                $"📅 {dateRange} ({trip.Duration} days)\n" +
+                $"🌍 Destination: {destination}",
+                $"/trips/{trip.TripId}"
+            );
+        }
+        catch (Exception ex)
+        {
+            // Log error but don't fail trip creation
+            Console.WriteLine($"Failed to send notification for new trip: {ex.Message}");
+        }
         
         return trip;
     }

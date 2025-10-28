@@ -2,8 +2,11 @@
 @using TravelOperation.Core.Models.Entities
 @using TravelOperation.Core.Services
 @using TravelOperation.Core.Services.Interfaces
+@using TrevelOperation.RazorLib.Components
 @inject INotificationService NotificationService
 @inject IAuthenticationService AuthService
+@inject ITransactionService TransactionService
+@inject ITripService TripService
 @inject NavigationManager NavigationManager
 
 <div class="container mx-auto p-6">
@@ -80,7 +83,8 @@
         <div class="space-y-4">
             @foreach (var notification in filteredNotifications)
             {
-                <div class="card bg-base-100 shadow @(!notification.IsRead ? "border-l-4 border-primary" : "") hover:shadow-lg transition-shadow">
+                <div class="card bg-base-100 shadow @(!notification.IsRead ? "border-l-4 border-primary" : "") hover:shadow-lg transition-shadow cursor-pointer" 
+                     @onclick="() => NavigateToAction(notification)">
                     <div class="card-body p-4">
                         <div class="flex gap-4">
                             <!-- Icon -->
@@ -111,14 +115,14 @@
                                     </div>
 
                                     <!-- Actions -->
-                                    <div class="dropdown dropdown-end">
+                                    <div class="dropdown dropdown-end" @onclick:stopPropagation="true">
                                         <label tabindex="0" class="btn btn-ghost btn-xs btn-circle">⋮</label>
                                         <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52">
                                             @if (!notification.IsRead)
                                             {
-                                                <li><a @onclick="() => MarkAsRead(notification.NotificationId)">✓ Mark as Read</a></li>
+                                                <li><a @onclick="async () => await MarkAsRead(notification.NotificationId)" @onclick:stopPropagation="true">✓ Mark as Read</a></li>
                                             }
-                                            <li><a @onclick="() => DeleteNotification(notification.NotificationId)" class="text-error">🗑️ Delete</a></li>
+                                            <li><a @onclick="async () => await DeleteNotification(notification.NotificationId)" @onclick:stopPropagation="true" class="text-error">🗑️ Delete</a></li>
                                         </ul>
                                     </div>
                                 </div>
@@ -131,11 +135,19 @@
                                     <div class="flex items-center gap-4 text-xs text-gray-500">
                                         <span class="badge badge-ghost badge-sm">@notification.Category</span>
                                         <span>@GetTimeAgo(notification.CreatedAt)</span>
+                                        @if (notification.RelatedEntityType == "Transaction")
+                                        {
+                                            <span class="badge badge-info badge-xs">💳 Click to view transaction</span>
+                                        }
+                                        @if (notification.RelatedEntityType == "Trip")
+                                        {
+                                            <span class="badge badge-success badge-xs">✈️ Click to view trip</span>
+                                        }
                                     </div>
 
                                     @if (!string.IsNullOrEmpty(notification.ActionUrl))
                                     {
-                                        <button class="btn btn-sm btn-primary" @onclick="() => NavigateToAction(notification)">
+                                        <button class="btn btn-sm btn-primary" @onclick="() => NavigateToAction(notification)" @onclick:stopPropagation="true">
                                             @(notification.ActionLabel ?? "View")
                                         </button>
                                     }
@@ -161,6 +173,16 @@
     }
 </div>
 
+<!-- Transaction Detail Modal -->
+<TransactionDetailModal IsVisible="@showTransactionModal"
+                       Transaction="@selectedTransaction"
+                       OnClose="CloseTransactionModal" />
+
+<!-- Trip Detail Modal -->
+<TripDetailModal IsVisible="@showTripModal"
+                Trip="@selectedTrip"
+                OnClose="CloseTripModal" />
+
 @code {
     private List<Notification> notifications = new();
     private List<Notification> filteredNotifications = new();
@@ -168,6 +190,14 @@
     private string selectedFilter = "all";
     private bool isLoading = false;
     private string currentUserEmail = "";
+    
+    // Transaction Modal
+    private bool showTransactionModal = false;
+    private Transaction? selectedTransaction = null;
+    
+    // Trip Modal
+    private bool showTripModal = false;
+    private Trip? selectedTrip = null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -186,14 +216,31 @@
 
         try
         {
-            notifications = await NotificationService.GetNotificationsByEmailAsync(currentUserEmail);
-            unreadCount = await NotificationService.GetUnreadCountAsync(currentUserEmail);
+            // Check if user is Finance role
+            var currentUserRole = await AuthService.GetCurrentUserRoleAsync();
+            
+            if (currentUserRole?.Equals("Finance", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                // Finance users see ALL notifications
+                notifications = await NotificationService.GetAllNotificationsAsync();
+                // Count unread across all users
+                unreadCount = notifications.Count(n => !n.IsRead);
+                Console.WriteLine($"📢 Finance user: Loaded {notifications.Count} notifications (all users)");
+            }
+            else
+            {
+                // Regular users see only their own notifications
+                notifications = await NotificationService.GetNotificationsByEmailAsync(currentUserEmail);
+                unreadCount = await NotificationService.GetUnreadCountAsync(currentUserEmail);
+                Console.WriteLine($"👤 Employee: Loaded {notifications.Count} notifications for {currentUserEmail}");
+            }
+            
             ApplyFilter();
         }
         catch (Exception ex)
         {
             // Handle error
-            Console.WriteLine($"Error loading notifications: {ex.Message}");
+            Console.WriteLine($"❌ Error loading notifications: {ex.Message}");
         }
         finally
         {
@@ -258,10 +305,58 @@
             await MarkAsRead(notification.NotificationId);
         }
 
+        // Check if notification is related to a transaction
+        if (notification.RelatedEntityType == "Transaction" && !string.IsNullOrEmpty(notification.RelatedEntityId))
+        {
+            try
+            {
+                // Load the transaction and open detail modal
+                var transaction = await TransactionService.GetTransactionByIdAsync(notification.RelatedEntityId);
+                if (transaction != null)
+                {
+                    selectedTransaction = transaction;
+                    showTransactionModal = true;
+                    StateHasChanged();
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error loading transaction: {ex.Message}");
+                // Fall back to navigation if modal fails
+            }
+        }
+
+        // Check if notification is related to a trip
+        if (notification.RelatedEntityType == "Trip" && !string.IsNullOrEmpty(notification.RelatedEntityId))
+        {
+            // Navigate to trip details page
+            if (int.TryParse(notification.RelatedEntityId, out int tripId))
+            {
+                NavigationManager.NavigateTo($"/trips/{tripId}");
+                return;
+            }
+        }
+
+        // Default behavior - navigate to ActionUrl
         if (!string.IsNullOrEmpty(notification.ActionUrl))
         {
             NavigationManager.NavigateTo(notification.ActionUrl);
         }
+    }
+
+    private void CloseTransactionModal()
+    {
+        showTransactionModal = false;
+        selectedTransaction = null;
+        StateHasChanged();
+    }
+
+    private void CloseTripModal()
+    {
+        showTripModal = false;
+        selectedTrip = null;
+        StateHasChanged();
     }
 
     private string GetTimeAgo(DateTime dateTime)

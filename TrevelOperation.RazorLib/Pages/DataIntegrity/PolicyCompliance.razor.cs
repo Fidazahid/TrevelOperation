@@ -7,6 +7,7 @@ namespace TrevelOperation.RazorLib.Pages.DataIntegrity;
 
 public partial class PolicyCompliance
 {
+    [Inject] private INotificationService NotificationService { get; set; } = default!;
     private ComplianceStats? stats;
     private List<PolicyComplianceResult>? complianceResults;
     private List<PolicyComplianceResult> filteredResults => ApplyClientSideFilters();
@@ -118,6 +119,9 @@ public partial class PolicyCompliance
 
             CalculateStats();
 
+            // Send notifications for violations
+            await SendViolationNotifications();
+
             ShowAlert("Compliance Check Complete", $"Found {complianceResults.Count} non-compliant transactions.", AlertDialog.AlertType.Info);
         }
         catch (Exception ex)
@@ -127,6 +131,73 @@ public partial class PolicyCompliance
         finally
         {
             loading = false;
+        }
+    }
+
+    private async Task SendViolationNotifications()
+    {
+        if (complianceResults == null || !complianceResults.Any())
+            return;
+
+        try
+        {
+            // Group violations by employee email
+            var violationsByEmployee = new Dictionary<string, List<(string TransactionId, PolicyViolationType Type, PolicySeverity Severity, string Message)>>();
+
+            foreach (var result in complianceResults)
+            {
+                var transaction = transactions?.FirstOrDefault(t => t.TransactionId == result.TransactionId);
+                if (transaction == null || string.IsNullOrEmpty(transaction.Email))
+                    continue;
+
+                if (!violationsByEmployee.ContainsKey(transaction.Email))
+                {
+                    violationsByEmployee[transaction.Email] = new List<(string, PolicyViolationType, PolicySeverity, string)>();
+                }
+
+                foreach (var violation in result.Violations)
+                {
+                    violationsByEmployee[transaction.Email].Add((
+                        result.TransactionId,
+                        violation.Type,
+                        violation.Severity,
+                        violation.Description
+                    ));
+                }
+            }
+
+            // Send notifications to each employee
+            foreach (var kvp in violationsByEmployee)
+            {
+                var email = kvp.Key;
+                var violations = kvp.Value;
+
+                // Send notification for each violation
+                foreach (var (transactionId, type, severity, message) in violations)
+                {
+                    await NotificationService.NotifyPolicyViolationAsync(
+                        email,
+                        transactionId,
+                        type.ToString(),
+                        message
+                    );
+
+                    // For Critical and High severity violations, also notify Finance team
+                    if (severity == PolicySeverity.Critical || severity == PolicySeverity.High)
+                    {
+                        var severityIcon = severity == PolicySeverity.Critical ? "🔴" : "🟠";
+                        await NotificationService.NotifyFinanceTeamAsync(
+                            $"{severityIcon} {severity} Policy Violation Detected",
+                            $"Transaction {transactionId} for {email} has a {severity.ToString().ToLower()} severity {type} violation: {message}",
+                            $"/data-integrity/policy-compliance"
+                        );
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error sending violation notifications: {ex.Message}");
         }
     }
 
@@ -256,6 +327,18 @@ public partial class PolicyCompliance
         {
             await PolicyComplianceService.ApproveExceptionAsync(selectedResult.TransactionId, approvedBy, approvalReason);
             
+            // Send notification to employee
+            var transaction = transactions?.FirstOrDefault(t => t.TransactionId == selectedResult.TransactionId);
+            if (transaction != null && !string.IsNullOrEmpty(transaction.Email))
+            {
+                await NotificationService.NotifyEmployeeTransactionValidatedAsync(
+                    transaction.Email,
+                    selectedResult.TransactionId,
+                    transaction.Category?.Name ?? "Unknown",
+                    transaction.AmountUSD ?? 0
+                );
+            }
+            
             CloseApproveModal();
             await RefreshData();
             
@@ -292,6 +375,18 @@ public partial class PolicyCompliance
         {
             var violationType = Enum.Parse<PolicyViolationType>(selectedFlagViolationType);
             await PolicyComplianceService.FlagTransactionAsync(selectedResult.TransactionId, flagReason, violationType);
+            
+            // Send notification to employee
+            var transaction = transactions?.FirstOrDefault(t => t.TransactionId == selectedResult.TransactionId);
+            if (transaction != null && !string.IsNullOrEmpty(transaction.Email))
+            {
+                await NotificationService.NotifyEmployeeInquiryAsync(
+                    transaction.Email,
+                    selectedResult.TransactionId,
+                    transaction.Category?.Name ?? "Unknown",
+                    flagReason
+                );
+            }
             
             CloseFlagModal();
             await RefreshData();

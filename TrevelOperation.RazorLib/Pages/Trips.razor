@@ -6,6 +6,7 @@
 @inject ITripService TripService
 @inject ILookupService LookupService
 @inject IExportService ExportService
+@inject IAuthenticationService AuthService
 @inject IJSRuntime JSRuntime
 @inject NavigationManager NavigationManager
 @implements IDisposable
@@ -35,6 +36,14 @@
             </button>
         </div>
     </div>
+
+    @* Display current user info for debugging - Remove in production *@
+    @if (!string.IsNullOrEmpty(currentUserRole))
+    {
+        <div class="alert alert-info mt-2 mb-2 text-sm">
+            <span>👤 Logged in as: <strong>@currentUserEmail</strong> | Role: <strong>@currentUserRole</strong></span>
+        </div>
+    }
 
     <!-- Filters -->
     <div class="card bg-base-100 shadow-sm ">
@@ -370,6 +379,11 @@
     private IEnumerable<Status>? statuses;
     private IEnumerable<Owner>? owners;
 
+    // Current user for role-based access
+    private TravelOperation.Core.Models.User? currentUser;
+    private string? currentUserRole;
+    private string? currentUserEmail;
+
     // Alert Dialog state
     private bool showAlertDialog = false;
     private string alertTitle = "";
@@ -422,6 +436,11 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Get current user information
+        currentUser = await AuthService.GetCurrentUserAsync();
+        currentUserRole = await AuthService.GetCurrentUserRoleAsync();
+        currentUserEmail = await AuthService.GetCurrentUserEmailAsync();
+        
         await LoadData();
     }
 

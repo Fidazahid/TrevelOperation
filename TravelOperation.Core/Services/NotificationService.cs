@@ -19,6 +19,13 @@ public class NotificationService : INotificationService
         _logger = logger;
     }
 
+    public async Task<List<Notification>> GetAllNotificationsAsync()
+    {
+        return await _context.Notifications
+            .OrderByDescending(n => n.CreatedAt)
+            .ToListAsync();
+    }
+
     public async Task<List<Notification>> GetNotificationsByEmailAsync(string email, bool unreadOnly = false)
     {
         var query = _context.Notifications
@@ -268,19 +275,44 @@ public class NotificationService : INotificationService
         // Get finance team emails from system settings or headcount
         var financeEmails = await GetFinanceTeamEmailsAsync();
 
+        // Extract entity type and ID from actionUrl if present (e.g., /trips/123 or /transactions?search=xxx)
+        string? relatedEntityType = null;
+        string? relatedEntityId = null;
+        
+        if (!string.IsNullOrEmpty(actionUrl))
+        {
+            if (actionUrl.StartsWith("/trips/"))
+            {
+                relatedEntityType = "Trip";
+                relatedEntityId = actionUrl.Replace("/trips/", "").Split('?')[0];
+            }
+            else if (actionUrl.Contains("/transactions"))
+            {
+                relatedEntityType = "Transaction";
+                // Try to extract transaction ID from search parameter
+                var searchParam = actionUrl.Split("search=").LastOrDefault();
+                if (!string.IsNullOrEmpty(searchParam))
+                {
+                    relatedEntityId = searchParam.Split('&')[0];
+                }
+            }
+        }
+
         foreach (var email in financeEmails)
         {
             var notification = new Notification
             {
                 RecipientEmail = email,
                 Type = NotificationType.Info,
-                Category = NotificationCategory.System,
+                Category = relatedEntityType == "Trip" ? NotificationCategory.Trip : NotificationCategory.System,
                 Priority = NotificationPriority.High,
                 Title = title,
                 Message = message,
                 ActionUrl = actionUrl,
-                ActionLabel = actionUrl != null ? "Take Action" : null,
-                Icon = "💼"
+                ActionLabel = actionUrl != null ? "View Details" : null,
+                RelatedEntityType = relatedEntityType,
+                RelatedEntityId = relatedEntityId,
+                Icon = relatedEntityType == "Trip" ? "✈️" : "💼"
             };
 
             await CreateNotificationAsync(notification);
@@ -307,21 +339,78 @@ public class NotificationService : INotificationService
         await CreateNotificationAsync(notification);
     }
 
+    public async Task NotifyEmployeeTransactionValidatedAsync(string employeeEmail, string transactionId, string categoryName, decimal amount)
+    {
+        var notification = new Notification
+        {
+            RecipientEmail = employeeEmail,
+            Type = NotificationType.Success,
+            Category = NotificationCategory.Transaction,
+            Priority = NotificationPriority.Low,
+            Title = $"{categoryName} Transaction Validated ✅",
+            Message = $"Your {categoryName.ToLower()} transaction of ${amount:N2} has been validated by Finance. No further action required.",
+            ActionUrl = $"/transactions?search={transactionId}",
+            ActionLabel = "View Transaction",
+            RelatedEntityId = transactionId,
+            RelatedEntityType = "Transaction",
+            Icon = "✅"
+        };
+
+        await CreateNotificationAsync(notification);
+
+        _logger.LogInformation(
+            "Employee notification sent: Transaction {TransactionId} validated for {Email}",
+            transactionId,
+            employeeEmail);
+    }
+
+    public async Task NotifyEmployeeInquiryAsync(string employeeEmail, string transactionId, string categoryName, string inquiryReason)
+    {
+        var notification = new Notification
+        {
+            RecipientEmail = employeeEmail,
+            Type = NotificationType.Info,
+            Category = NotificationCategory.Transaction,
+            Priority = NotificationPriority.Normal,
+            Title = $"Finance Inquiry: {categoryName} Transaction",
+            Message = $"Finance has questions about your {categoryName.ToLower()} transaction. {inquiryReason}",
+            ActionUrl = $"/transactions?search={transactionId}",
+            ActionLabel = "View Details",
+            RelatedEntityId = transactionId,
+            RelatedEntityType = "Transaction",
+            Icon = "📧"
+        };
+
+        await CreateNotificationAsync(notification);
+
+        _logger.LogInformation(
+            "Employee inquiry notification sent: Transaction {TransactionId} for {Email}",
+            transactionId,
+            employeeEmail);
+    }
+
     private async Task<List<string>> GetFinanceTeamEmailsAsync()
     {
-        // Get users with Finance role from Headcount or Users table
-        var financeEmails = await _context.Headcount
-            .Where(h => h.Department == "Finance" || h.Department == "Accounting")
-            .Select(h => h.Email)
+        // Get ONLY users with Finance role from AuthUsers table
+        var financeUsers = await _context.AuthUsers
+            .Where(u => u.IsActive && 
+                       u.Role != null && 
+                       u.Role.ToLower() == "finance")
+            .Select(u => u.Email)
             .Distinct()
             .ToListAsync();
 
-        if (!financeEmails.Any())
+        if (!financeUsers.Any())
         {
-            // If no finance users found in headcount, log a warning
-            _logger.LogWarning("No finance users found in Headcount table for notifications");
+            _logger.LogWarning("No users with Role='Finance' found. Please add Finance users to the system.");
+        }
+        else
+        {
+            _logger.LogInformation("Found {Count} users with Finance role: {Emails}", 
+                financeUsers.Count, 
+                string.Join(", ", financeUsers));
         }
 
-        return financeEmails;
+        return financeUsers;
     }
 }

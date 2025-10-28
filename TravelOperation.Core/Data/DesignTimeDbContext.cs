@@ -13,7 +13,8 @@ namespace TravelOperation.Core.Data
         public TravelDbContext CreateDbContext(string[] args)
         {
             var optionsBuilder = new DbContextOptionsBuilder<TravelDbContext>();
-            optionsBuilder.UseSqlite("Data Source=TravelOperations.db");
+            optionsBuilder.UseSqlite("Data Source=TravelExpense.db");
+            
             // Do NOT add AuditInterceptor here
             return new TravelDbContext(optionsBuilder.Options);
         }

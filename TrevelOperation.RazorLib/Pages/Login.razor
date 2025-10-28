@@ -27,7 +27,7 @@
                     <InputText @bind-value="loginModel.Email" 
                                class="form-input" 
                                id="email" 
-                               placeholder="Try: admin@corporate.com, sales.manager@wsc.com, or john.doe@wsc.com" 
+                               placeholder="Enter your email address" 
                                autocomplete="email" />
                 </div>
                 <ValidationMessage For="@(() => loginModel.Email)" class="validation-error" />
@@ -81,46 +81,20 @@
                 }
             </button>
         </EditForm>
-
+  <div class="test-login-section">
+            <button type="button" class="test-login-button" @onclick="QuickAdminLogin">
+                🔑 Quick Admin Login
+            </button>
+        </div>
+         <div class="test-login-section">
+            <button type="button" class="test-login-button" @onclick="QuickEmployeeLogin">
+                🔑 Quick Employee Login
+            </button>
+        </div>
         <!-- Footer -->
         <div class="login-footer">
             © 2025 Corporate Travel System. All rights reserved.
         </div>
-        </div>
-
-        <!-- Test Credentials Hint - Side Panel -->
-        <div class="test-credentials">
-            <div class="test-title">Quick Test Logins</div>
-            <div class="test-item">
-                <div class="test-role">
-                    <span class="role-badge">Finance</span>
-                    <span class="test-email">admin@corporate.com</span>
-                    <span class="test-pass">admin123</span>
-                </div>
-                <button type="button" class="auto-fill-btn" @onclick='() => AutoFillCredentials("admin@corporate.com", "admin123")'>
-                    Auto-Fill
-                </button>
-            </div>
-            <div class="test-item">
-                <div class="test-role">
-                    <span class="role-badge">Owner</span>
-                    <span class="test-email">sales.manager@wsc.com</span>
-                    <span class="test-pass">manager123</span>
-                </div>
-                <button type="button" class="auto-fill-btn" @onclick='() => AutoFillCredentials("sales.manager@wsc.com", "manager123")'>
-                    Auto-Fill
-                </button>
-            </div>
-            <div class="test-item">
-                <div class="test-role">
-                    <span class="role-badge">Employee</span>
-                    <span class="test-email">john.doe@wsc.com</span>
-                    <span class="test-pass">emp123</span>
-                </div>
-                <button type="button" class="auto-fill-btn" @onclick='() => AutoFillCredentials("john.doe@wsc.com", "emp123")'>
-                    Auto-Fill
-                </button>
-            </div>
         </div>
     </div>
 </div>
@@ -143,9 +117,9 @@
 
     .login-wrapper {
         display: flex;
-        gap: 2rem;
+        justify-content: center;
         align-items: center;
-        max-width: 1000px;
+        max-width: 480px;
         width: 100%;
     }
 
@@ -325,130 +299,14 @@
         height: 16px;
         border: 2px solid rgba(255, 255, 255, 0.3);
         border-top: 2px solid white;
-    .test-credentials {
-        background: rgba(255, 255, 255, 0.12);
-        backdrop-filter: blur(30px);
-        border: 1px solid rgba(255, 255, 255, 0.25);
-        border-radius: 20px;
-        padding: 2rem;
-        min-width: 320px;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-        animation: fadeInRight 0.6s ease-out;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
     }
 
-    @@keyframes fadeInRight {
-        from {
-            opacity: 0;
-            transform: translateX(30px);
-        }
+    @@keyframes spin {
         to {
-            opacity: 1;
-            transform: translateX(0);
+            transform: rotate(360deg);
         }
-    }
-
-    .test-title {
-        color: rgba(255, 255, 255, 0.95);
-        font-weight: 600;
-        margin-bottom: 1.5rem;
-        text-align: center;
-        font-size: 1rem;
-        letter-spacing: 0.02em;
-        padding-bottom: 1rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-    }
-
-    .test-item {
-        margin-bottom: 1.25rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-        padding: 1rem;
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 12px;
-        transition: all 0.3s ease;
-    }
-
-    .test-item:hover {
-        background: rgba(255, 255, 255, 0.08);
-        transform: translateX(4px);
-    }
-
-    .test-item:last-child {
-        margin-bottom: 0;
-    }
-
-    .test-role {
-        display: flex;
-        flex-direction: column;
-        gap: 0.375rem;
-    }
-
-    .role-badge {
-        color: rgba(255, 255, 255, 0.95);
-        font-weight: 600;
-        font-size: 0.875rem;
-        display: inline-block;
-    }
-
-    .test-email {
-        color: rgba(255, 255, 255, 0.85);
-        font-size: 0.8rem;
-        font-family: 'Courier New', monospace;
-    }
-
-    .test-pass {
-        color: rgba(255, 255, 255, 0.7);
-    /* Mobile responsiveness */
-    @@media (max-width: 968px) {
-        .login-wrapper {
-            flex-direction: column;
-        }
-
-        .test-credentials {
-            width: 100%;
-            min-width: auto;
-            max-width: 480px;
-        }
-    }
-
-    @@media (max-width: 480px) {
-        .login-container {
-            padding: 1rem;
-        }
-
-        .login-card {
-            padding: 2rem 1.5rem;
-            max-width: 100%;
-        }
-
-        .logo-title {
-            font-size: 1.5rem;
-        }
-
-        .logo-subtitle {
-            font-size: 0.75rem;
-        }
-
-        .test-credentials {
-            padding: 1.5rem;
-        }
-    }   width: 100%;
-    }
-
-    .auto-fill-btn:hover {
-        background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
-    }   margin-left: 0.5rem;
-        font-weight: 500;
-    }
-
-    .auto-fill-btn:hover {
-        background: rgba(59, 130, 246, 0.55);
-        color: white;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
     }
 
     .login-footer {
@@ -460,12 +318,42 @@
         border-top: 1px solid rgba(255, 255, 255, 0.1);
     }
 
+    .test-login-section {
+        margin-bottom: 1.5rem;
+        text-align: center;
+    }
+
+    .test-login-button {
+        background: rgba(34, 197, 94, 0.2);
+        border: 1px solid rgba(34, 197, 94, 0.4);
+        color: #86efac;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .test-login-button:hover {
+        background: rgba(34, 197, 94, 0.3);
+        border-color: rgba(34, 197, 94, 0.6);
+        transform: translateY(-1px);
+    }
+
     /* Mobile responsiveness */
     @@media (max-width: 480px) {
+        .login-container {
+            padding: 1rem;
+        }
+
         .login-card {
             margin: 1rem;
             padding: 2rem 1.5rem;
-            max-width: 380px;
+            max-width: 100%;
         }
 
         .logo-title {
@@ -500,6 +388,18 @@
         showPassword = !showPassword;
     }
 
+    private async Task QuickAdminLogin()
+    {
+        loginModel.Email = "admin@company.com";
+        loginModel.Password = "Admin@123";
+        await HandleLogin();
+    }
+private async Task QuickEmployeeLogin()
+    {
+        loginModel.Email = "dmin@company.com";
+        loginModel.Password = "Admin@123";
+       StateHasChanged();
+    }
     private async Task HandleLogin()
     {
         try
@@ -535,13 +435,6 @@
     private async Task HandleForgotPassword()
     {
         await JSRuntime.InvokeVoidAsync("alert", "Please contact your system administrator to reset your password.");
-    }
-
-    private void AutoFillCredentials(string email, string password)
-    {
-        loginModel.Email = email;
-        loginModel.Password = password;
-        StateHasChanged();
     }
 
     protected override async Task OnInitializedAsync()

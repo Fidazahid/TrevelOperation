@@ -5,6 +5,7 @@ using Moq;
 using TravelOperation.Core.Data;
 using TravelOperation.Core.Models.Entities;
 using TravelOperation.Core.Models.Lookup;
+using TravelOperation.Core.Services.Interfaces;
 using TrevelOperation.Service;
 
 namespace TravelOperation.Tests.Services;
@@ -22,7 +23,8 @@ public class CategoryMappingTests : IDisposable
 
         _context = new TravelDbContext(options);
         var mockLogger = new Mock<ILogger<CsvImportService>>();
-        _service = new CsvImportService(_context, mockLogger.Object);
+        var mockNotificationService = new Mock<INotificationService>();
+        _service = new CsvImportService(_context, mockLogger.Object, mockNotificationService.Object);
         SeedTestData();
     }
 

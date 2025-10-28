@@ -29,10 +29,10 @@
                     }
                 </div>
             </label>
-            <div tabindex="0" class="dropdown-content card card-compact shadow-lg bg-base-100 rounded-box w-96 mt-3 max-h-[500px] overflow-y-auto">
-                <div class="card-body">
+            <div tabindex="0" class="dropdown-content card card-compact shadow-lg bg-white rounded-box w-96 mt-3 max-h-[500px] overflow-y-auto">
+                <div class="card-body bg-white">
                     <div class="flex justify-between items-center mb-2">
-                        <h3 class="card-title text-base">Notifications</h3>
+                        <h3 class="card-title text-base text-gray-900">Notifications</h3>
                         @if (unreadCount > 0)
                         {
                             <span class="badge badge-primary badge-sm">@unreadCount unread</span>
@@ -44,12 +44,12 @@
                         <div class="space-y-2">
                             @foreach (var notification in recentNotifications.Take(5))
                             {
-                                <div class="p-3 hover:bg-base-200 rounded-lg cursor-pointer @(!notification.IsRead ? "bg-primary/5" : "")" 
+                                <div class="p-3 hover:bg-gray-100 rounded-lg cursor-pointer @(!notification.IsRead ? "bg-blue-50" : "bg-white")" 
                                      @onclick="() => NavigateToNotification(notification)">
                                     <div class="flex gap-2">
                                         <div class="text-2xl">@notification.Icon</div>
                                         <div class="flex-1">
-                                            <div class="font-semibold text-sm @(!notification.IsRead ? "text-primary" : "")">
+                                            <div class="font-semibold text-sm @(!notification.IsRead ? "text-primary" : "text-gray-900")">
                                                 @notification.Title
                                             </div>
                                             <div class="text-xs text-gray-500 line-clamp-2">@notification.Message</div>
@@ -222,12 +222,27 @@
             
         try
         {
-            unreadCount = await NotificationService.GetUnreadCountAsync(currentUserEmail);
-            var allNotifications = await NotificationService.GetNotificationsByEmailAsync(currentUserEmail);
-            recentNotifications = allNotifications
-                .OrderByDescending(n => n.CreatedAt)
-                .Take(5)
-                .ToList();
+            // Check if user is Finance role
+            if (currentUserRole?.Equals("Finance", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                // Finance users see ALL notifications
+                var allNotifications = await NotificationService.GetAllNotificationsAsync();
+                unreadCount = allNotifications.Count(n => !n.IsRead);
+                recentNotifications = allNotifications
+                    .OrderByDescending(n => n.CreatedAt)
+                    .Take(5)
+                    .ToList();
+            }
+            else
+            {
+                // Regular users see only their own notifications
+                unreadCount = await NotificationService.GetUnreadCountAsync(currentUserEmail);
+                var allNotifications = await NotificationService.GetNotificationsByEmailAsync(currentUserEmail);
+                recentNotifications = allNotifications
+                    .OrderByDescending(n => n.CreatedAt)
+                    .Take(5)
+                    .ToList();
+            }
         }
         catch (Exception ex)
         {

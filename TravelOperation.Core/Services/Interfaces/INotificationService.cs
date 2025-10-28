@@ -8,6 +8,11 @@ namespace TravelOperation.Core.Services.Interfaces;
 public interface INotificationService
 {
     /// <summary>
+    /// Get all notifications (Finance only)
+    /// </summary>
+    Task<List<Notification>> GetAllNotificationsAsync();
+
+    /// <summary>
     /// Get all notifications for a specific user
     /// </summary>
     Task<List<Notification>> GetNotificationsByEmailAsync(string email, bool unreadOnly = false);
@@ -93,4 +98,14 @@ public interface INotificationService
     /// Notify about tax compliance issue
     /// </summary>
     Task NotifyTaxComplianceIssueAsync(string email, int tripId, string tripName, decimal exposure);
+
+    /// <summary>
+    /// Notify employee when their transaction is validated by Finance
+    /// </summary>
+    Task NotifyEmployeeTransactionValidatedAsync(string employeeEmail, string transactionId, string categoryName, decimal amount);
+
+    /// <summary>
+    /// Notify employee when Finance has questions about their transaction
+    /// </summary>
+    Task NotifyEmployeeInquiryAsync(string employeeEmail, string transactionId, string categoryName, string inquiryReason);
 }
